@@ -1,3 +1,4 @@
+import type { WorkflowClientSource } from '../instructions/types.js';
 import type {
   JsonObject,
   WorkflowId,
@@ -48,6 +49,8 @@ export interface WorkflowListOptions {
   pageSize?: number;
 }
 export interface WorkflowRunListOptions {
+  /** A workflow id or Artifact hash; narrows the list to runs of that workflow's key, across its revisions. */
+  workflowId?: WorkflowId;
   workflowKey?: string;
   workflowTitle?: string;
   status?: number | null;
@@ -79,7 +82,7 @@ export interface WorkflowNodeRunPayload {
   truncated: boolean;
 }
 export interface WorkflowParameterSettings {
-  id: WorkflowId;
+  id: string;
   schema: WorkflowParameterSchema;
   values: WorkflowParameterValues;
 }
@@ -102,6 +105,8 @@ export interface WorkflowDefinitionView {
   inputSchema: unknown;
   parametersSchema: WorkflowParameterSchema;
   parameterValues: WorkflowParameterValues;
+  /** Revision-owned Client declarations, such as the custom parameter form. */
+  client: WorkflowClientSource;
   nodes: Array<{
     id: string;
     key: string;

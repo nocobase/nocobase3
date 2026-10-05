@@ -6,7 +6,7 @@ keywords: 'NocoBase,组件,样式,shadcn,主题变量,深色模式,图标'
 
 # 界面和样式
 
-NocoBase 应用使用 shadcn/ui 组件和 Tailwind CSS 编写界面。基础组件放在 `client/components/ui/`，应用共享组件放在 `client/components/`，页面及其专用组件放在 `client/pages/` 中对应的页面目录。从 [NocoBase UI Library](http://ui.nocobase.com) 安装的业务组件同样放在 `client/components/`，例如模板预装的 `PageContainer`、`PageHeader` 和路由浮层组件；认证界面 `auth-ui` 这类完整功能则放在 `client/extensions/nocobase-<item>/`。
+NocoBase 应用使用 shadcn/ui 组件和 Tailwind CSS 编写界面。基础组件放在 `client/components/ui/`，应用共享组件放在 `client/components/`，页面及其专用组件放在 `client/pages/` 中对应的页面目录。从 [NocoBase UI Library](http://ui.nocobase.com) 安装的业务组件同样放在 `client/components/`，例如模板预装的 `PageContainer`、`PageHeader` 和路由浮层组件；登录页用到的 `auth-forms`、`auth-methods`、`auth-split-layout` 这类区块则放在 `client/extensions/nocobase-<item>/`。
 
 普通界面样式使用主题变量。这样同一套组件可以适配浅色主题、深色主题和其他主题预设。
 
@@ -16,10 +16,10 @@ NocoBase 应用使用 shadcn/ui 组件和 Tailwind CSS 编写界面。基础组�
 
 ```bash
 pnpm exec shadcn add card
-pnpm exec shadcn add dialog table badge
+pnpm exec shadcn add table badge
 ```
 
-CLI 会把组件源码写入 `client/components/ui/`。模板的 `components.json` 已将 `ui` 别名配置为 `@/components/ui`，因此可以使用 `@/components/ui/<component>` 导入组件。
+CLI 会把组件源码写入 `client/components/ui/`。一个组件依赖的其他组件已经存在、且内容和 registry 不同时（模板自带的组件都是这样，比如翻译过文案的 `dialog`），CLI 会询问是否覆盖，这时回答“否”，保留已有文件。模板的 `components.json` 已将 `ui` 别名配置为 `@/components/ui`，因此可以使用 `@/components/ui/<component>` 导入组件。
 
 添加组件前，可以先查看源码、文档或 registry 中的其他组件：
 
@@ -175,7 +175,7 @@ export function SettingsIcon(): ReactElement {
 
 ```tsx
 // client/pages/orders.tsx
-import { useApiClient } from '@nocobase/app-client';
+import { ApiClientError, useApiClient } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { useEffect, useState, type ReactElement } from 'react';
 
@@ -188,6 +188,7 @@ interface Order {
 
 interface OrdersResponse {
   readonly data: Order[];
+  readonly meta: { page: number; pageSize: number; total: number };
 }
 
 export default function OrdersPage(): ReactElement {
@@ -202,8 +203,11 @@ export default function OrdersPage(): ReactElement {
       .request<OrdersResponse>({ path: 'orders' })
       .then((response) => setOrders(response.data))
       .catch((cause: unknown) => {
+        // Never show cause.message to users; map the status or reason to translated text.
         setError(
-          cause instanceof Error ? cause.message : t('orders.loadFailed'),
+          cause instanceof ApiClientError && cause.status === 403
+            ? t('orders.forbidden')
+            : t('orders.loadFailed'),
         );
       })
       .finally(() => setIsLoading(false));
@@ -238,7 +242,7 @@ export default function OrdersPage(): ReactElement {
 }
 ```
 
-`api.request({ path: 'orders' })` 假设应用已经提供了对应的服务端接口。加载反馈要放在正在加载的界面区域内；如果内容位于对话框或抽屉中，就在对话框或抽屉内部显示加载状态。
+`api.request({ path: 'orders' })` 假设应用已经提供了对应的服务端接口，它按 HTTP API 规范返回 `{ data, meta }`。请求失败时抛出的 `ApiClientError` 带有 `status` 和 `reason`，界面按它们选择自己的翻译文案，不要直接显示 `message`。加载反馈要放在正在加载的界面区域内；如果内容位于对话框或抽屉中，就在对话框或抽屉内部显示加载状态。
 
 ## 文字和多语言
 

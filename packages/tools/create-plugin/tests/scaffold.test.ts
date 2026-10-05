@@ -114,7 +114,7 @@ describe('createPlugin', () => {
       'server.jobs',
       ['./package.json', './server'],
       [],
-      ['@nocobase/app-server', '@nocobase/queue'],
+      ['@nocobase/app-server', '@nocobase/jobs', '@nocobase/service-provider'],
     ],
     [
       'server.locales',
@@ -406,6 +406,24 @@ describe('createPlugin', () => {
     expect(manifest.files).toEqual(['dist', 'README.md', 'CHANGELOG.md']);
   });
 
+  it('tests the database capability with app-testing', async () => {
+    const result = await createWith(['database']);
+    const manifest = JSON.parse(
+      await readFile(path.join(result.targetDirectory, 'package.json'), 'utf8'),
+    ) as { devDependencies?: Record<string, string> };
+    const test = await readFile(
+      path.join(result.targetDirectory, 'tests/database.test.ts'),
+      'utf8',
+    );
+    expect(manifest.devDependencies).toHaveProperty(
+      '@nocobase/app-testing',
+      'workspace:*',
+    );
+    expect(manifest.devDependencies).not.toHaveProperty('@nocobase/db-testing');
+    expect(test).toContain("from '@nocobase/app-testing/server'");
+    expect(test).not.toMatch(/@nocobase\/db-sqlite|dialect:|:memory:/);
+  });
+
   it('keeps Server routes independent from providers and database', async () => {
     const result = await createWith(['server.routes']);
     const manifest = JSON.parse(
@@ -433,20 +451,41 @@ describe('createPlugin', () => {
     expect(manifest.exports).not.toHaveProperty('./server/tokens');
   });
 
-  it('generates a stable package-scoped Queue Job identity', async () => {
-    const result = await createWith(['server.jobs']);
+  it('generates a JobExecutor job with a stable name and the provider that owns it', async () => {
+    const jobsOnly = await createWith(['server.jobs']);
     const job = await readFile(
-      path.join(result.targetDirectory, 'server/jobs/audit-log.ts'),
+      path.join(jobsOnly.targetDirectory, 'server/jobs/audit-log.ts'),
       'utf8',
     );
-    const test = await readFile(
-      path.join(result.targetDirectory, 'tests/jobs.test.ts'),
+    const provider = await readFile(
+      path.join(jobsOnly.targetDirectory, 'server/jobs/provider.ts'),
       'utf8',
     );
+    const plugin = await readFile(
+      path.join(jobsOnly.targetDirectory, 'server/plugin.ts'),
+      'utf8',
+    );
+    expect(job).toContain("from '@nocobase/jobs'");
+    expect(job).toContain('public static readonly jobName: string');
+    expect(job).toContain("'@nocobase/app-plugin-audit-log/audit-log'");
+    expect(provider).toContain(
+      "getJobExecutor('@nocobase/app-plugin-audit-log')",
+    );
+    expect(plugin).toContain('serviceProviders: [AuditLogJobsProvider],');
+    expect(plugin).not.toContain('queue');
 
-    expect(job).toContain("name: '@nocobase/app-plugin-audit-log/audit-log'");
-    expect(job).not.toContain('AuditLogJob.name');
-    expect(test).toContain("name: '@nocobase/app-plugin-audit-log/audit-log'");
+    const withServices = await createWith([
+      'server.service-providers',
+      'server.jobs',
+    ]);
+    expect(
+      await readFile(
+        path.join(withServices.targetDirectory, 'server/plugin.ts'),
+        'utf8',
+      ),
+    ).toContain(
+      'serviceProviders: [...serviceProviders, AuditLogJobsProvider],',
+    );
   });
 
   it('maps selected Client entries without inventing routes or providers', async () => {
@@ -504,7 +543,7 @@ describe('createPlugin', () => {
       '@nocobase/app-server': 'workspace:^',
       '@nocobase/db': 'workspace:^',
       '@nocobase/i18n': 'workspace:^',
-      '@nocobase/queue': 'workspace:^',
+      '@nocobase/jobs': 'workspace:^',
       '@nocobase/service-provider': 'workspace:^',
     });
     expect(manifest.files).toEqual(
@@ -534,7 +573,7 @@ describe('createPlugin', () => {
     expect(command).not.toContain('flags.json');
     expect(command).not.toContain('logJson');
     expect(test).toContain(
-      "import { bindAppCommand, runAppCommand } from '@nocobase/app-cli/testing';",
+      "import { bindAppCommand, runAppCommand } from '@nocobase/app-testing/cli';",
     );
     expect(test).toContain("describe('@nocobase/app-plugin-audit-log'");
     expect(test).not.toMatch(/__NOCOBASE_[A-Z0-9_]+__/u);

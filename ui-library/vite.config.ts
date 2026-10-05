@@ -6,15 +6,6 @@ import path from 'node:path';
 export default defineConfig({
   plugins: [react(), tailwindcss() as unknown as PluginOption],
   resolve: {
-    alias: [
-      {
-        find: '@nocobase/app-plugin-authentication/client/actions',
-        replacement: path.resolve(
-          __dirname,
-          './website/demo/auth/auth-ui/mock-actions.tsx',
-        ),
-      },
-      { find: '@', replacement: path.resolve(__dirname, './website') },
-    ],
+    alias: [{ find: '@', replacement: path.resolve(__dirname, './website') }],
   },
 });

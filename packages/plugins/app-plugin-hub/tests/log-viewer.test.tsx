@@ -1,5 +1,11 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  TestI18nProvider,
+  createTestI18nRuntime,
+} from '@nocobase/i18n/testing';
+import type { ReactNode } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import enUS from '../client/locales/en-US.js';
 const { request, client } = vi.hoisted(() => {
   const request = vi.fn();
   return { request, client: { request } };
@@ -7,18 +13,37 @@ const { request, client } = vi.hoisted(() => {
 vi.mock('@nocobase/app-client', () => ({
   useApiClient: () => client,
 }));
-vi.mock('@nocobase/i18n/client', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-    i18n: { language: 'en-US' },
-  }),
-}));
+
+const runtime = await createTestI18nRuntime({
+  namespaces: { '@nocobase/app-plugin-hub': enUS },
+});
+
+function I18n({ children }: { readonly children: ReactNode }) {
+  return (
+    <TestI18nProvider runtime={runtime} namespace='@nocobase/app-plugin-hub'>
+      {children}
+    </TestI18nProvider>
+  );
+}
 import { LogViewer } from '../client/pages/hub/log-viewer.js';
 beforeEach(() => request.mockReset());
+
+/** A log read as the server answers it: the entries in `data`, the token and the journal's state in `meta`. */
+function logResponse({
+  entries,
+  cursor,
+  ...meta
+}: {
+  readonly entries: readonly object[];
+  readonly cursor: string;
+  readonly [key: string]: unknown;
+}): object {
+  return { data: entries, meta: { ...meta, nextPageToken: cursor } };
+}
 afterEach(() => vi.restoreAllMocks());
 it('shows a persisted deployment error and sends filters to the deployment endpoint', async () => {
-  request.mockResolvedValue({
-    data: {
+  request.mockResolvedValue(
+    logResponse({
       entries: [
         {
           time: '2026-09-17',
@@ -32,14 +57,16 @@ it('shows a persisted deployment error and sends filters to the deployment endpo
       hasMore: false,
       enabled: true,
       status: 'failed',
-    },
+    }),
+  );
+  render(<LogViewer appId='app2' deploymentId='deployment-1' />, {
+    wrapper: I18n,
   });
-  render(<LogViewer appId='app2' deploymentId='deployment-1' />);
   await screen.findByText(/Initialization failed/, { selector: 'summary' });
   expect(request.mock.calls[0]?.[0].path).toBe(
     'hub/apps/app2/deployments/deployment-1/logs',
   );
-  fireEvent.click(screen.getByRole('combobox', { name: 'logs.level' }));
+  fireEvent.click(screen.getByRole('combobox', { name: 'Level' }));
   const errorOption = await screen.findByRole('option', {
     name: 'error',
     exact: true,
@@ -53,9 +80,9 @@ it('shows a persisted deployment error and sends filters to the deployment endpo
       }),
     ),
   );
-  fireEvent.click(screen.getByRole('combobox', { name: 'logs.level' }));
+  fireEvent.click(screen.getByRole('combobox', { name: 'Level' }));
   const allOption = await screen.findByRole('option', {
-    name: 'logs.allLevels',
+    name: 'All levels',
     exact: true,
   });
   fireEvent.pointerDown(allOption, { pointerType: 'mouse' });
@@ -63,42 +90,42 @@ it('shows a persisted deployment error and sends filters to the deployment endpo
   await waitFor(() =>
     expect(request).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        query: expect.objectContaining({ level: '' }),
+        query: expect.not.objectContaining({ level: expect.anything() }),
       }),
     ),
   );
 });
 it('distinguishes unavailable collection from an empty filtered result', async () => {
-  request.mockResolvedValue({
-    data: {
+  request.mockResolvedValue(
+    logResponse({
       entries: [],
       cursor: '',
       available: false,
       hasMore: false,
       enabled: true,
       status: 'succeeded',
-    },
+    }),
+  );
+  render(<LogViewer appId='app2' deploymentId='old-deployment' />, {
+    wrapper: I18n,
   });
-  render(<LogViewer appId='app2' deploymentId='old-deployment' />);
-  await screen.findByText('logs.unavailable');
+  await screen.findByText(enUS.logs.unavailable);
 });
 
 function logPage(
   entries: Array<{ time: string; msg: string; logId: string }>,
   extra = {},
 ): object {
-  return {
-    data: {
-      entries: entries.map((entry) => ({ ...entry, level: 'info' })),
-      cursor: 'next',
-      available: true,
-      hasMore: false,
-      enabled: true,
-      reset: false,
-      status: 'succeeded',
-      ...extra,
-    },
-  };
+  return logResponse({
+    entries: entries.map((entry) => ({ ...entry, level: 'info' })),
+    cursor: 'next',
+    available: true,
+    hasMore: false,
+    enabled: true,
+    reset: false,
+    status: 'succeeded',
+    ...extra,
+  });
 }
 
 it('keeps paged history ordered and deduplicated and replaces entries after a reset', async () => {
@@ -119,11 +146,12 @@ it('keeps paged history ordered and deduplicated and replaces entries after a re
     );
   const { container } = render(
     <LogViewer appId='app2' deploymentId='deployment-1' />,
+    { wrapper: I18n },
   );
-  await screen.findByText('logs.empty');
-  fireEvent.click(screen.getByText('logs.history'));
+  await screen.findByText('No matching log entries.');
+  fireEvent.click(screen.getByText('Load retained history'));
   await screen.findByText(/First/, { selector: 'summary' });
-  fireEvent.click(screen.getByText('logs.next'));
+  fireEvent.click(screen.getByText('Load next entries'));
   await screen.findByText(/Earlier/, { selector: 'summary' });
   expect(
     [...container.querySelectorAll('summary')].map(
@@ -133,10 +161,10 @@ it('keeps paged history ordered and deduplicated and replaces entries after a re
     expect.stringContaining('Earlier'),
     expect.stringContaining('First'),
   ]);
-  fireEvent.click(screen.getByText('logs.next'));
+  fireEvent.click(screen.getByText('Load next entries'));
   await screen.findByText(/Restarted scan/, { selector: 'summary' });
   expect(container.querySelectorAll('summary')).toHaveLength(1);
-  expect(screen.getByText('logs.rotated')).toBeInTheDocument();
+  expect(screen.getByText(enUS.logs.rotated)).toBeInTheDocument();
 });
 
 it('continues an empty history scan and pauses after finding records', async () => {
@@ -149,12 +177,14 @@ it('continues an empty history scan and pauses after finding records', async () 
         { hasMore: true },
       ),
     );
-  render(<LogViewer appId='app2' deploymentId='deployment-1' />);
-  await screen.findByText('logs.empty');
-  fireEvent.click(screen.getByText('logs.history'));
+  render(<LogViewer appId='app2' deploymentId='deployment-1' />, {
+    wrapper: I18n,
+  });
+  await screen.findByText('No matching log entries.');
+  fireEvent.click(screen.getByText('Load retained history'));
   await screen.findByText(/Matching record/, { selector: 'summary' });
   expect(request).toHaveBeenCalledTimes(3);
-  expect(screen.getByText('logs.next')).toBeInTheDocument();
+  expect(screen.getByText('Load next entries')).toBeInTheDocument();
 });
 
 it('downloads every page with a stable time boundary and rejects a reset during export', async () => {
@@ -188,18 +218,20 @@ it('downloads every page with a stable time boundary and rejects a reset during 
     .spyOn(HTMLAnchorElement.prototype, 'click')
     .mockImplementation(() => {});
   try {
-    render(<LogViewer appId='app2' deploymentId='deployment-1' />);
-    await screen.findByText('logs.empty');
-    fireEvent.click(screen.getByText('logs.download'));
+    render(<LogViewer appId='app2' deploymentId='deployment-1' />, {
+      wrapper: I18n,
+    });
+    await screen.findByText('No matching log entries.');
+    fireEvent.click(screen.getByText('Download logs'));
     await waitFor(() => expect(click).toHaveBeenCalledTimes(1));
     expect(downloaded?.size).toBeGreaterThan(100);
     expect(request.mock.calls[2]?.[0].query).toMatchObject({
-      cursor: 'download-next',
+      pageToken: 'download-next',
       fromStart: true,
       until: request.mock.calls[1]?.[0].query.until,
     });
-    fireEvent.click(screen.getByText('logs.download'));
-    await screen.findByText('logs.downloadChanged');
+    fireEvent.click(screen.getByText('Download logs'));
+    await screen.findByText(enUS.logs.downloadChanged);
     expect(click).toHaveBeenCalledTimes(1);
   } finally {
     vi.unstubAllGlobals();
@@ -208,18 +240,18 @@ it('downloads every page with a stable time boundary and rejects a reset during 
 
 it('submits local date-time filters as ISO timestamps and clears them independently', async () => {
   request.mockResolvedValue(logPage([]));
-  render(<LogViewer appId='app2' />);
-  await screen.findByText('logs.empty');
+  render(<LogViewer appId='app2' />, { wrapper: I18n });
+  await screen.findByText('No matching log entries.');
   const today = new Date();
   const dayName = new RegExp(
     `${today.toLocaleDateString('en-US', { month: 'long' })} ${today.getDate()}(?:st|nd|rd|th)?, ${today.getFullYear()}`,
   );
-  fireEvent.click(screen.getByRole('button', { name: 'logs.since' }));
+  fireEvent.click(screen.getByRole('button', { name: 'From time' }));
   fireEvent.click(await screen.findByRole('button', { name: dayName }));
-  fireEvent.change(screen.getByLabelText('dateTime.time'), {
+  fireEvent.change(screen.getByLabelText('Time'), {
     target: { value: '13:45' },
   });
-  fireEvent.click(screen.getByRole('button', { name: 'dateTime.done' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Done' }));
   const since = new Date(
     today.getFullYear(),
     today.getMonth(),
@@ -233,12 +265,12 @@ it('submits local date-time filters as ISO timestamps and clears them independen
     ),
   );
 
-  fireEvent.click(screen.getByRole('button', { name: 'logs.until' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Until time' }));
   fireEvent.click(await screen.findByRole('button', { name: dayName }));
-  fireEvent.change(screen.getByLabelText('dateTime.time'), {
+  fireEvent.change(screen.getByLabelText('Time'), {
     target: { value: '23:59' },
   });
-  fireEvent.click(screen.getByRole('button', { name: 'dateTime.done' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Done' }));
   const until = new Date(
     today.getFullYear(),
     today.getMonth(),
@@ -254,9 +286,9 @@ it('submits local date-time filters as ISO timestamps and clears them independen
     ),
   );
 
-  fireEvent.click(screen.getByRole('button', { name: 'logs.since' }));
-  expect(screen.getByLabelText('dateTime.time')).toHaveValue('13:45');
-  fireEvent.click(screen.getByRole('button', { name: 'dateTime.clear' }));
+  fireEvent.click(screen.getByRole('button', { name: 'From time' }));
+  expect(screen.getByLabelText('Time')).toHaveValue('13:45');
+  fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
   await waitFor(() => {
     const query = request.mock.lastCall?.[0].query;
     expect(query).not.toHaveProperty('since');
@@ -279,8 +311,8 @@ it('labels numeric and textual log levels while retaining raw entry details', as
     '35',
     'CUSTOM',
   ];
-  request.mockResolvedValue({
-    data: {
+  request.mockResolvedValue(
+    logResponse({
       entries: levels.map((level, index) => ({
         time: '2026-09-19',
         level,
@@ -292,9 +324,9 @@ it('labels numeric and textual log levels while retaining raw entry details', as
       hasMore: false,
       enabled: true,
       status: 'succeeded',
-    },
-  });
-  const { container } = render(<LogViewer appId='app2' />);
+    }),
+  );
+  const { container } = render(<LogViewer appId='app2' />, { wrapper: I18n });
   await screen.findByText(/entry-10/, { selector: 'summary' });
   const summaries = [...container.querySelectorAll('summary')];
   levels.forEach((level, index) => {

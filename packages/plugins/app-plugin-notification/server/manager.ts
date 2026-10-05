@@ -71,6 +71,19 @@ export class NotificationIdempotencyConflictError extends Error {
   }
 }
 
+/**
+ * A Channel cannot reach its transport: it is not enabled, its Provider changed or is not registered, or creating the
+ * Channel or Provider runtime failed (an SMTP transport that cannot be built, for example). Routes answer it with 503;
+ * any other error is a defect and is left to the application.
+ */
+export class NotificationTransportUnavailableError extends Error {
+  readonly code = 'NOTIFICATION_TRANSPORT_UNAVAILABLE';
+  constructor(message: string, options?: { readonly cause?: unknown }) {
+    super(message, options);
+    this.name = 'NotificationTransportUnavailableError';
+  }
+}
+
 export class NotificationDeliveryRetryError extends Error {
   readonly code = 'NOTIFICATION_DELIVERY_RETRY_NOT_ALLOWED';
   constructor(
@@ -95,7 +108,7 @@ export class NotificationManager<
   readonly registry: NotificationRegistry;
   private readonly channelManager: ChannelManager;
 
-  private readonly queueJob: DeliveryJobClass;
+  private readonly deliveryJob: DeliveryJobClass;
   private readonly reconcileJob: NotificationReconcileJob;
   private readonly runtimePromises = new Map<string, Promise<void>>();
   private readonly retryTimers = new Map<
@@ -105,6 +118,7 @@ export class NotificationManager<
   private readonly statusSubscriptions = new Map<string, StatusSubscription>();
   private nextStatusSequence = 0;
   private activated = false;
+  private activation?: Promise<void>;
   private started = false;
   private startPromise?: Promise<void>;
 
@@ -126,7 +140,7 @@ export class NotificationManager<
         this.scheduleRetry(delivery);
       },
     });
-    this.queueJob = createDeliveryJob(this.channelManager);
+    this.deliveryJob = createDeliveryJob(this.channelManager);
     this.reconcileJob = new NotificationReconcileJob({
       intervalMs: options.reconcileIntervalMs ?? 30_000,
       logger: options.logger,
@@ -134,16 +148,26 @@ export class NotificationManager<
     });
   }
 
-  activate(): void {
+  async activate(): Promise<void> {
     this.registry.validate(this.options.config);
     if (
-      this.activated ||
       !Object.values(this.options.config.channels).some(
         (config) => config.enabled !== false,
       )
     )
       return;
-    this.options.queue.registerJob(this.queueJob);
+    this.activation ??= this.activateInternal().catch((error: unknown) => {
+      this.activation = undefined;
+      throw error;
+    });
+    await this.activation;
+  }
+
+  private async activateInternal(): Promise<void> {
+    // Register before setup(): setup() starts consuming, and a Delivery task
+    // left waiting by an earlier run must find its handler.
+    this.options.executor.registerJob(this.deliveryJob);
+    await this.options.executor.setup();
     this.activated = true;
     this.reconcileJob.start();
   }
@@ -161,7 +185,9 @@ export class NotificationManager<
     const provider = this.registry.provider(channelConfig.provider);
     const definition = provider && this.registry.channel(provider.messageType);
     if (!definition?.test)
-      throw new Error('Notification test target is unavailable.');
+      throw new NotificationTransportUnavailableError(
+        'Notification test target is unavailable.',
+      );
     const message = definition.test.toSendInput({
       actor,
       values: request.values,
@@ -266,7 +292,7 @@ export class NotificationManager<
       return;
     }
     try {
-      this.activate();
+      await this.activate();
       for (const [name] of enabledConfigs) await this.ensureRuntime(name);
       await this.reconcile();
       this.started = true;
@@ -285,6 +311,8 @@ export class NotificationManager<
       await this.channelManager.close();
       this.runtimePromises.clear();
       this.activated = false;
+      // The executor stays set up: a later start() activates again on it.
+      this.activation = undefined;
       this.options.logger.error(
         { event: 'notification.manager.start_failed', err: error },
         'Failed to start Notification Manager.',
@@ -296,7 +324,7 @@ export class NotificationManager<
   async send(
     input: NotificationSendInput<TChannels>,
   ): Promise<NotificationSendResult> {
-    this.activate();
+    await this.activate();
     validateNotificationIdempotencyKey(input.idempotencyKey);
     if (
       input.source !== undefined &&
@@ -589,10 +617,15 @@ export class NotificationManager<
 
   async close(): Promise<void> {
     await this.startPromise?.catch(() => undefined);
+    const activation = this.activation;
+    await activation?.catch(() => undefined);
     const wasActive = this.activated;
     this.activated = false;
+    this.activation = undefined;
     this.clearRetryTimers();
     await this.reconcileJob.stop();
+    // Running Deliveries finish before the Channels they send through close.
+    if (activation) await this.options.executor.shutdown();
     await this.channelManager.close();
     this.runtimePromises.clear();
     this.started = false;
@@ -607,7 +640,7 @@ export class NotificationManager<
 
   private async dispatch(deliveryId: string): Promise<void> {
     try {
-      await this.options.queue.dispatch(this.queueJob, { deliveryId });
+      await this.options.executor.addJob(new this.deliveryJob({ deliveryId }));
     } catch (error) {
       this.options.logger.warn(
         {
@@ -833,7 +866,9 @@ export class NotificationManager<
     const config = this.options.config.channels[type];
     if (!config || config.enabled === false)
       return Promise.reject(
-        new Error(`Notification Channel "${type}" is not enabled.`),
+        new NotificationTransportUnavailableError(
+          `Notification Channel "${type}" is not enabled.`,
+        ),
       );
     if (this.channelManager.has(type)) {
       if (
@@ -841,7 +876,7 @@ export class NotificationManager<
         config.provider
       )
         return Promise.reject(
-          new Error(
+          new NotificationTransportUnavailableError(
             `Notification Channel "${type}" Provider has changed; restart the runtime.`,
           ),
         );
@@ -849,7 +884,15 @@ export class NotificationManager<
     }
     const existing = this.runtimePromises.get(type);
     if (existing) return existing;
-    const operation = this.createRuntime(type);
+    const operation = this.createRuntime(type).catch((error: unknown) => {
+      throw error instanceof NotificationTransportUnavailableError
+        ? error
+        : // Keep the original message: a failed delivery records it as the reason the Channel was unavailable.
+          new NotificationTransportUnavailableError(
+            error instanceof Error ? error.message : String(error),
+            { cause: error },
+          );
+    });
     this.runtimePromises.set(type, operation);
     void operation.catch(() => {
       if (this.runtimePromises.get(type) === operation) {
@@ -862,13 +905,15 @@ export class NotificationManager<
   private async createRuntime(name: string): Promise<void> {
     const config = this.options.config.channels[name];
     if (!config || config.enabled === false)
-      throw new Error(`Notification Channel "${name}" is not enabled.`);
+      throw new NotificationTransportUnavailableError(
+        `Notification Channel "${name}" is not enabled.`,
+      );
     const providerDefinition = this.registry.provider(config.provider);
     const definition =
       providerDefinition &&
       this.registry.channel(providerDefinition.messageType);
     if (!providerDefinition || !definition)
-      throw new Error(
+      throw new NotificationTransportUnavailableError(
         `Notification Provider "${config.provider}" is unavailable.`,
       );
     const channel = await definition.createChannel(

@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-database-explorer",
   "displayName": "Database Explorer",
   "description": "Read-only browsing of an application's database connections, collections, and fields.",
-  "version": "0.1.0-beta.7",
+  "version": "1.0.0-beta.10",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -76,7 +76,8 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "hono": "catalog:"
+    "hono": "catalog:",
+    "zod": "catalog:"
   },
   "peerDependencies": {
     "@nocobase/app-client": "workspace:^",
@@ -91,7 +92,7 @@
     "tailwind-merge": "catalog:"
   },
   "devDependencies": {
-    "@nocobase/db-sqlite": "workspace:*",
+    "@nocobase/app-testing": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@nocobase/service-provider": "workspace:*",
     "@testing-library/jest-dom": "catalog:",

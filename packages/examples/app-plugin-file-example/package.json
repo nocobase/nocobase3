@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-file-example",
   "displayName": "File Example App Plugin",
   "description": "Attachments collection, API routes, and an upload page demonstrating File Repository.",
-  "version": "0.1.0-beta.12",
+  "version": "1.0.0-beta.15",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "sideEffects": false,
@@ -48,27 +48,26 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "devDependencies": {
-    "@nocobase/db-sqlite": "workspace:*",
-    "@nocobase/dev-config": "workspace:*",
-    "@types/node": "catalog:",
-    "eslint": "catalog:",
-    "prettier": "catalog:",
-    "typescript": "catalog:",
-    "vitest": "catalog:",
     "@nocobase/app-client": "workspace:*",
-    "@nocobase/app-server": "workspace:*",
     "@nocobase/app-plugin-file": "workspace:*",
+    "@nocobase/app-server": "workspace:*",
     "@nocobase/db": "workspace:*",
+    "@nocobase/app-testing": "workspace:*",
+    "@nocobase/dev-config": "workspace:*",
+    "@nocobase/drive": "workspace:*",
     "@nocobase/i18n": "workspace:*",
     "@nocobase/service-provider": "workspace:*",
-    "react": "catalog:",
-    "@types/react": "catalog:",
-    "jsdom": "catalog:",
+    "@testing-library/jest-dom": "catalog:",
     "@testing-library/react": "catalog:",
     "@testing-library/user-event": "catalog:",
-    "@testing-library/jest-dom": "catalog:",
-    "hono": "catalog:",
-    "@nocobase/drive": "workspace:*"
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "eslint": "catalog:",
+    "jsdom": "catalog:",
+    "prettier": "catalog:",
+    "react": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   },
   "license": "Apache-2.0",
   "repository": {
@@ -78,17 +77,21 @@
   },
   "peerDependencies": {
     "@nocobase/app-client": "workspace:^",
-    "@nocobase/app-server": "workspace:^",
+    "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-plugin-file": "workspace:^",
+    "@nocobase/app-server": "workspace:^",
     "@nocobase/db": "workspace:^",
     "@nocobase/i18n": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
+    "@silurus/ooxml": "0.85.1",
     "lucide-react": "catalog:",
     "react": "^19.0.0",
-    "tailwind-merge": "catalog:",
-    "@silurus/ooxml": "0.85.1"
+    "tailwind-merge": "catalog:"
   },
   "engines": {
     "node": ">=24.0.0"
+  },
+  "dependencies": {
+    "hono": "catalog:"
   }
 }

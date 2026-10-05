@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-notification-example",
   "displayName": "Notification Example App Plugin",
   "description": "A task assignment example that persists tasks and sends in-app notifications.",
-  "version": "0.1.0-beta.1",
+  "version": "1.0.0-beta.4",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "sideEffects": false,
@@ -48,7 +48,8 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "hono": "catalog:"
+    "hono": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@base-ui/react": "catalog:",
@@ -57,7 +58,7 @@
     "@nocobase/app-plugin-notification": "workspace:*",
     "@nocobase/app-server": "workspace:*",
     "@nocobase/db": "workspace:*",
-    "@nocobase/db-sqlite": "workspace:*",
+    "@nocobase/app-testing": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@nocobase/i18n": "workspace:*",
     "@nocobase/service-provider": "workspace:*",

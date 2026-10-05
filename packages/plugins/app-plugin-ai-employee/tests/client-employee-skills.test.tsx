@@ -12,7 +12,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AIEmployeeRecord } from '../client/ai-employee-service.js';
 import enUS from '../client/locales/en-US.js';
 import zhCN from '../client/locales/zh-CN.js';
-import AIEmployeePage from '../client/pages/ai-employee-page.js';
+import { RouterProvider } from 'react-router';
+import { createEmployeeTestRouter } from './employee-test-router.js';
 
 const mocks = vi.hoisted(() => ({
   api: { request: vi.fn() },
@@ -58,6 +59,36 @@ const catalog = [
   },
   { name: 'unscoped', description: 'No scope metadata' },
 ];
+/** The summary `GET /aiEmployee/tools` answers for a registered tool. */
+function toolSummary(tool: Record<string, any>) {
+  const name = tool.definition?.name ?? tool.name;
+  return {
+    name,
+    title: tool.introduction?.title ?? name,
+    description: tool.definition?.description ?? '',
+    about: tool.introduction?.about ?? '',
+    scope: tool.scope,
+    source: tool.from ?? '',
+    defaultPermission: tool.defaultPermission,
+  };
+}
+
+/** The summary `GET /aiEmployee/skills` answers for a registered skill. */
+function skillSummary(skill: Record<string, any>) {
+  return {
+    name: skill.name,
+    title: skill.introduction?.title ?? skill.title ?? skill.name,
+    description: skill.description ?? '',
+    about: skill.introduction?.about ?? '',
+    scope: skill.scope,
+    source: skill.from ?? '',
+    tools: (skill.tools ?? []).map((name: string) => ({ name })),
+  };
+}
+
+const summaries = (value: unknown, summary: (item: any) => unknown) =>
+  Array.isArray(value) ? value.map(summary) : value;
+
 let employee: AIEmployeeRecord;
 let loadCatalog: () => Promise<unknown>;
 
@@ -81,21 +112,23 @@ beforeEach(() => {
       path: string;
       json?: Partial<AIEmployeeRecord>;
     }) => {
-      if (path === 'ai/aiEmployees:list') return [employee];
-      if (path === 'ai/aiEmployees:get') return employee;
-      if (path === 'ai/aiEmployees:update') {
+      if (path === 'aiEmployees') return { data: [employee] };
+      if (path === 'aiEmployees/ellis' && json) {
         employee = { ...employee, ...json };
-        return employee;
+        return { data: employee };
       }
-      if (path === 'ai/aiSkills:list') return loadCatalog();
-      return [];
+      if (path === 'aiEmployees/ellis') return { data: employee };
+      if (path === 'aiEmployee/skills')
+        return { data: summaries(await loadCatalog(), skillSummary) };
+      return { data: [] };
     },
   );
 });
 afterEach(cleanup);
 
 async function renderSkills() {
-  render(<AIEmployeePage />);
+  const router = createEmployeeTestRouter();
+  await act(async () => render(<RouterProvider router={router} />));
   // The first render in this file transforms the page's whole import graph, which can outlast findBy's default 1 s
   // when a runner executes every package's tests at once.
   await screen.findByRole('heading', { name: 'Ellis' }, { timeout: 10_000 });
@@ -106,7 +139,7 @@ function skillSwitch(name: string) {
 }
 function savedPayload() {
   return mocks.api.request.mock.calls.find(
-    ([request]) => request.path === 'ai/aiEmployees:update',
+    ([request]) => request.path === 'aiEmployees/ellis' && request.json,
   )?.[0].json;
 }
 async function save() {
@@ -295,7 +328,7 @@ describe('employee Skills selection', () => {
       );
       expect(
         mocks.api.request.mock.calls.filter(
-          ([request]) => request.path === 'ai/aiEmployees:get',
+          ([request]) => request.path === 'aiEmployees/ellis' && !request.json,
         ),
       ).toHaveLength(1);
     },

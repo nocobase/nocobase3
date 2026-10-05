@@ -2,21 +2,18 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
+import type { DatabaseManager, Row } from '@nocobase/db';
 import {
-  createDatabaseManager,
-  type DatabaseManager,
-  type Row,
-} from '@nocobase/db';
-import sqlite from '@nocobase/db-sqlite';
+  createTestDatabase,
+  type TestDatabase,
+} from '@nocobase/app-testing/server';
 import {
   createJobExecutorService,
   type ManagedJobExecutorService,
-  type ScheduleConfig,
+  type JobsConfig,
   type ScheduleExecutor,
 } from '@nocobase/jobs';
 
-import createDefinitions from '../../database/migrations/202609020001_scheduler_create_definitions.js';
-import addRunState from '../../database/migrations/202609240001_scheduler_add_run_state.js';
 import { createScheduleDispatchJob } from '../../server/dispatch.js';
 import { ScheduleOccurrenceStore } from '../../server/occurrences.js';
 import {
@@ -26,24 +23,14 @@ import {
 import { ScheduleTargetRegistry } from '../../server/schedules/registry.js';
 import { SCHEDULER_SCOPE } from '../../server/providers/scheduler.js';
 import { ScheduleStore } from '../../server/store.js';
+import { schedulerMigrations } from './migrations.js';
 
-/** A SQLite database with the Scheduler's migrations applied. */
-export async function createSchedulerDatabase(
-  filename: string = ':memory:',
-): Promise<DatabaseManager> {
-  const database = createDatabaseManager({
-    drivers: { sqlite },
-    connections: { main: { dialect: 'sqlite', filename } },
-  });
-  const connection = database.connection();
-  const context = {
-    builder: connection.builder,
-    query: connection.query,
-    connection,
-  };
-  await createDefinitions.up(context);
-  await addRunState.up(context);
-  return database;
+/**
+ * A database of its own on the dialect the environment selects, with the
+ * Scheduler's migrations applied. `destroy()` closes and drops it.
+ */
+export function createSchedulerDatabase(): Promise<TestDatabase> {
+  return createTestDatabase({ migrations: schedulerMigrations });
 }
 
 export interface ScheduleServiceHarness {
@@ -55,7 +42,7 @@ export interface ScheduleServiceHarness {
 
 /** A schedule service on the memory adapter, persisting into a fresh temporary directory. */
 export async function createMemoryScheduleService(
-  config?: ScheduleConfig,
+  config?: JobsConfig,
 ): Promise<ScheduleServiceHarness> {
   const directory = await mkdtemp(
     path.join(os.tmpdir(), 'nocobase-scheduler-'),

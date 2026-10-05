@@ -10,16 +10,21 @@ Validate using an administrator account with the appropriate permissions: the ta
 
 The list page is `/settings/schedules`; details are at `/settings/schedules/:scheduleId`. Definitions are maintained in source. The UI supports viewing and enabling/disabling tasks, with no API for creating or editing Cron definitions.
 
-All routes below require authentication and authorization for `{ resource: { type: 'page', id: 'scheduler.schedules' }, action: 'access' }`. Enabling/disabling currently uses the same permission, not a separate update action.
+All routes below require authentication and authorization for `{ resource: { type: 'page', id: 'scheduler.schedules' }, action: 'access' }`, checked before the schedule is looked up. Enabling/disabling currently uses the same permission, not a separate update action.
 
-| Method and path                      | Response / effect                                                                                             |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
-| `GET /api/schedules`                 | `{ data: ScheduleListItem[] }`                                                                                |
-| `GET /api/schedules/:id/occurrences` | `{ data: ScheduleOccurrenceView[] }`; currently at most the latest 100 records, with no pagination parameters |
-| `POST /api/schedules/:id/enable`     | `{ data: ScheduleListItem }`; enables the task, no request body                                               |
-| `POST /api/schedules/:id/disable`    | `{ data: ScheduleListItem }`; pauses the task, no request body                                                |
+| Method and path                                        | Response / effect                                                                                                                                                  |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GET /api/scheduler/schedules`                         | `{ data: ScheduleListItem[], meta: { page, pageSize, total } }`; `page` (default 1) and `pageSize` (default 20, at most 100)                                       |
+| `GET /api/scheduler/schedules/:scheduleId`             | `{ data: ScheduleListItem }`                                                                                                                                       |
+| `GET /api/scheduler/schedules/:scheduleId/occurrences` | `{ data: ScheduleOccurrenceView[], meta: { nextPageToken? } }`, newest first; `pageSize` (default 20, at most 100) and `pageToken` from the previous page's `meta` |
+| `POST /api/scheduler/schedules/:scheduleId/enable`     | `{ data: ScheduleListItem }`; enables the task, no request body                                                                                                    |
+| `POST /api/scheduler/schedules/:scheduleId/disable`    | `{ data: ScheduleListItem }`; pauses the task, no request body                                                                                                     |
 
-Use the id returned by list for `:id`, not the definition key or workflowKey. Enabling/disabling affects future scheduling; it does not cancel already dispatched Queue Jobs or workflows.
+Failures use the standard `/api` error body with domain `scheduler`: a caller without page access gets `403` with reason `SCHEDULE_ACCESS_REQUIRED`, an id this application has no schedule for gets `404` with reason `SCHEDULE_NOT_FOUND`, and an invalid `page`, `pageSize` or `pageToken` gets `400` with reason `INVALID_INPUT`. Treat `pageToken` as opaque; the last page has no `nextPageToken`.
+
+The running application documents these routes under the `Scheduler` tag at `/api/swagger/docs` (JSON at `/api/swagger`, signed in), with the full `ScheduleListItem` and occurrence schemas; their operationIds are `schedulerListSchedules`, `schedulerGetSchedule`, `schedulerListOccurrences`, `schedulerEnableSchedule` and `schedulerDisableSchedule`.
+
+Use the id returned by list for `:scheduleId`, not the definition key or workflowKey. Enabling/disabling affects future scheduling; it does not cancel jobs or workflows already started.
 
 `schedulerServiceToken` from `@nocobase/app-plugin-scheduler/server/tokens` is the plugin's one public service, and it is a contribution surface rather than an administration one:
 
@@ -56,9 +61,9 @@ Execution history includes status, reason, executionCount, timestamps, controlle
 Validate according to the change, beyond comparing synchronized Skill files:
 
 - The definition module imports, typechecks, and builds. Synchronization succeeds, and the list shows the expected key, timezone, and next execution.
-- In development, use a short Cron interval to observe an execution: a short target produces its business result and succeeds; asynchronous Queue Jobs or Workflows wait first and eventually reflect the real outcome.
+- In development, use a short Cron interval to observe an execution: a short target produces its business result and succeeds; asynchronous jobs or Workflows wait first and eventually reflect the real outcome.
 - Check actual status and reason for invalid payloads and missing/disabled targets. Successful synchronization does not prove input validity.
-- For asynchronous adapters, cover duplicate dispatch, the same reference for the same occurrence, successful completion, terminal failure after retries, and recovery through inspection after a lost notification. Verify a real business worker loads and consumes the Job on the selected connection/queue and produces the expected business result; Job discovery alone is insufficient.
+- For asynchronous adapters, cover duplicate dispatch, the same reference for the same occurrence, successful completion, terminal failure after retries, and recovery through inspection after a lost notification. Verify the target's executor runs the submitted job on the selected `jobs` configuration and produces the expected business result; a successful submission alone is insufficient.
 - Confirm enable/disable settings survive normal synchronization. Test finalization of removed definitions only in an authorized test environment.
 - For custom pages or Routes, verify anonymous, unauthorized, and authorized access. Run relevant application lint, typecheck, tests, and build, and report unverified external-system boundaries.
 
@@ -67,11 +72,11 @@ Do not trigger production business effects merely to validate integration. Use a
 ## Diagnose Problems
 
 - **Command missing:** check the Scheduler CLI contribution in `cli/plugins.ts`.
-- **Definition absent:** first confirm the target application root, actual running `appName`, environment/database, and UI/API endpoint are the same ones used for synchronization. In that application, call `GET /api/schedules`, match `appName` and the exact schedule `key`, and use the returned `id` for history and enable/disable routes. A renamed application or key has a different persistent identity; environment selects the deployment/database rather than adding a field to that identity. If the row is still absent, check that the registering Provider actually runs — it is listed in `server/providers/index.ts` or its plugin's `serviceProviders`, the `.has(schedulerServiceToken)` guard did not skip it because Scheduler is not installed, and `defineSchedule()` is called from `register()`/`boot()` rather than `start()` or later.
+- **Definition absent:** first confirm the target application root, actual running `appName`, environment/database, and UI/API endpoint are the same ones used for synchronization. In that application, call `GET /api/scheduler/schedules`, match `appName` and the exact schedule `key`, and use the returned `id` for history and enable/disable routes. A renamed application or key has a different persistent identity; environment selects the deployment/database rather than adding a field to that identity. If the row is still absent, check that the registering Provider actually runs — it is listed in `server/providers/index.ts` or its plugin's `serviceProviders`, the `.has(schedulerServiceToken)` guard did not skip it because Scheduler is not installed, and `defineSchedule()` is called from `register()`/`boot()` rather than `start()` or later.
 - **Startup failure:** check that the application composes `JobExecutorServiceProvider`, which `jobs` configuration applies — `scheduler.jobs` when it is set, otherwise `jobs.default`; a `scheduler.jobs` naming no `jobs` configuration stops the start — (the Redis connection for `redis`; for `memory`, whether `storage/jobs` is readable and its state file valid, which the error names), migrations, duplicate keys/types, Provider boot registration, and manifest validation errors.
 - **No trigger:** check nextRunAt, timezone, from/to, limit, enablement, and lifecycleState, then confirm the application and worker are running. The sync-only command is not a background daemon. The `memory` adapter serves one process: every process or instance fires its own copy, and one that was killed rather than stopped lost the changes since it started, so a deployment of several instances needs the `redis` adapter.
 - **Warning "A schedule fired that this instance has no definition for":** the backend held a rule this instance has no definition for, such as during a rolling deployment or after a definition was removed from code. No occurrence is recorded and the firing is not retried. Run `--finalize` once the complete manifest is deployed; the rule is removed then, and every later start removes it again should that removal have been lost. A definition that is still active in the database keeps its rule until then.
 - **Workflow does not execute:** read the Workflow integration section in [Definitions, Registration, and Synchronization](definitions.md); check its directory key, current definition enablement, Artifact availability, and inputSchema, then trace the stable eventKey and original run. Schedule synchronization does not validate the entire workflow's readiness.
-- **Stuck waiting:** follow the target reference and inspect the real executor, completion notification, and observer. Scheduler's periodic reconciliation does not perform the business worker's execution.
+- **Stuck waiting:** follow the target reference and inspect the real executor, completion notification, and observer. Scheduler's periodic reconciliation does not run the target's job.
 - **Historical occurrence after retargeting:** use the occurrence's recorded target type and reference, not the definition's current target. Follow [Historical Occurrences After Retargeting](targets.md#historical-occurrences-after-retargeting) before assessing a completion callback.
 - **Historical triggered status:** this only indicates that a target previously accepted a request, not successful completion. runCount is not a success count either.

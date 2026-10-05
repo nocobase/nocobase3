@@ -331,8 +331,13 @@ describe('Authorization Core', () => {
       const response = await app.request(path);
       expect(response.status).toBe(403);
       await expect(response.json()).resolves.toEqual({
-        code: 'FORBIDDEN',
-        message: 'Authorization denied',
+        error: {
+          code: 403,
+          status: 'PERMISSION_DENIED',
+          reason: 'AUTHORIZATION_DENIED',
+          domain: 'authorization',
+          message: 'Authorization denied',
+        },
       });
     }
     const error = new AuthorizationDeniedError({ effect: 'deny', reasons: [] });
@@ -369,6 +374,26 @@ describe('Authorization Core', () => {
         authorization: authorization.for(alice),
       }),
     ).toBeUndefined();
+  });
+});
+
+describe('the route registry', () => {
+  it('lists its registrations with their handlers, normalized and sorted by path', () => {
+    const authorization = createAuthorization({ plugins: [] });
+    const reports: Parameters<typeof authorization.routes.add>[1] = () =>
+      Promise.resolve(new Response('reports'));
+    const audit: Parameters<typeof authorization.routes.add>[1] = () =>
+      Promise.resolve(new Response('audit'));
+    authorization.routes.add('reports/', reports);
+    authorization.routes.add('//audit', audit);
+
+    expect(authorization.routes.entries()).toEqual([
+      { path: '/audit', handler: audit },
+      { path: '/reports', handler: reports },
+    ]);
+    expect(authorization.routes.entries().map((entry) => entry.path)).toEqual(
+      authorization.routes.list(),
+    );
   });
 });
 

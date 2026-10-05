@@ -15,10 +15,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useCatalogDisplay } from '../client/catalog-display.js';
 import { SkillToolBadges } from '../client/components/skill-tool-badges.js';
 import locales from '../client/locales/index.js';
-import AIEmployeePage from '../client/pages/ai-employee-page.js';
-import SkillsSettingsPage from '../client/pages/skills-settings-page.js';
-import ToolsSettingsPage from '../client/pages/tools-settings-page.js';
+import { createMemoryRouter, RouterProvider } from 'react-router';
+import { createCatalogTestRouter } from './catalog-test-router.js';
+import { createEmployeeTestRouter } from './employee-test-router.js';
 import MCPPage from '../client/pages/mcp-page.js';
+import MCPToolsPage from '../client/pages/mcp-services/tools.js';
 import type { ManagedSkillDetail } from '../client/skills-management-service.js';
 import type { ManagedToolDetail } from '../client/tools-management-service.js';
 import packageMetadata from '../package.json' with { type: 'json' };
@@ -195,9 +196,11 @@ describe('client-only catalog translations', () => {
     ];
     const original = structuredClone(rows);
     mocks.api.request.mockImplementation(async ({ path }: { path: string }) =>
-      path.endsWith(':listAll') ? { rows } : tool,
+      path === 'aiEmployee/tools' ? { data: rows } : { data: tool },
     );
-    const { runtime } = await mount(<ToolsSettingsPage />);
+    const { runtime } = await mount(
+      <RouterProvider router={createCatalogTestRouter('tools')} />,
+    );
     const list = await screen.findByRole('list');
     const titles = () =>
       within(list)
@@ -245,9 +248,11 @@ describe('client-only catalog translations', () => {
     ];
     const original = structuredClone(rows);
     mocks.api.request.mockImplementation(async ({ path }: { path: string }) =>
-      path.endsWith(':listAll') ? { rows } : skill,
+      path === 'aiEmployee/skills' ? { data: rows } : { data: skill },
     );
-    const { runtime } = await mount(<SkillsSettingsPage />);
+    const { runtime } = await mount(
+      <RouterProvider router={createCatalogTestRouter('skills')} />,
+    );
     const list = await screen.findByRole('list');
     expect(
       within(list)
@@ -302,36 +307,38 @@ describe('client-only catalog translations', () => {
     };
     const rawTools = [
       {
-        definition: { name: tool.name, description: tool.description },
-        introduction: { title: tool.title, about: tool.about },
+        name: tool.name,
+        title: tool.title,
+        description: tool.description,
+        about: tool.about,
         i18n: tool.i18n,
       },
-      {
-        definition: { name: 'literal-tool' },
-        introduction: { title: 'Middle' },
-      },
+      { name: 'literal-tool', title: 'Middle', description: '', about: '' },
     ];
     const rawSkills = [
       {
         name: skill.name,
         title: skill.title,
         description: skill.description,
+        about: '',
         i18n: skill.i18n,
       },
-      { name: 'literal-skill', title: 'Middle' },
+      { name: 'literal-skill', title: 'Middle', description: '', about: '' },
     ];
     const original = structuredClone({ rawTools, rawSkills });
     mocks.api.request.mockImplementation(
       async ({ path, json }: { path: string; json?: object }) => {
-        if (path === 'ai/aiEmployees:list') return [employee];
-        if (path === 'ai/aiEmployees:get') return employee;
-        if (path === 'ai/aiEmployees:update') return { ...employee, ...json };
-        if (path === 'ai/aiTools:list') return rawTools;
-        if (path === 'ai/aiSkills:list') return rawSkills;
-        return [];
+        if (path === 'aiEmployees') return { data: [employee] };
+        if (path === 'aiEmployees/atlas')
+          return { data: json ? { ...employee, ...json } : employee };
+        if (path === 'aiEmployee/tools') return { data: rawTools };
+        if (path === 'aiEmployee/skills') return { data: rawSkills };
+        return { data: [] };
       },
     );
-    const { runtime } = await mount(<AIEmployeePage />);
+    const { runtime } = await mount(
+      <RouterProvider router={createEmployeeTestRouter()} />,
+    );
     await screen.findByRole('heading', { name: 'Atlas' });
     fireEvent.click(screen.getByRole('tab', { name: 'Skills' }));
     const selectorNames = () =>
@@ -358,7 +365,7 @@ describe('client-only catalog translations', () => {
       ),
     );
     const update = mocks.api.request.mock.calls.find(
-      ([request]) => request.path === 'ai/aiEmployees:update',
+      ([request]) => request.path === 'aiEmployees/atlas' && request.json,
     )?.[0];
     expect(update.json.skillSettings).toMatchObject({
       enabledSkills: [skill.name],
@@ -382,18 +389,30 @@ describe('client-only catalog translations', () => {
     ];
     const original = structuredClone(entries);
     mocks.api.request.mockImplementation(async ({ path }: { path: string }) =>
-      path.endsWith(':listTools')
-        ? { server: entries }
-        : [
-            {
-              name: 'server',
-              title: 'Server',
-              enabled: true,
-              transport: 'http',
-            },
-          ],
+      path === 'aiEmployee/mcpServers/tools'
+        ? { data: { server: entries } }
+        : {
+            data: [
+              {
+                name: 'server',
+                title: 'Server',
+                enabled: true,
+                transport: 'http',
+              },
+            ],
+          },
     );
-    const { runtime } = await mount(<MCPPage />);
+    const router = createMemoryRouter(
+      [
+        {
+          path: '/settings/ai/mcp-services',
+          Component: MCPPage,
+          children: [{ path: ':serverName/tools', Component: MCPToolsPage }],
+        },
+      ],
+      { initialEntries: ['/settings/ai/mcp-services'] },
+    );
+    const { runtime } = await mount(<RouterProvider router={router} />);
     fireEvent.click(await screen.findByRole('button', { name: 'View' }));
     const dialog = screen.getByRole('dialog');
     const rows = () => within(dialog).getAllByRole('listitem');

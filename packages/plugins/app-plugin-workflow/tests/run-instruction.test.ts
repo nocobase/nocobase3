@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import type { DatabaseManager } from '@nocobase/db';
+import { type TestDatabase } from '@nocobase/app-testing/server';
 import {
   createServiceToken,
   ServiceContainer,
@@ -30,7 +31,7 @@ import { pendingInstruction } from './fixtures/instructions.js';
 import { createWorkflowRunServices } from '../server/engine/run-services.js';
 import { asIdFilter } from '../server/engine/utils.js';
 import {
-  createTestDatabase,
+  createWorkflowTestDatabase,
   createTestWorkflow,
   findRun,
   listNodeRuns,
@@ -66,14 +67,16 @@ async function createArtifactRoot(
 }
 
 describe('run instruction', () => {
+  let testDatabase: TestDatabase;
   let database: DatabaseManager;
 
   beforeEach(async () => {
-    database = await createTestDatabase();
+    testDatabase = await createWorkflowTestDatabase();
+    database = testDatabase.database;
   });
 
   afterEach(async () => {
-    await database.destroy();
+    await testDatabase.destroy();
     await Promise.all(
       roots
         .splice(0)
@@ -449,6 +452,7 @@ describe('run instruction', () => {
   it('publishes completion for the same attempt and resumes a condition branch', async () => {
     const resourceRoot = await createArtifactRoot({
       './value': 'export function run() { return 42; }',
+      './take-branch': 'export function run() { return true; }',
     });
     const workflow = await createTestWorkflow(database, {
       key: 'queued-branch',
@@ -456,7 +460,7 @@ describe('run instruction', () => {
         {
           key: 'condition',
           type: 'condition',
-          config: {},
+          config: { module: './take-branch' },
           downstreamKey: 'after',
         },
         {

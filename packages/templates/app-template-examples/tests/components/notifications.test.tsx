@@ -6,6 +6,11 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react';
+import {
+  TestI18nProvider,
+  createTestI18nRuntime,
+} from '@nocobase/i18n/testing';
+import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
@@ -26,33 +31,42 @@ vi.mock('@nocobase/app-client', async (importOriginal) => {
       token === actual.realtimeClientToken ? realtime : client,
   };
 });
-vi.mock('@nocobase/i18n/client', () => ({
-  useTranslation: () => ({
-    t: (key: string, options?: { defaultValue?: string }) =>
-      options?.defaultValue ?? key,
-  }),
-}));
 
+import notificationInApp from '@nocobase/app-plugin-notification-in-app/client/plugin';
 import NotificationsPage from '../../client/pages/notifications.tsx';
+import enUS from '../../client/locales/en-US.js';
 
-it('loads the current inbox, persists read state with CSRF, filters unread, and cleans up subscriptions', async () => {
+const runtime = await createTestI18nRuntime({
+  application: {
+    namespace: '@nocobase/app-template-examples',
+    resources: enUS,
+  },
+  namespaces: {
+    '@nocobase/app-plugin-notification-in-app': notificationInApp().locales!,
+  },
+});
+
+function I18n({ children }: { readonly children: ReactNode }) {
+  return (
+    <TestI18nProvider
+      runtime={runtime}
+      namespace='@nocobase/app-template-examples'
+    >
+      {children}
+    </TestI18nProvider>
+  );
+}
+
+it('loads the current inbox, persists read state, filters unread, and cleans up subscriptions', async () => {
   let readAt: string | undefined;
   mocks.subscribe.mockReturnValue(mocks.cleanup);
   mocks.onOpen.mockReturnValue(mocks.cleanup);
   mocks.request.mockImplementation(
-    async ({
-      path,
-      method,
-      json,
-    }: {
-      path: string;
-      method?: string;
-      json?: { action?: string };
-    }) => {
-      if (path.endsWith('/csrf')) return { token: 'test-csrf' };
-      if (path.endsWith('/unread-count')) return { count: readAt ? 0 : 1 };
+    async ({ path, method }: { path: string; method?: string }) => {
+      if (path.endsWith('/unreadCount'))
+        return { data: { count: readAt ? 0 : 1 } };
       if (method === 'POST') {
-        if (json?.action === 'read') readAt = new Date().toISOString();
+        if (path.endsWith('/markRead')) readAt = new Date().toISOString();
         return { data: { id: 'message-1', readAt } };
       }
       return {
@@ -75,20 +89,17 @@ it('loads the current inbox, persists read state with CSRF, filters unread, and 
     <MemoryRouter>
       <NotificationsPage />
     </MemoryRouter>,
+    { wrapper: I18n },
   );
   expect(await screen.findByText('Your report is ready')).toBeInTheDocument();
   fireEvent.click(
     screen.getByRole('button', { name: 'Mark read', exact: true }),
   );
   await waitFor(() =>
-    expect(mocks.request).toHaveBeenCalledWith(
-      expect.objectContaining({
-        path: 'notifications/in-app/message-1',
-        method: 'POST',
-        headers: { 'x-csrf-token': 'test-csrf' },
-        json: { action: 'read' },
-      }),
-    ),
+    expect(mocks.request).toHaveBeenCalledWith({
+      path: 'notificationInApp/messages/message-1/markRead',
+      method: 'POST',
+    }),
   );
   await screen.findByRole('button', { name: 'Mark unread' });
   fireEvent.click(screen.getByRole('button', { name: 'Unread', exact: true }));
@@ -133,8 +144,8 @@ it('automatically loads the last page once when the bottom becomes visible', asy
   );
   mocks.request.mockReset();
   mocks.request.mockImplementation(async ({ path }: { path: string }) => {
-    if (path.endsWith('/unread-count')) return { count: 0 };
-    const lastPage = path.includes('cursor=next');
+    if (path.endsWith('/unreadCount')) return { data: { count: 0 } };
+    const lastPage = path.includes('pageToken=next');
     return {
       data: [
         {
@@ -144,13 +155,14 @@ it('automatically loads the last page once when the bottom becomes visible', asy
           createdAt: '2026-09-17T12:00:00Z',
         },
       ],
-      nextCursor: lastPage ? undefined : 'next',
+      meta: lastPage ? {} : { nextPageToken: 'next' },
     };
   });
   render(
     <MemoryRouter>
       <NotificationsPage />
     </MemoryRouter>,
+    { wrapper: I18n },
   );
   await screen.findByText('Latest message');
   expect(screen.queryByText('Older message')).not.toBeInTheDocument();
@@ -172,7 +184,7 @@ it('automatically loads the last page once when the bottom becomes visible', asy
   await screen.findByText('Older message');
   expect(
     mocks.request.mock.calls.filter(([request]) =>
-      request.path.includes('cursor=next'),
+      request.path.includes('pageToken=next'),
     ),
   ).toHaveLength(1);
   expect(screen.getByText('Latest message')).toBeInTheDocument();
@@ -201,7 +213,7 @@ it('expands and collapses overflowing message bodies independently', async () =>
   );
   mocks.request.mockReset();
   mocks.request.mockImplementation(async ({ path }: { path: string }) => {
-    if (path.endsWith('/unread-count')) return { count: 0 };
+    if (path.endsWith('/unreadCount')) return { data: { count: 0 } };
     return {
       data: ['Long message body', 'Short message'].map((body) => ({
         id: body,
@@ -215,6 +227,7 @@ it('expands and collapses overflowing message bodies independently', async () =>
     <MemoryRouter>
       <NotificationsPage />
     </MemoryRouter>,
+    { wrapper: I18n },
   );
   await screen.findByText('Long message body');
   // Each row starts observing in an effect, which can still be pending once its text is in the DOM. Measuring before

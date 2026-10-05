@@ -16,15 +16,15 @@ Templates ship their tests into generated applications. Keep them runnable from 
 
 ## What to test, by change
 
-| You changed      | Test at least                                                                                     |
-| ---------------- | ------------------------------------------------------------------------------------------------- |
-| A server route   | Anonymous → `401`, authenticated but unpermitted → `403`, permitted → expected payload            |
-| A public webhook | Missing signature, invalid signature, valid signature, duplicate delivery                         |
-| A migration      | `up` produces the expected schema; `down` reverses it; against a real database                    |
-| A seed           | First run, run against existing data, repeat run                                                  |
-| A service        | Its domain behavior, with its dependencies supplied directly                                      |
-| A job            | `execute()` with a realistic payload; a second run is harmless; failures behave as intended       |
-| Frontend code    | See [frontend tests](frontend/references/testing.md): pages, components, route declarations, copy |
+| You changed      | Test at least                                                                                                                     |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| A server route   | Anonymous → `401`, authenticated but unpermitted → `403`, permitted → expected payload; the route is declared in the API document |
+| A public webhook | Missing signature, invalid signature, valid signature, duplicate delivery                                                         |
+| A migration      | `up` produces the expected schema; `down` reverses it; against a real database                                                    |
+| A seed           | First run, run against existing data, repeat run                                                                                  |
+| A service        | Its domain behavior, with its dependencies supplied directly                                                                      |
+| A job            | `execute()` with a realistic payload; a second run is harmless; failures behave as intended                                       |
+| Frontend code    | See [frontend tests](frontend/references/testing.md): pages, components, route declarations, copy                                 |
 
 ## Testing a route
 
@@ -49,13 +49,73 @@ expect(response.status).toBe(401);
 
 Do not add a `registerRoutes(router, ...)` helper just to make a route testable. It moves the security boundary out of the thing you are testing.
 
+## Testing through the whole application
+
+To check a route's authentication and permission boundaries as a user meets them, start the application itself on test databases with `@nocobase/app-testing/server` and sign in through its own sign-in route with `@nocobase/app-plugin-authentication/testing`:
+
+```ts
+import {
+  DEFAULT_ADMIN_CREDENTIALS,
+  signIn,
+} from '@nocobase/app-plugin-authentication/testing';
+import { createAppTest } from '@nocobase/app-testing/server';
+import { createStandaloneServer } from '../../server/standalone.ts';
+
+const test = createAppTest({ createServer: createStandaloneServer });
+
+test('lists orders for an administrator only', async ({ testApp, request }) => {
+  expect((await request('/orders')).status).toBe(401);
+  const admin = await signIn(testApp, DEFAULT_ADMIN_CREDENTIALS);
+  expect((await admin.fetch('/orders')).status).toBe(200);
+});
+```
+
+The application starts as `pnpm start` starts it and installs its migrations and seeds on start; one application serves the test file. A user other than the administrator is one a seed of the application created, signed in the same way.
+
+### The API document
+
+The same started application proves that every route declares itself for the [API document](http-api.md#api-documentation):
+
+```ts
+import {
+  apiDocsToken,
+  findApiDocumentSchemaProblems,
+  findUndeclaredApiRoutes,
+} from '@nocobase/app-server/router';
+
+test('declares its routes in the API document', async ({ testApp }) => {
+  expect(findUndeclaredApiRoutes(testApp.application)).toEqual([]);
+  const document = await testApp.application.container
+    .resolve(apiDocsToken)
+    .getDocument();
+  expect(findApiDocumentSchemaProblems(document)).toEqual([]);
+  const cancel = document.paths?.['/api/orders/{orderId}/cancel']?.post;
+  expect(cancel?.operationId).toBe('cancelOrder');
+  // 401, 403 and 500 from apiErrorResponses, 400 from its validators and its own precondition, and its 404.
+  expect(Object.keys(cancel?.responses ?? {}).sort()).toEqual([
+    '200',
+    '400',
+    '401',
+    '403',
+    '404',
+    '500',
+  ]);
+});
+```
+
+The document lists only the statuses a route can return: a route without a permission check has no `403`, and one without `apiValidator()` and no other `400` of its own has no `400`. [HTTP API design](http-api.md#declaring-a-route) states the rule.
+
+## Test databases
+
+A test never chooses its database: it does not import a `@nocobase/db-<dialect>` package, configure `dialect: 'sqlite'` or `':memory:'`, or reach for SQL only one database understands, such as `PRAGMA` or `sqlite_master`. It gets its databases from `@nocobase/app-testing/server` — `createAppTest()` for the whole application, `createTestDatabase()` or `createDatabaseTest()` for a database alone — on the dialect `NOCOBASE_TEST_DB_DIALECT` names, and SQLite when it is unset, so `pnpm test` needs no server. Assert on the schema with `expectCollection()`, which compares Field and Collection names rather than physical ones.
+
 ## Testing the frontend
 
-Component tests, the route test and translation checks are described in [frontend tests](frontend/references/testing.md).
+Component tests, the route test and translation checks are described in [frontend tests](frontend/references/testing.md), including a minimal component test that renders with the real i18n runtime from `@nocobase/i18n/testing`. Do not mock `@nocobase/i18n/client`: a mocked `t` hides misspelt keys and wrong namespaces.
 
 ## Testing migrations
 
-Run against a real test database. A test that only imports the migration file proves nothing about the schema it produces. Verify tables, columns, types, indexes, and constraints after `up`, then run `down` and verify cleanup.
+Run against a real test database. A test that only imports the migration file proves nothing about the schema it produces. `describeMigration()` from `@nocobase/app-testing/server` applies the migrations before it, applies this one, rolls it back and applies it again, and checks after each step that metadata and tables agree and that rolling back restores every table as it was; its `up` and `down` callbacks verify the fields, indexes and constraints with `expectCollection()`.
 
 ## Before finishing
 
@@ -77,7 +137,7 @@ Add focused regression coverage when behavior changes. Documentation-only change
 
 Then verify the affected behavior, selecting only the applicable steps below. Green commands mean the code compiles and the assertions you wrote hold — not that the feature works:
 
-- For a frontend change, verify as [the frontend workflow](frontend/ui-workflow.md) prescribes for the workflow it took; a quick change needs only static checks.
+- For a frontend change, verify as [the frontend workflow](frontend/ui-workflow.md) prescribes for the workflow it took: a quick change runs the static checks and the related tests and looks at the changed element once in the browser; a theme change runs the theme tests and its browser check; the full workflow ends with its acceptance review.
 - Confirm the endpoint's responses for signed-out, unpermitted, and permitted callers.
 - Confirm `pnpm nocobase db apply` applies cleanly.
 
@@ -87,9 +147,9 @@ Say what you ran, what passed, and what you did not run. If you could not verify
 
 ## Strict startup verification
 
-Set `NOCOBASE_STRICT_STARTUP=true` when running `pnpm dev` or `pnpm start` in automated verification. Startup failures, including job import failures, exit nonzero after resource cleanup. Strict dev runs the server without watch mode so a failed server cannot remain hidden behind a watcher; restart the command after server or configuration changes. Client HMR remains available. Omit the variable or set it to `false` for normal development with server hot reload. Request errors and individual job execution failures do not terminate the application.
+Set `NOCOBASE_STRICT_STARTUP=true` when running `pnpm dev` or `pnpm start` in automated verification. Startup failures exit nonzero after resource cleanup. Strict dev runs the server without watch mode so a failed server cannot remain hidden behind a watcher; restart the command after server or configuration changes. Client HMR remains available. Omit the variable or set it to `false` for normal development with server hot reload. Request errors and individual job execution failures do not terminate the application.
 
-Use the shared Vitest presets for tests that discover queue jobs. They inline the queue loader so dynamically imported TypeScript tasks use Vitest's transformation and module registry. Do not suppress job import warnings or disable automatic discovery to make a startup test pass; assert that discovered jobs register and execute.
+In application tests that start jobs or queues, keep their memory state files out of the working tree: `createAppTest()` and `createTestApp()` put the application's storage in a temporary directory, and a test that starts the application another way selects a `jobs` or `queue` configuration key whose `persistence.path` is a temporary directory.
 
 ## Vite cache isolation
 
@@ -105,4 +165,7 @@ Do not delete or rebuild a running development server's cache. For an already co
 
 `@nocobase/app-cli` implements the application's scripts and commands: `pnpm dev`, `pnpm build` and `pnpm start` run `nocobase dev`, `nocobase build` and `nocobase start`, and every standard command is `pnpm nocobase <topic> <command>`. In the source repository, run shared implementation tests in `packages/app/app-cli` and application composition tests in each affected template. Keep tests for the application's own commands in the application. A generated application consumes the compiled package; do not edit installed package files to customize behavior.
 
+Application server source supports extensionless relative imports. Keep `module: "ESNext"`, `moduleResolution: "Bundler"`, and `tsc-alias.resolveFullPaths: true` in `tsconfig.server.json`. Development uses `tsx`; production builds run `tsc-alias` after `tsc` to complete ESM paths, before build hooks collect workflow resources. When changing this configuration, verify the compiled output with plain Node and no source files or TypeScript loader.
+
+Application-owned workflows live in `workflows/` beside `server/` by default. Keep `workflows/**/*.ts` in the server TypeScript build and workflow client directories in the client typecheck. Point ESLint at `tsconfig.server.json` for workflow definitions and handlers so type-aware linting covers the top-level directory. The workflow CLI builds artifacts into `dist/workflows/`; verify this directory when checking a production build.
 Vite configuration imports the proxy helpers from `@nocobase/app-cli/dev/proxy`. Watcher, proxy, supervisor and build-step unit tests live in `app-cli`; templates verify their composition and Vite integration.

@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-users",
   "displayName": "User Management",
   "description": "Reusable user administration APIs and pages for NocoBase applications.",
-  "version": "1.0.0-beta.12",
+  "version": "2.0.0-beta.0",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -84,7 +84,8 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "hono": "catalog:"
+    "hono": "catalog:",
+    "zod": "catalog:"
   },
   "peerDependencies": {
     "@base-ui/react": "catalog:",
@@ -104,20 +105,20 @@
     "@nocobase/authorization": "workspace:^"
   },
   "devDependencies": {
-    "@nocobase/db-sqlite": "workspace:*",
+    "@nocobase/app-testing": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
+    "@testing-library/react": "catalog:",
+    "@testing-library/user-event": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "eslint": "catalog:",
+    "jsdom": "catalog:",
     "prettier": "catalog:",
+    "react-dom": "catalog:",
     "shadcn": "catalog:",
     "tailwindcss": "catalog:",
     "tw-animate-css": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:",
-    "@testing-library/react": "catalog:",
-    "@testing-library/user-event": "catalog:",
-    "jsdom": "catalog:",
-    "react-dom": "catalog:"
+    "vitest": "catalog:"
   }
 }

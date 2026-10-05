@@ -1,5 +1,6 @@
-import sqlite from '@nocobase/db-sqlite';
-import { createDatabaseManager, type DatabaseManager } from '@nocobase/db';
+import type { DatabaseManager } from '@nocobase/db';
+import { type TestDatabase } from '@nocobase/app-testing/server';
+import { ServiceContainer } from '@nocobase/service-provider';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
@@ -11,6 +12,7 @@ import Dispatcher from '../server/engine/dispatcher.js';
 import { WorkflowRunRepository } from '../server/repositories/workflow-run-repository.js';
 import { createWorkflowRunRoutes } from '../server/routes/workflow-runs.js';
 import Processor from '../server/engine/processor.js';
+import { createWorkflowRunServices } from '../server/engine/run-services.js';
 import type {
   WorkflowDefinition,
   WorkflowId,
@@ -29,34 +31,29 @@ import {
   echoInstruction,
 } from './fixtures/instructions.js';
 import {
-  createTestDatabase,
+  constantCondition,
+  createModuleRoot,
+  createWorkflowTestDatabase,
   createTestWorkflow,
-  createWorkflowCollections,
   findRun,
   insertTestRun,
   listNodeRuns,
   readRun,
+  removeModuleRoots,
   testStore,
 } from './helpers.js';
 
 describe('workflow dispatcher and processor', () => {
+  let testDatabase: TestDatabase;
   let database: DatabaseManager;
 
   beforeEach(async () => {
-    database = createDatabaseManager({
-      drivers: { sqlite },
-      connections: {
-        main: {
-          dialect: 'sqlite',
-          filename: ':memory:',
-        },
-      },
-    });
-    await createWorkflowCollections(database.builder());
+    testDatabase = await createWorkflowTestDatabase();
+    database = testDatabase.database;
   });
 
   afterEach(async () => {
-    await database.destroy();
+    await testDatabase.destroy();
   });
 
   it('returns a persisted manual run before a waiting node finishes and drains it', async () => {
@@ -97,7 +94,7 @@ describe('workflow dispatcher and processor', () => {
           'content-type': 'application/json',
           'event-key': 'manual-background',
         },
-        body: '{}',
+        body: JSON.stringify({ input: {} }),
       });
       expect(response.status).toBe(200);
       const receipt = (await response.json()) as {
@@ -255,6 +252,7 @@ describe('workflow dispatcher and processor', () => {
  * a path that happens to use it.
  */
 describe('Processor public API', () => {
+  let testDatabase: TestDatabase;
   let database: DatabaseManager;
   let workflow: WorkflowDefinition;
   let runCounter = 0;
@@ -263,6 +261,8 @@ describe('Processor public API', () => {
     ['condition', ConditionInstruction],
     ['echo', echoInstruction],
   ]);
+  const services = createWorkflowRunServices(new ServiceContainer());
+  let moduleRoot = '';
 
   function nodeOf(key: string): WorkflowNode {
     const node = workflow.nodes.find((candidate) => candidate.key === key);
@@ -297,13 +297,19 @@ describe('Processor public API', () => {
       workflow: definition,
       execution,
       instructions,
+      services,
+      workflowResourceRoot: moduleRoot,
     });
     await processor.prepare();
     return { processor, runId };
   }
 
   beforeEach(async () => {
-    database = await createTestDatabase();
+    testDatabase = await createWorkflowTestDatabase();
+    database = testDatabase.database;
+    moduleRoot = await createModuleRoot({
+      './always-true': constantCondition(true),
+    });
     runCounter = 0;
     workflow = await createTestWorkflow(database, {
       key: 'processor-api',
@@ -317,7 +323,7 @@ describe('Processor public API', () => {
         {
           key: 'gate',
           type: 'condition',
-          config: {},
+          config: { module: './always-true' },
           upstreamKey: 'head',
           downstreamKey: 'after',
         },
@@ -348,7 +354,8 @@ describe('Processor public API', () => {
   });
 
   afterEach(async () => {
-    await database.destroy();
+    await testDatabase.destroy();
+    await removeModuleRoots();
   });
 
   it('maps every nodeRun status to an execution status', () => {

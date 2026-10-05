@@ -3,9 +3,10 @@
 This example owns the file and business migrations, concrete API routes and the
 upload, preview and relation pages. Consume the core File Repository plugin only
 through its public exports; register both plugins in the target App, core first.
-Keep public documentation in English. The example exposes public routes.
-Applications own authentication and authorization; Range and conditional
-requests are not supported. Business relations are written through the owning
+Keep public documentation in English. Every exposure and upload route
+requires a signed-in user through the authentication plugin; the content route
+under each `accessPath` stays public, as the File Repository defines it. Range
+and conditional requests are not supported. Business relations are written through the owning
 repository's write policy, never by editing file metadata directly.
 
 This is a NocoBase application plugin: a package published to a registry and installed into an application someone else assembled. That makes it a guest, and most of the rules below follow from it.
@@ -45,7 +46,7 @@ Before adding a client package, check whether `packages/templates/app-template-d
 
 ### Runtime packages are peers, never dependencies
 
-`@nocobase/app-server`, `@nocobase/app-client`, `@nocobase/db`, `@nocobase/i18n`, `@nocobase/service-provider`, `@nocobase/queue`, `@nocobase/caching`, `@nocobase/ai-employee`, `@nocobase/authorization`, `@nocobase/repository-input`, and every other `@nocobase/app-plugin-*` carry process-wide state — service tokens compared by object identity, React contexts, a job registry. A second copy splits that state, and nothing warns: the install succeeds, the build succeeds, and at runtime a demonstrably registered service reports `Service "..." is not registered`.
+`@nocobase/app-server`, `@nocobase/app-client`, `@nocobase/db`, `@nocobase/i18n`, `@nocobase/service-provider`, `@nocobase/queue`, `@nocobase/caching`, `@nocobase/ai-employee`, `@nocobase/authorization`, `@nocobase/repository-input`, and every other `@nocobase/app-plugin-*` carry process-wide state or host-owned contracts — service tokens compared by object identity, React contexts, the application's queue service. A second copy splits that state, and nothing warns: the install succeeds, the build succeeds, and at runtime a demonstrably registered service reports `Service "..." is not registered`.
 
 Declare each as a `peerDependency` — the published compatibility contract requiring a host-provided package. One declaration is enough; pnpm installs a peer and links it into this package's own `node_modules`, so lint, tests, and the build resolve it without a second entry to keep in step. `pnpm peers:check` enforces the packages in its recorded list; review newly identified shared packages explicitly. The generator already emits this shape for the capabilities you selected.
 

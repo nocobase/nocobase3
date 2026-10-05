@@ -105,6 +105,13 @@ export interface DatabaseRepositoryRuntimeStrategy {
     aggregate: string | undefined;
   }) => string | Knex.Raw;
   readonly createManyFallback?: (collection: CollectionDefinition) => boolean;
+  /**
+   * Whether one multi-row `INSERT … RETURNING` hands back every inserted row,
+   * decodable the way a single-row RETURNING is. A `createMany` that must
+   * report generated keys to a Repository mutation event then stays one
+   * statement; without it the rows are inserted one by one.
+   */
+  readonly insertManyReturning?: boolean;
   readonly emptyInsertValue?: (context: {
     client: Knex;
     collection: CollectionDefinition;
@@ -220,6 +227,22 @@ export interface DatabaseSchemaRuntimeStrategy {
    * Defaults to passing the value through.
    */
   readonly encodeJsonDefault?: (context: { altering: boolean }) => boolean;
+  /**
+   * The default a column is created or altered with, as an expression, in place of its `defaultValue`.
+   *
+   * Return one where the engine rejects the literal form, as MySQL does on a TEXT column, which takes a default only
+   * as `default ('…')`. `undefined` keeps the literal default.
+   *
+   * Knex's MySQL column compiler drops any default, this expression included, from a column it built as `text()` or
+   * `binary()`, because MySQL before 8.0.13 accepted none there. A dialect returning an expression for such a column
+   * therefore also names the column's type through `columnType`: a column built through `specificType` keeps its
+   * default. The MySQL dialect decides both from one place, `textDefaultType`, so the two answers cannot drift.
+   */
+  readonly columnDefault?: (context: {
+    client: Knex;
+    column: ColumnSchemaDefinition;
+    altering: boolean;
+  }) => Knex.Raw | undefined;
   readonly configureForeignKey?: (context: {
     foreign: any;
     constraint: PhysicalConstraintDefinition & { type: 'foreignKey' };

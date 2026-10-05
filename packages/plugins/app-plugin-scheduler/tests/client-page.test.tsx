@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 
+import type { I18nRuntime } from '@nocobase/i18n';
 import {
+  TestI18nProvider,
+  createTestI18nRuntime,
+} from '@nocobase/i18n/testing';
+import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -9,118 +15,35 @@ import {
   waitFor,
 } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ReactNode } from 'react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 
 const mocks = vi.hoisted(() => {
   const request = vi.fn();
-  let language: 'en-US' | 'zh-CN' = 'en-US';
-  const translations: Readonly<Record<string, string>> = {
-    'nav.automation': 'Automation',
-    'page.title': 'Scheduled tasks',
-    'page.targets.workflow': 'Workflow',
-    'page.targets.job': 'Job',
-    'page.pagination.previous': 'Previous',
-    'page.pagination.next': 'Next',
-    'page.pagination.summary': 'Page {{page}} of {{total}}',
-    'page.filters.searchLabel': 'Search schedules',
-    'page.filters.searchPlaceholder': 'Search name, target type, or schedule…',
-    'page.filters.statusLabel': 'Filter by status',
-    'page.filters.targetLabel': 'Filter by target type',
-    'page.filters.allStatuses': 'All statuses',
-    'page.filters.allTargets': 'All target types',
-    'page.statuses.active': 'Active',
-    'page.statuses.paused': 'Paused',
-    'page.statuses.inactive': 'Inactive',
-    'page.statuses.targetIssue': 'Target issue',
-    'page.columns.name': 'Name',
-    'page.columns.target': 'Target',
-    'page.columns.scheduleTimezone': 'Schedule / timezone',
-    'page.columns.triggered': 'Triggered',
-    'page.columns.nextRun': 'Next trigger',
-    'page.columns.status': 'Status',
-    'page.actions.enable': 'Enable',
-    'page.actions.disable': 'Disable',
-    'page.loading': 'Loading scheduled tasks…',
-    'page.empty': 'No scheduled tasks are defined.',
-    'page.noMatches': 'No scheduled tasks match these filters.',
-    'page.unavailable': '—',
-    'page.invalidSchedule': 'Invalid schedule',
-    'page.details.back': 'Back to scheduled tasks',
-    'page.details.loading': 'Loading schedule details…',
-    'page.details.notFound': 'The scheduled task was not found.',
-    'page.details.overview': 'Overview',
-    'page.details.triggers': 'Execution records',
-    'page.details.schedule': 'Schedule',
-    'page.details.frequency': 'Frequency',
-    'page.details.timezone': 'Timezone',
-    'page.details.nextRun': 'Next run',
-    'page.details.lastTrigger': 'Last trigger',
-    'page.details.triggerCount': 'Trigger count',
-    'page.details.target': 'Execution target',
-    'page.details.targetName': 'Target',
-    'page.details.targetType': 'Target type',
-    'page.details.description': 'Description',
-    'page.triggersLoading': 'Loading triggers…',
-    'page.triggersEmpty': 'No triggers have started.',
-    'page.triggerColumns.timing': 'Started / finished',
-    'page.triggerColumns.status': 'Status',
-    'page.triggerStatuses.triggered': 'Triggered',
-  };
-  const chineseTranslations: Readonly<Record<string, string>> = {
-    'nav.automation': '自动化',
-    'page.title': '定时任务',
-    'page.columns.triggered': '已触发',
-    'page.filters.searchLabel': '搜索定时任务',
-    'page.filters.searchPlaceholder': '搜索名称、目标类型或执行周期…',
-    'page.filters.statusLabel': '按状态筛选',
-    'page.filters.targetLabel': '按目标类型筛选',
-    'page.filters.allStatuses': '全部状态',
-    'page.filters.allTargets': '全部目标类型',
-    'page.statuses.active': '运行中',
-    'page.statuses.paused': '已暂停',
-    'page.statuses.inactive': '已失效',
-    'page.statuses.targetIssue': '目标异常',
-    'page.loading': '正在加载定时任务…',
-    'page.empty': '尚未声明定时任务。',
-  };
-  return {
-    request,
-    api: { request },
-    setLanguage: (nextLanguage: 'en-US' | 'zh-CN') => {
-      language = nextLanguage;
-    },
-    getLanguage: () => language,
-    t: (key: string, options?: Readonly<Record<string, unknown>>) => {
-      const template =
-        (language === 'zh-CN' ? chineseTranslations[key] : translations[key]) ??
-        (options?.defaultValue as string | undefined) ??
-        key;
-      return template.replace(/{{(\w+)}}/g, (_match, name: string) =>
-        String(options?.[name] ?? ''),
-      );
-    },
-  };
+  return { request, api: { request } };
 });
+
+const NS = '@nocobase/app-plugin-scheduler';
+let runtime: I18nRuntime;
 
 vi.mock('@nocobase/app-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@nocobase/app-client')>()),
   apiClientToken: Symbol('api-client'),
   useService: () => mocks.api,
 }));
-vi.mock('@nocobase/i18n/client', () => ({
-  useTranslation: () => ({
-    i18n: {
-      language: mocks.getLanguage(),
-      resolvedLanguage: mocks.getLanguage(),
-    },
-    t: mocks.t,
-  }),
-}));
-
 import SchedulesPage from '../client/pages/schedules-page.js';
 import ScheduleDetailPage from '../client/pages/schedule-detail-page.js';
 import { formatCronDescription } from '../client/pages/cron-description.js';
 import { formatClientRelativeTime } from '../client/pages/date-time.js';
+import locales from '../client/locales/index.js';
+
+function I18n({ children }: { readonly children: ReactNode }) {
+  return (
+    <TestI18nProvider runtime={runtime} namespace={NS}>
+      {children}
+    </TestI18nProvider>
+  );
+}
 
 const schedules = [
   {
@@ -179,11 +102,32 @@ const timeZoneLabelledFormatter = new Intl.DateTimeFormat(undefined, {
   timeZoneName: 'short',
 });
 
+/** One page of `GET /scheduler/schedules`, holding every schedule the test lists. */
+function listPage(items: readonly unknown[]): {
+  data: readonly unknown[];
+  meta: { page: number; pageSize: number; total: number };
+} {
+  return { data: items, meta: { page: 1, pageSize: 100, total: items.length } };
+}
+
+/** Answers the page's requests by path, the way the scheduler's routes would. */
+function respond(
+  path: string,
+  items: readonly { readonly id: string }[],
+  occurrences: readonly unknown[],
+): unknown {
+  if (path === 'scheduler/schedules') return listPage(items);
+  if (path.endsWith('/occurrences')) return { data: occurrences, meta: {} };
+  const id = decodeURIComponent(path.slice('scheduler/schedules/'.length));
+  return { data: items.find((item) => item.id === id) };
+}
+
 function renderList(): ReturnType<typeof render> {
   return render(
     <MemoryRouter>
       <SchedulesPage />
     </MemoryRouter>,
+    { wrapper: I18n },
   );
 }
 
@@ -199,13 +143,19 @@ function renderDetail(
         />
       </Routes>
     </MemoryRouter>,
+    { wrapper: I18n },
   );
 }
 
 describe('SchedulesPage', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     mocks.request.mockReset();
-    mocks.setLanguage('en-US');
+    // Target types are registered by other plugins, so the page labels one it has no key for by its type name
+    // (`defaultValue: type`); the fixtures' `cleanup` and `app.scheduled-log` are such types.
+    runtime = await createTestI18nRuntime({
+      namespaces: { [NS]: locales },
+      strict: false,
+    });
   });
   afterEach(() => {
     cleanup();
@@ -222,7 +172,8 @@ describe('SchedulesPage', () => {
   });
 
   it('renders a page title and empty state without developer-facing copy', async () => {
-    let resolveRequest: ((value: { data: never[] }) => void) | undefined;
+    let resolveRequest:
+      ((value: ReturnType<typeof listPage>) => void) | undefined;
     mocks.request.mockReturnValue(
       new Promise((resolve) => {
         resolveRequest = resolve;
@@ -238,15 +189,15 @@ describe('SchedulesPage', () => {
     expect(screen.queryByText('Read only')).toBeNull();
     expect(screen.queryByText('Read-only code-defined schedules.')).toBeNull();
 
-    resolveRequest?.({ data: [] });
+    resolveRequest?.(listPage([]));
     expect(
       await screen.findByText('No scheduled tasks are defined.'),
     ).toBeTruthy();
   });
 
   it('renders the plugin-owned Chinese locale through its namespace', async () => {
-    mocks.setLanguage('zh-CN');
-    mocks.request.mockResolvedValueOnce({ data: schedules });
+    await act(() => runtime.changeLanguage('zh-CN'));
+    mocks.request.mockResolvedValueOnce(listPage(schedules));
 
     renderList();
     expect(await screen.findByText('在上午 02:00')).toBeTruthy();
@@ -256,7 +207,7 @@ describe('SchedulesPage', () => {
   });
 
   it('filters schedules by text, status, and target', async () => {
-    mocks.request.mockResolvedValueOnce({ data: schedules });
+    mocks.request.mockResolvedValueOnce(listPage(schedules));
     renderList();
 
     await screen.findByText('Daily customer sync');
@@ -334,7 +285,7 @@ describe('SchedulesPage', () => {
       title: 'Server log report',
       targetType: 'app.scheduled-log',
     };
-    mocks.request.mockResolvedValueOnce({ data: [longTargetSchedule] });
+    mocks.request.mockResolvedValueOnce(listPage([longTargetSchedule]));
     const { container } = renderList();
 
     const row = (await screen.findByText('Server log report')).closest('tr');
@@ -348,7 +299,7 @@ describe('SchedulesPage', () => {
   });
 
   it('links the task title to its dedicated detail page', async () => {
-    mocks.request.mockResolvedValueOnce({ data: schedules });
+    mocks.request.mockResolvedValueOnce(listPage(schedules));
     renderList();
 
     const link = await screen.findByRole('link', {
@@ -366,7 +317,7 @@ describe('SchedulesPage', () => {
       id: `schedule-${index + 1}`,
       title: `Task ${index + 1}`,
     }));
-    mocks.request.mockResolvedValueOnce({ data: many });
+    mocks.request.mockResolvedValueOnce(listPage(many));
     renderList();
 
     await screen.findByText('Task 1');
@@ -398,7 +349,7 @@ describe('SchedulesPage', () => {
   });
 
   it('hides the pager while the list fits on one page', async () => {
-    mocks.request.mockResolvedValueOnce({ data: schedules });
+    mocks.request.mockResolvedValueOnce(listPage(schedules));
     renderList();
 
     await screen.findByText('Daily customer sync');
@@ -409,7 +360,7 @@ describe('SchedulesPage', () => {
   it('merges trigger count and last trigger into one relative column', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.setSystemTime(new Date('2026-09-02T12:00:00.000Z'));
-    mocks.request.mockResolvedValueOnce({ data: schedules });
+    mocks.request.mockResolvedValueOnce(listPage(schedules));
     renderList();
 
     await screen.findByText('Daily customer sync');
@@ -440,7 +391,7 @@ describe('SchedulesPage', () => {
   });
 
   it('carries the enabled state as a switch of its own, named by the action it performs', async () => {
-    mocks.request.mockResolvedValueOnce({ data: schedules });
+    mocks.request.mockResolvedValueOnce(listPage(schedules));
     renderList();
 
     await screen.findByText('Daily customer sync');
@@ -467,7 +418,7 @@ describe('SchedulesPage', () => {
 
   it('navigates to the detail page from the title rather than from the whole row', async () => {
     mocks.request.mockImplementation(({ path }: { path: string }) =>
-      Promise.resolve({ data: path === 'schedules' ? schedules : [] }),
+      Promise.resolve(respond(path, schedules, [])),
     );
     render(
       <MemoryRouter initialEntries={['/settings/schedules']}>
@@ -479,6 +430,7 @@ describe('SchedulesPage', () => {
           />
         </Routes>
       </MemoryRouter>,
+      { wrapper: I18n },
     );
 
     const title = await screen.findByText('Daily customer sync');
@@ -500,7 +452,7 @@ describe('SchedulesPage', () => {
 
   it('renders the read-only overview on the dedicated detail route', async () => {
     mocks.request.mockImplementation(({ path }: { path: string }) =>
-      Promise.resolve({ data: path === 'schedules' ? schedules : [] }),
+      Promise.resolve(respond(path, schedules, [])),
     );
     renderDetail();
 
@@ -546,27 +498,28 @@ describe('SchedulesPage', () => {
 
   it('renders trigger timing, status, and reason without internal metadata', async () => {
     mocks.request.mockImplementation(({ path }: { path: string }) =>
-      Promise.resolve({
-        data:
-          path === 'schedules'
-            ? [schedules[0]]
-            : [
-                {
-                  id: 'occurrence-1',
-                  status: 'triggered',
-                  reason: 'accepted',
-                  executionCount: 1,
-                  startedAt: '2026-09-01T02:00:01.000Z',
-                  finishedAt: '2026-09-01T02:00:02.000Z',
-                  targetReceipt: { eventKey: 'private-value' },
-                },
-              ],
-      }),
+      Promise.resolve(
+        respond(
+          path,
+          [schedules[0]],
+          [
+            {
+              id: 'occurrence-1',
+              status: 'triggered',
+              reason: 'accepted',
+              executionCount: 1,
+              startedAt: '2026-09-01T02:00:01.000Z',
+              finishedAt: '2026-09-01T02:00:02.000Z',
+              targetReceipt: { eventKey: 'private-value' },
+            },
+          ],
+        ),
+      ),
     );
     renderDetail();
 
     await screen.findByRole('heading', { name: 'Daily customer sync' });
-    const status = await screen.findByText('Triggered');
+    const status = await screen.findByText('Triggered (result unknown)');
     const trigger = within(status.closest('tr')!);
     expect(trigger.getByText('accepted')).toBeTruthy();
     expect(

@@ -1,22 +1,28 @@
 import {
   AppWindow,
+  ArrowLeft,
   Blocks,
   CalendarClock,
   CalendarDays,
   Check,
+  Columns2,
   Copy,
   Heading,
+  KeyRound,
   Layers,
   LayoutTemplate,
   Monitor,
   Moon,
   PanelRight,
   RefreshCw,
+  Rows3,
   Search,
   ShieldCheck,
   Smartphone,
   Sun,
+  Table2,
   Tablet,
+  TriangleAlert,
   type LucideIcon,
 } from 'lucide-react';
 import {
@@ -52,7 +58,10 @@ import {
 } from './components/ui/sidebar';
 import { Separator } from './components/ui/separator';
 import { TooltipProvider } from './components/ui/tooltip';
-import { AuthenticationUiDemo } from './demo/auth/auth-ui';
+import { AuthenticationDemo } from './demo/auth';
+import { BackButtonDemo } from './demo/components/back-button';
+import { ConfirmDialogDemo } from './demo/components/confirm-dialog';
+import { DataTableDemo } from './demo/components/data-table';
 import { DatePickerDemo } from './demo/components/date-picker';
 import { DateTimePickerDemo } from './demo/components/date-time-picker';
 import { PageContainerDemo } from './demo/components/page-container';
@@ -70,15 +79,16 @@ interface RegistryItem {
   };
 }
 
-const authUiItem: RegistryItem = {
-  name: 'auth-ui',
-  title: 'Authentication UI',
-  description: 'A configurable authentication UI for NocoBase applications.',
+const fallbackItem: RegistryItem = {
+  name: 'auth-centered-layout',
+  title: 'Auth Centered Layout',
+  description:
+    'The page around an authentication form: the brand above a card in the middle of a muted page.',
   meta: {
     group: 'Authentication',
     iframeHeight: 720,
   },
-  type: 'registry:block',
+  type: 'registry:component',
 };
 
 interface ItemPreview {
@@ -89,7 +99,13 @@ interface ItemPreview {
 
 // Items are not discovered: each one is wired here, and routed to its demo in `AppContent`.
 const itemPreviews: Record<string, ItemPreview> = {
-  'auth-ui': { path: '/demo/auth/auth-ui/login', icon: ShieldCheck },
+  'auth-centered-layout': {
+    path: '/demo/auth/auth-centered-layout',
+    icon: ShieldCheck,
+  },
+  'auth-split-layout': { path: '/demo/auth/auth-split-layout', icon: Columns2 },
+  'auth-forms': { path: '/demo/auth/auth-forms/login', icon: KeyRound },
+  'auth-methods': { path: '/demo/auth/auth-methods', icon: Rows3 },
   'page-container': {
     path: '/demo/components/page-container',
     icon: LayoutTemplate,
@@ -108,10 +124,19 @@ const itemPreviews: Record<string, ItemPreview> = {
     path: '/demo/components/route-overlays/report',
     icon: Layers,
   },
+  'back-button': {
+    path: '/demo/components/back-button/SO-1042',
+    icon: ArrowLeft,
+  },
   'date-picker': { path: '/demo/components/date-picker', icon: CalendarDays },
   'date-time-picker': {
     path: '/demo/components/date-time-picker',
     icon: CalendarClock,
+  },
+  'data-table': { path: '/demo/components/data-table', icon: Table2 },
+  'confirm-dialog': {
+    path: '/demo/components/confirm-dialog',
+    icon: TriangleAlert,
   },
 };
 
@@ -154,8 +179,17 @@ export function App(): ReactElement {
 
 function AppContent(): ReactElement {
   const { pathname } = window.location;
-  if (pathname.startsWith('/demo/auth/auth-ui')) {
-    return <AuthenticationUiDemo />;
+  if (pathname.startsWith('/demo/auth/')) {
+    return <AuthenticationDemo />;
+  }
+  if (pathname.startsWith('/demo/components/back-button')) {
+    return <BackButtonDemo />;
+  }
+  if (pathname.startsWith('/demo/components/data-table')) {
+    return <DataTableDemo />;
+  }
+  if (pathname.startsWith('/demo/components/confirm-dialog')) {
+    return <ConfirmDialogDemo />;
   }
   if (pathname.startsWith('/demo/components/date-picker')) {
     return <DatePickerDemo />;
@@ -177,16 +211,16 @@ function AppContent(): ReactElement {
 }
 
 function RegistryDocs(): ReactElement {
-  const [items, setItems] = useState<RegistryItem[]>([authUiItem]);
+  const [items, setItems] = useState<RegistryItem[]>([fallbackItem]);
   const [query, setQuery] = useState('');
-  const [activeName, setActiveName] = useState<string>(authUiItem.name);
+  const [activeName, setActiveName] = useState<string>(fallbackItem.name);
 
   useEffect(() => {
     const controller = new AbortController();
     fetch('/r/registry.json', { signal: controller.signal })
       .then((response) => response.json())
       .then((data: { items?: RegistryItem[] }) => {
-        const nextItems = data.items?.length ? data.items : [authUiItem];
+        const nextItems = data.items?.length ? data.items : [fallbackItem];
         const slug =
           window.location.pathname.match(/^\/registry\/([^/]+)/)?.[1];
         setItems(nextItems);
@@ -204,7 +238,7 @@ function RegistryDocs(): ReactElement {
         }
       })
       .catch(() => {
-        if (!controller.signal.aborted) setItems([authUiItem]);
+        if (!controller.signal.aborted) setItems([fallbackItem]);
       });
     return () => controller.abort();
   }, []);

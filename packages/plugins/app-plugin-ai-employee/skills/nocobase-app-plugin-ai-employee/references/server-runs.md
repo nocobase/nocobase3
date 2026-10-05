@@ -77,10 +77,10 @@ The normal path covers almost everything:
 ```text
 App ai/ resources + client/extensions/nocobase-ai
         ↓  @nocobase/app-plugin-ai-employee
-   /api/ai, persisted conversations, SSE, tool approval
+   /api/aiEmployee, persisted conversations, SSE, tool approval
 ```
 
-Reach for `AgentServiceFactory` only for an App-owned server integration that must invoke an agent with no browser present — a workflow adapter, a scheduled job, an App-owned API route, a server service. The caller must already have a clear actor, an authorization policy, and a lifecycle for the work. Confirm the existing `/api/ai` behavior is genuinely insufficient before proposing this.
+Reach for `AgentServiceFactory` only for an App-owned server integration that must invoke an agent with no browser present — a workflow adapter, a scheduled job, an App-owned API route, a server service. The caller must already have a clear actor, an authorization policy, and a lifecycle for the work. Confirm the existing `/api/aiEmployee` behavior is genuinely insufficient before proposing this.
 
 ## Public container tokens
 
@@ -138,13 +138,13 @@ type CreateAIConversationParams = {
 create(options: CreateAIConversationParams): Promise<CreatedAIConversation>; // the row, with its sessionId
 update(options: { userId; sessionId; title?; options? }): Promise<AIConversationEntity | null>;
 getConversation(options: { sessionId; userId? }): Promise<AIConversationEntity | null>;
-getMessages(options: { userId; sessionId; cursor?; paginate?; updateRead? }):
+getMessages(options: { userId; sessionId; cursor?; paginate?; pageSize?; updateRead? }):
   Promise<{ rows: any[]; hasMore?: boolean; cursor?: string | null }>; // rows shaped as below
 ```
 
 `userId` is the owning application user — never a user id a model supplied. Always pass `userId` when reading or mutating a user-owned conversation; a missing or mismatched owner is not a successful lookup.
 
-`getMessages` returns parsed history rows, not raw persistence records and not the Registry's already-normalized `AIChatMessage[]`. A row exposes `key` and a nested `content.messageId`; there is no top-level `messageId` or `sessionId`. Pagination matches HTTP: newest-first, 10 per page by default, `{ rows }` with a 200-row cap for `paginate=false`, tool rows joined into `content.tool_calls`, and `updateRead=true` marking the conversation read. Keep ids as strings, take the session id from the authorized conversation rather than from a row, and read [api-reference.md § History message schema](api-reference.md#history-message-schema) before adapting history into a new request.
+`getMessages` returns parsed history rows, not raw persistence records and not the Registry's already-normalized `AIChatMessage[]`. A row exposes `key` and a nested `content.messageId`; there is no top-level `messageId` or `sessionId`. Pagination is newest-first, 10 per page unless `pageSize` says otherwise, with `cursor` the oldest returned id while `hasMore` is true — the HTTP route reports it as `meta.nextPageToken` — and `{ rows }` with a 200-row cap for `paginate=false`; tool rows are joined into `content.tool_calls`, and `updateRead=true` marks the conversation read, which the HTTP route leaves to a separate `markRead`. Keep ids as strings, take the session id from the authorized conversation rather than from a row, and read [api-reference.md § History message schema](api-reference.md#history-message-schema) before adapting history into a new request.
 
 ## `createAIEmployee()`
 
@@ -188,7 +188,7 @@ interface CreateAgentOptions {
 
 All three of `sessionId`, `actor`, and `runtime` are required: a fixed agent has nowhere to persist without a session, and there is no implicit root. `model` is fixed at creation and a request cannot override it; if none is supplied, the factory takes the first enabled model when the agent is created, and rejects there if there is none. `tools` names registered tools to activate. `skills` activates the tools those Skills name and gives the agent `getSkill`, bound to exactly those Skills, with the Skills listed in its system prompt — so the model loads a Skill's procedure when a request matches it, as an employee's does. `getSkill` loads nothing outside that list, so a Skill that tells the model to load another works only when both are listed: give `data-query` together with `data-metadata`. A name that matches no registered Skill is dropped without an error — the agent is created, and that Skill is simply absent from its prompt — so check each name against the Skills in AI settings. A Skill's tools are active from the start rather than after it is loaded. A fixed agent has no employee presets, so each tool's own `defaultPermission` decides: `ALLOW` runs without asking, and `ASK` — which is also what a tool declaring nothing gets — pauses the run exactly as it does for an employee, reported as `interrupt` from `invoke()` and continued with `resumeInvoke()`. `autoCall` does not exist here. `messages` is not a creation option — the turn's messages go to `invoke()` or `stream()`.
 
-A pause is kept by a checkpointer. By default it is the plugin's own tables, so a newly created agent for the same `sessionId` resumes the run; beside a `persistence` the caller supplies, it is the process instead, and only the same `AgentService` can resume. `checkpointer` overrides the default, for instance to keep a short-lived job's pauses out of the database. Take it from the factory — `factory.getMemorySaver()` for this process only, `factory.getDatabaseCheckpointSaver()` for the plugin's tables — rather than constructing one yourself: the option is typed against the plugin's own `@langchain/langgraph`, and a saver built from another copy may not fit it. A saver of your own, such as one backed by another store, extends `BaseCheckpointSaver` from that same package. `createAIEmployee()` takes no checkpointer: an employee's pauses are always kept in the plugin's tables, because a tool decision or a resume from the chat or the conversation center rebuilds the agent and reads them there, and a sub-agent keeps none, since its pause belongs to the agent that called it.
+A pause is kept by a checkpointer. By default it is the plugin's own tables, so a newly created agent for the same `sessionId` resumes the run; beside a `persistence` the caller supplies, it is the process instead, and only the same `AgentService` can resume. `checkpointer` overrides the default, for instance to keep a short-lived job's pauses out of the database. Take it from the factory — `factory.getMemorySaver()` for this process only, `factory.getDatabaseCheckpointSaver()` for the plugin's tables — rather than constructing one yourself: the option is typed against the plugin's own `@langchain/langgraph`, and a saver built from another copy may not fit it. A saver of your own, such as one backed by another store, extends `BaseCheckpointSaver` from that same package. `createAIEmployee()` takes no checkpointer: an employee's pauses are always kept in the plugin's tables, because a tool decision or a resume from the chat rebuilds the agent and reads them there, and a sub-agent keeps none, since its pause belongs to the agent that called it.
 
 ## Executing an agent
 
@@ -290,7 +290,7 @@ const agent = await factory.createAIEmployee({
 });
 ```
 
-Give the conversation the same `skillSettings` as the agent. The agent's copy governs this run; every later run over HTTP — a tool decision, a resume or a retry from the chat or the conversation center — rebuilds the agent from the conversation's copy, so a conversation without one is resumed with the employee's full tool set.
+Give the conversation the same `skillSettings` as the agent. The agent's copy governs this run; every later run over HTTP — a tool decision, a resume or a retry from the chat — rebuilds the agent from the conversation's copy, so a conversation without one is resumed with the employee's full tool set.
 
 The list narrows what the employee already allows; it never adds a tool the employee does not have. It covers tools a Skill activates as well as base tools, so a Skill's tools have to be on it too — and when one Skill tells the model to load another, as `data-query` does with `data-metadata`, the whole chain's tools, or the model gets `Tool unavailable.` partway and the run ends in a guessed answer rather than an error. Two groups pass it regardless: the system tools — `getSkill`, `subAgentWebSearch`, `knowledge-base-retrieve` and `aiEmployeeWorkflowTaskOutput` — each still subject to its own switch, and `loadFrontendTool` and `executeFrontendTool`, which appear only when the session carries a frontend tool manifest and then always pause; a server-side run should not pass one. `toolsVersion` matters only for an empty list: with it, `tools: []` leaves only the system tools; without it, an empty list means no filter at all. `skills` with `skillsVersion` narrows the Skills the same way — only the named Skills are offered to `getSkill` and listed in the prompt, and with `skillsVersion` an empty list offers none — so a run that should follow one procedure is not offered the others.
 

@@ -1,5 +1,217 @@
 # @nocobase/app-server
 
+## 2.0.0-beta.0
+
+### Major Changes
+
+- e123790: Move `@nocobase/app-server`, `@nocobase/app-client`, `@nocobase/app-plugin-authentication`, `@nocobase/app-plugin-users`, `@nocobase/app-plugin-hub`, `@nocobase/app-plugin-workflow` and `@nocobase/app-plugin-ai-employee` to the 2.0.0 prerelease line. The HTTP API migration released in 1.0.0-beta.N changed every route and the error body, but in prerelease mode a `major` changeset on a version that is already a `1.0.0` prerelease only increments the prerelease number, so nothing in the version said the change was breaking. These packages now release as `2.0.0-beta.0`, and every package that depends on or peers with one of them is released again so that its published range is `^2.0.0-beta.0` rather than a `^1.0.0-beta` range the new versions do not satisfy. An application upgrading to these versions upgrades all of them together.
+
+## 2.0.0-beta
+
+Moves the package to the 2.0.0 prerelease line, so that the breaking changes released as 1.0.0-beta.33 show in the major version. This version is never published; the first release on the line is 2.0.0-beta.0.
+
+## 1.0.0-beta.33
+
+### Major Changes
+
+- 21d274c: An application now fails to start when two API routes answer the same method and path. Hono runs only the first matching route, so a plugin route that repeats another plugin's route, or a hand-written route that repeats a `defineRepositoryApiRoutes` data endpoint, used to be dead code that nothing reported. Parameter names do not distinguish routes (`/orders/:id` and `/orders/:orderId` are the same route), an `ALL` route collides with every method on its path, and middleware is not counted. The error names the method, the path and both owners: a plugin's routes are named by its package name, the application's own routes by the application's package name, and a contribution passed to `Application.addRoutes()` by its position unless the new optional `{ owner }` argument names it.
+
+  The `nocobase-app-development` Skill's HTTP API reference states this rule, uses `/translation/translateText` instead of `/ai/translateText` as the example of a computation on no stored resource, and adds that a route schema never uses `z.any()` and uses `z.unknown()` only for a genuinely free-form value, with a comment saying why.
+
+- 3f01f61: Every failed `/api` response now has one body, `{ error: { code, status, reason, domain, message, localizedMessage?, fieldViolations?, metadata?, requestId } }`, following Google's AIP-193: `code` is the HTTP status, `status` one of a fixed set such as `NOT_FOUND`, and `reason` the stable, machine-readable cause clients branch on.
+
+  - `@nocobase/app-server/router` exports `ApiError`, which a route throws to answer in that body, and `parseApiInput()`, which validates input against a zod schema inside Hono's `validator()` and answers `400 INVALID_ARGUMENT` naming every invalid field. The application renders anything a route does not: an unexpected error is an opaque `500 INTERNAL`, Hono's `HTTPException` and any error carrying a 4xx `status` keep it, and an unknown `/api` path is a JSON `404 ROUTE_NOT_FOUND` instead of the SPA page. Every `/api` response carries the request's id in `x-request-id`, reusing a safe id the caller sent, and the request log uses the same id. Repository routes report their errors in the new body, with the Repository error code as `reason` and `domain` `app`; a write refused by Policy carries its `path` and `details` in `metadata`.
+  - `ApiClientError` (from `@nocobase/api-client`, re-exported by `@nocobase/app-client`) replaces `code` with `reason` and `domain`, read from the new body; `requestId` falls back to the body when the header is absent. Replace `error.code === 'X'` with `error.reason === 'X'`.
+  - `AuthorizationDeniedError` carries `reason` `AUTHORIZATION_DENIED` and `domain` `authorization`, and its `getResponse()` answers the new body.
+  - `auth.required()` answers an anonymous request with `401 UNAUTHENTICATED`, reason `AUTHENTICATION_REQUIRED`, and a credential Better Auth refuses with its status and Better Auth's code as `reason`, instead of `{ code: 'UNAUTHORIZED' }` and Better Auth's own body. Better Auth's own routes under `/api/auth/` are unchanged.
+  - The authorization routes answer a denial with `403 PERMISSION_DENIED` and invalid settings input with `400 INVALID_ARGUMENT`, reason `INVALID_AUTHORIZATION_INPUT`, instead of `{ code: 'FORBIDDEN' }` and `{ code: 'INVALID_AUTHORIZATION_INPUT' }`.
+
+- 21d274c: Data endpoints from `defineRepositoryApiRoutes` separate the exposure name and the action with a slash instead of a colon: `POST /api/{name}:{action}` is now `POST /api/{name}/{action}`, such as `POST /api/salesOrders/findMany`. The colon form is no longer routed and answers `404 ROUTE_NOT_FOUND`. `api.repository(name)` in `@nocobase/api-client` sends the new path.
+
+  An exposure name must be a camelCase path segment matching `/^[a-z][a-zA-Z0-9]*$/`, and must not be `auth`, `healthz` or `swagger`. `defineRepositoryApiRoutes` throws at declaration for any other name, so an application exposing a name such as `sales/orders` or `sales-orders` must rename it, and its clients must use the new name. A duplicate name now reports which name was declared twice.
+
+  The HTTP API specification in `@nocobase/app-skills` now covers singular or plural plugin namespaces, plugins mounted through another plugin's dispatcher, fixed segments registered before path parameters, the not-found rule, the `413`/`415` statuses and the removal of `422` and `502`, binary and multipart input, and the routes that keep their own shape. The generated plugin `AGENTS.md` from `@nocobase/create-plugin` states the namespace and data endpoint rules accordingly.
+
+- 21d274c: Every `RepositoryError` now carries a `status`, the canonical error status its code maps to through the new `repositoryErrorStatuses` table exported by `@nocobase/db` (`INVALID_ARGUMENT`, `PERMISSION_DENIED`, `NOT_FOUND`, `ABORTED` or `INTERNAL`). The table is typed over every `RepositoryErrorCode`, so a new code does not compile until it has a status.
+
+  `@nocobase/app-server` reads that status instead of keeping its own list of codes, so a code added to the Repository reaches an `/api` caller with the status chosen for it. Two answers change:
+
+  - `RELATION_TARGET_NOT_FOUND` is `400 INVALID_ARGUMENT` instead of `404`: the missing target is one the request body names, not the resource in the URL.
+  - `INVALID_WRITE_POLICY` is an opaque `500 INTERNAL` instead of `400`: write policies are server-owned, so an invalid one is a server misconfiguration.
+
+  Every Repository error a caller sees now carries its `path` and `details` in `metadata`, not only the write-forbidden codes, and an `INVALID_ARGUMENT` one also names its path in `fieldViolations`.
+
+### Minor Changes
+
+- 21d274c: An application can set global limits for every `/api` request in a new `api` section of `config.yml`. All three are off by default and nothing is installed for one that is unset, so an application that does not set them behaves as before.
+
+  ```yaml
+  api:
+    bodyLimit: 10mb
+    timeout: 30s
+    rateLimit:
+      max: 600
+      window: 1m
+  ```
+
+  - `bodyLimit` refuses a larger body, whether it declares its length or streams it, with `413 INVALID_ARGUMENT`, reason `BODY_TOO_LARGE`. It is a ceiling over every route; a route that needs a smaller limit sets its own.
+  - `timeout` answers `503 UNAVAILABLE`, reason `REQUEST_TIMEOUT`, when a handler has not returned its response within the deadline. It covers only the time until the response exists, so a streaming response (SSE, NDJSON) that has started is not cut off. The handler is not cancelled; what it returns or throws after the deadline is discarded.
+  - `rateLimit` allows `max` requests per `window` from each client connection address and answers `429 RESOURCE_EXHAUSTED`, reason `RATE_LIMITED`, with a `Retry-After` header in seconds. `GET /api/healthz` is exempt; Better Auth's routes under `/api/auth/` are counted. Counters are fixed windows kept in process memory and bounded, so each instance of a multi-instance deployment counts on its own, and behind a reverse proxy every request shares the proxy's address. A request whose address is unknown, such as one a Hub forwards to an application it hosts in process, is not counted.
+
+  All three answer in the standard error body with domain `app` and the request's `x-request-id`. Sizes are a number of bytes or a string such as `512kb`, `10mb` or `1gb`; durations a number of milliseconds or a string such as `500ms`, `30s`, `1m` or `1h`.
+
+  `@nocobase/app-server/router` exports `defineApiConfig()`, which declares the section with its validation, so `pnpm nocobase config check` and every start report a malformed value, and maps `API_BODY_LIMIT` and `API_TIMEOUT`; `installApiLimits()` and the individual middlewares are exported too. The three templates declare the section in `server/config/api.ts` and document it, commented out, in `config.example.yml`. An existing application adds the same `server/config/api.ts` and registers it in `server/config/index.ts` to get validation and the environment variables; without it, the limits it sets in `config.yml` still apply, but `config check` reports `api` as an unknown section.
+
+  The `nocobase-app-development` Skill's HTTP API reference describes the limits and their reasons, and the `nocobase-deployment` Skill lists them among the production settings to review.
+
+- 0b933b3: Applications now generate an OpenAPI 3.1 document for their `/api` routes and serve it at `GET /api/swagger`, with Swagger UI at `GET /api/swagger/docs`, which keeps what "Authorize" was given, such as an API key, across reloads. The Swagger UI files ship in `@nocobase/app-server`'s `dist`; no CDN is involved and templates declare nothing.
+
+  `@nocobase/app-server/router` exports what a route declares itself with: `describeRoute()` re-exported from `hono-openapi`, `resolver(schema, direction?)`, `apiValidator(target, schema)` — which validates a Standard Schema such as a zod schema, answers invalid input exactly as `parseApiInput()` does (`400 INVALID_ARGUMENT`, reason `INVALID_INPUT`, domain `app`, one field violation per issue) and documents the parameters or body — and the response helpers `dataResponse()`, `listResponse()`, `emptyResponse()`, `apiErrorResponse()` and `apiErrorResponses`, which reference the shared standard error body. `apiErrorResponses` is `401`, `403` and `500`, for an authenticated route with a permission check; it does not include `400`. A route with an `apiValidator()` gets the `400` for invalid input in the document automatically, as the shared `InvalidInput` response, and a route without one gets none; a `400` the route declares itself for another reason, such as a failed precondition, is kept and documented after the invalid-input description. `parseApiInput()` keeps working and is superseded. Plugins import these from `@nocobase/app-server/router` and must not declare `hono-openapi` themselves; `pnpm peers:check` now fails one that does.
+
+  Data endpoints from `defineRepositoryApiRoutes` are documented automatically: each action gets an operation whose record, `values` and filter schemas are read from the Collection field by field, with the filter operators each field accepts and a shared `RepositoryFilter` component describing the grammar. Fields a fixed Policy forbids are left out. An exposure entry accepts `computedFields: { name: schema }`, a Standard Schema such as a zod schema or an OpenAPI schema per field, for fields it adds to every returned record that the Collection does not have; they are documented read-only in the exposure's record schema wherever a record is returned and never in `values`, `filter` or `sort`. The declaration changes nothing at runtime, and a name the Collection also has fails when the routes are created. `GET /api/healthz` is declared too, with `security: []` because it needs no credential.
+
+  The documentation is served only to requests an access check allows. Plugins register checks, and fragments for routes a library defines, through the new `apiDocsToken` service (`addAccess()`, `addFragment()`, `invalidate()`); a fragment may also carry `components.securitySchemes` and `security` requirements, which the document lists at its top level as alternatives, so a route that needs no credential declares `security: []`, and a document nothing contributes a scheme to has no `security` at all; until a check is registered the documentation routes answer `404 ROUTE_NOT_FOUND`, so an application without one publishes nothing. `inspectApiRoutes(app)` and `findUndeclaredApiRoutes(app)` report what each route of a started application declares, and `Application.apiRouter` exposes the assembled `/api` router. A plugin that serves routes through a runtime dispatcher, a catch-all on `/api` that hands each request to a router at request time, registers each router with `addApiRouter({ owner, prefix, scope?, router })`: its routes are documented, inspected and checked for duplicates at `prefix` followed by their own paths, exactly like routes mounted on `/api`. `scope` names the sub-path the dispatcher actually forwards to the router, such as `/sharingRules`; a route the router declares outside it is never reached, so it is left out of the document and the duplicate check and reported as undeclared. A forwarded target the framework cannot see into, such as a plain function, is registered with `addUndeclaredApiRoute({ owner, method, path, reason? })`, which `findUndeclaredApiRoutes(app)` always reports and the document never lists; `pnpm openapi:check` prints the `reason` of such a route. Both return a function that removes the registration, and `Application.forwardedApiRoutes` lists what is registered. A plugin route under `/api/swagger` now fails start as a duplicate route.
+
+  Schemas are converted under the document's conventions rather than hono-openapi's defaults. A response object is open unless its zod schema is strict (`z.strictObject()` or `.strict()`), so adding a response field is not a breaking change; a request body validated with `z.strictObject()` stays closed. A recursive schema such as `z.json()` becomes a component named by its `ref`, or `JsonValue`, or `Recursive<hash>` for another anonymous one, instead of a converter-generated `__schema0` that collided across routes or a `$ref` into `#/$defs` that resolved nowhere. A property whose schema is a shared one keeps its own description next to the `$ref`, and the shared component keeps its own. `apiValidator('header', ...)` leaves `Accept`, `Authorization` and `Content-Type` out of the parameters, as OpenAPI ignores them there. `findApiDocumentSchemaProblems(document)` lists unresolved references and converter-generated component names, for a test to expect none.
+
+  `@nocobase/db` exports `filterOperatorsForFieldType()`, `supportsFilterShorthand()` and `isSortableFieldType()`, the tables the Repository validates filters and sorts against, so descriptions of the filter grammar are derived from them rather than copied.
+
+  The `nocobase-app-development` Skill's HTTP API reference describes the API documentation: how people and agents read it (`<APP_BASE_PATH>/api/swagger/docs` and `<APP_BASE_PATH>/api/swagger` with a session or an `x-api-key` header, `401` without one and `404` when no access check is registered), how to declare a route and list only the error statuses it can produce (no `400` for input validation, which `apiValidator()` adds; `apiErrorResponses` only for an authenticated route with a permission check), `security: []` for a route reached without a credential, the five kinds of route that may be hidden, response schemas typed against the service's view type, `computedFields` on a data exposure, routes registered through `authz.routes.add` with `createRouteHandler`, routers forwarded by a plugin's own runtime dispatcher (`addApiRouter()` and `addUndeclaredApiRoute()`), and the test assertions. Its entry `SKILL.md` tells an agent to learn an application's endpoints from the JSON document rather than from route sources, and its server routes, testing and organisation references show routes declared with `describeRoute()` and validated with `apiValidator()`. The `nocobase-deployment` Skill describes the API documentation in production: who may read it, that there is no switch to make it public, and that restricting it further is done at the reverse proxy.
+
+### Patch Changes
+
+- 463a7a8: The database tests of `@nocobase/app-server`, `@nocobase/app-cli` and the examples template take their databases from `@nocobase/db-testing` instead of configuring SQLite files or in-memory databases, so they run on the dialect `NOCOBASE_TEST_DB_DIALECT` selects and on SQLite otherwise. Cases whose subject is SQLite itself, such as preparing SQLite storage or the examples template's SQLite stand-in for an external CRM, move to files marked `db-test-portability: sqlite-only`. Each package adds `@nocobase/db-testing` as a development dependency, and applications generated from the examples template get it with the tests they ship. Nothing any of these packages runs in production changes.
+- 7dbc54b: Repository writes can now be observed. `connection.onRepositoryMutation({ collections, keys?, values?, id? }, { inTransaction?, afterCommit? })` subscribes to the rows Repository writes change and returns a function that unsubscribes. Every write method emits one event per call that wrote at least one row, listing each row it created, updated or deleted — nested relation targets, foreign keys and through rows included — with its key and the fields written; a subscription matches when any of those rows belongs to one of its Collections. Subscriptions belong to the root connection and are shared with its transactions and policy-bound connections.
+
+  `inTransaction(event, connection)` runs inside the call's transaction once its writes are done; throwing fails the call with that error and rolls back an implicit transaction. `afterCommit(events, connection)` runs once per outermost commit with that transaction's matching events and the root connection, and drops them when the transaction or savepoint rolls back; its errors go to the new connection option `onRepositoryEventError(error, { subscriptionId, operationIds })`, or become a process warning whose `code` is `REPOSITORY_EVENT_LISTENER_FAILED` and whose `cause` is the error. Writes made through the connection either listener receives emit events with `parentOperationId`, nested at most `repositoryEventMaxDepth` levels (a new connection option, default 8) before they fail with the new `RepositoryError` code `REPOSITORY_EVENT_RECURSION`. A subscription matches an event by its root Collection or any Collection among its row changes.
+
+  A connection without subscriptions runs every write exactly as before. When a subscription asks for keys (the default), `updateMany` and `deleteMany` lock the matching rows and write them by key, and `createMany` keeps its single statement when every row supplies its key, otherwise uses one multi-row `INSERT … RETURNING` where the dialect runtime declares the new `insertManyReturning` flag (`@nocobase/db-sqlite` does) or inserts row by row. Subscriptions declaring `keys: false`, and Collections whose rows have no primary key or non-null unique key, keep the single statement and receive a `count` event. `connection.explainRepositoryEvents({ collection, operation })` reports the strategy, granularity and whether an implicit transaction is opened.
+
+  The write methods accept a `meta` option built with the new `defineRepositoryEventMeta<T>(namespace)` handle, whose `read(event)` returns the typed value; `values: true` subscriptions also receive the written values. Writes made through `query`, `client()`, migration and seed tasks, and rows changed by database cascades emit nothing, and events are delivered only in the process that wrote.
+
+  `@nocobase/app-server` ignores the two new connection options when deciding whether two connections point at the same database, and answers `REPOSITORY_EVENT_RECURSION` as a server error.
+
+- 7dbc54b: `DatabaseConnection` gains `afterCommit(callback)` and `afterRollback(callback)`. A commit callback runs after the outermost transaction commits, in registration order, once the transaction's Collection metadata changes are applied, and `transaction()` resolves only after every commit callback has finished. Registered inside a nested `transaction()`, it waits for the outer commit and is dropped if that savepoint rolls back; outside a transaction it starts at once. Rollback callbacks receive the error after the transaction or savepoint rolls back, including when the commit itself fails. A callback that throws does not change the transaction's outcome: the error goes to the new connection option `onTransactionCallbackError(error, phase)`, or becomes a process warning whose `code` is `TRANSACTION_CALLBACK_FAILED` and whose `cause` is the error. The `COLLECTION_METADATA_INVALIDATION_FAILED` warning now carries its code the same way. Registering either on a transaction connection after its transaction has finished throws. Policy-bound connections forward both methods.
+
+  Collection metadata changed inside a nested `transaction()` now reaches the connection's Registry when the outer transaction commits; before, only the outer transaction's own changes did, so the root connection could keep serving the old schema. If `onTransactionCallbackError` itself throws, that error becomes a warning too and the transaction's outcome is still unchanged.
+
+  `@nocobase/app-server` ignores `onTransactionCallbackError` when deciding whether two connections point at the same database.
+
+- Updated dependencies [21d274c]
+- Updated dependencies [7f9450e]
+- Updated dependencies [4403687]
+- Updated dependencies [be0fbbd]
+- Updated dependencies [463a7a8]
+- Updated dependencies [be0fbbd]
+- Updated dependencies [4403687]
+- Updated dependencies [be0fbbd]
+- Updated dependencies [7dbc54b]
+- Updated dependencies [27f09bd]
+- Updated dependencies [463a7a8]
+- Updated dependencies [be0fbbd]
+- Updated dependencies [463a7a8]
+- Updated dependencies [7dbc54b]
+- Updated dependencies [be0fbbd]
+- Updated dependencies [0b933b3]
+- Updated dependencies [21d274c]
+  - @nocobase/db@1.0.0-beta.17
+  - @nocobase/db-mysql@0.1.0-beta.3
+  - @nocobase/db-sqlite@0.1.0-beta.4
+  - @nocobase/db-postgres@0.1.0-beta.3
+  - @nocobase/db-kingbase@0.1.0-beta.3
+  - @nocobase/db-oceanbase@0.1.0-beta.2
+  - @nocobase/db-mssql@0.1.0-beta.2
+  - @nocobase/db-oracle@0.1.0-beta.3
+  - @nocobase/db-dameng@0.1.0-beta.3
+  - @nocobase/caching@0.1.0-beta.2
+  - @nocobase/i18n@1.0.0-beta.5
+  - @nocobase/jobs@0.1.0-beta.2
+  - @nocobase/queue@0.1.0-beta.8
+  - @nocobase/service-provider@0.0.2-beta.1
+
+## 1.0.0-beta.32
+
+### Minor Changes
+
+- 9291dbb: Pass `locales` the same way on the client and the server
+
+  `defineClientPlugin`, `defineServerPlugin` and both sides' `defineAppRuntime` now accept the `locales/index.ts` module itself or a function importing it, typed as the new `LocalesContribution` from `@nocobase/i18n`, which also exports `resolveLocalesContribution` to turn either into the module. Previously the client took only the module and the server only a function, so a plugin wired the same file two different ways. The module is the recommended form on both sides: each language in it is already a separate dynamic import, so importing the map statically loads no translations early. Existing `locales: () => import('./locales/index.js')` declarations keep working unchanged. `@nocobase/app-server` exports `AppServerPluginLocales` for the widened type and keeps `AppServerPluginLocalesLoader` as a deprecated alias. The bundled plugins, the application templates' `server/runtime.ts` and plugins generated by `create-plugin` now import their server locales statically.
+
+- e77641b: Rebuild `@nocobase/queue` on BullMQ 6.3.6, with producers, consumers and managers per application
+
+  **Breaking.** `@nocobase/queue` no longer wraps `@boringnode/queue`. `createQueueService(config, { appName, storagePath, logger?, onFallback? })` creates one application's `QueueService`, whose `producer(queue, configKey?)`, `consumer(queue, configKey?)` and `manager(queue, configKey?)` are bound to a named queue:
+
+  - `producer().publish(channel, message, options?)` and `publishMany([{ channel, message }], options?)` write JSON messages with `priority`, `delay`, `attempts`, `backoff` (`fixed` or `exponential`), `removeOnComplete`, `removeOnFail` and a `jobIdProducer`. A batch is prepared entirely before anything is written.
+  - `consumer().consume(handler)` registers a handler `(channel, message, signal)` and returns the function that unregisters it once its running calls settle. Every handler of a queue runs for every job; `withChannel(channels, handler)` filters channels.
+  - `manager().configure()` changes concurrency, job defaults and the global rate limit at runtime; `drain()` empties waiting jobs; `cancelJob()` and `cancelAllJobs()` cancel jobs this instance runs, without a retry.
+  - An `adapter: 'redis'` configuration runs on BullMQ through its public Queue and Worker APIs, each queue under the hash-tagged prefix `nbq:{<digest>}`. `adapter: 'inMemory'` runs in the process and writes unfinished jobs to `storage/queue` when it shuts down; it serves one process. Its optional `queueBackend` names a BullMQ backend factory registered with `registerBackend()`, such as a PostgreSQL one; left out, BullMQ's own Redis backend is used. Redis Cluster is not supported yet.
+  - `Job`, `Locator`, `Worker`, `Schedule`, `QueueManager`, `createQueueManager`, `createSyncQueueConfig`, the `sync` and `database` drivers, job discovery, job factories and the OpenTelemetry instrumentation are removed. So is the database driver's migration.
+
+  The `queue` configuration section now has the shape of `jobs`: `default` names a key, and every other key is one complete configuration. Without `queue.default`, queues run on the built-in memory configuration, reported once outside development. A section in the former `connections`/`worker`/`jobs` format is ignored with one warning instead of stopping the application, and its `default` is ignored unless it names a key of the new format.
+
+  `@nocobase/app-server/queue` exports `QueueServiceProvider`, constructed with `{ nodeEnv }`, `queueServiceToken` and `AppQueueConfig`; `QueueProvider`, `queueManagerToken` and `queueJobFactoryRegistryToken` are removed. The provider sets the service up in `start()`, after every provider has booted, and shuts it down last. `planAppRuntimeDatabaseTasks` and `AppRuntimeDatabaseTaskPlanOptions` are removed: planning no longer adds a queue migration source, and `runAppDatabaseTasks` keeps its `runtimeConfig` option. The plugin field `queue: { jobs }` and `createPluginJobLocations()` are deprecated: the field is accepted and ignored, each plugin declaring it is reported once at startup, plugin inspection reports it as the `SERVER_QUEUE_JOBS_DEPRECATED` warning in place of `SERVER_JOB_LOCATION_MISSING`, and `createPluginJobLocations()` returns an empty list.
+
+  The templates compose `QueueServiceProvider`, declare a `memory` and a `redis` key in `server/config/queue.ts`, and drop the `@/jobs` path alias. `create-plugin`'s `server.jobs` capability now generates a `@nocobase/jobs` job and the provider that owns the plugin's `JobExecutor`, instead of a Queue Job; the plugin declares `@nocobase/jobs` as a peer. The Vitest presets no longer inline `@boringnode/queue`. The application development Skill makes `@nocobase/jobs` the default for background work — `JobExecutor` for one-off tasks, `ScheduleExecutor` for recurring ones — and keeps queues for delays, priorities, deduplicating IDs, batches, rate limits and fan-out; the deployment Skill covers the `queue` backend next to the `jobs` one. The queue example plugin now publishes greetings and digest batches and consumes them with two handlers.
+
+  The `queue_jobs` and `queue_schedules` tables of the former database driver, and their migration's history record, are left in place: the migrator only checks packages that still contribute migrations, so startup is unaffected. Drop the tables by hand when nothing reads them. `pnpm nocobase db rollback` refuses to roll back a batch that contains that history record, so it fails while the latest batch is the one that created the tables, as in an application that has applied no migration since.
+
+  Upgrading an application:
+
+  1. In `server/app.ts`, replace `app.addServiceProvider(QueueProvider)` with `app.addServiceProvider(QueueServiceProvider, { nodeEnv: runtime.env.NODE_ENV })`, imported from `@nocobase/app-server/queue`.
+  2. Replace `server/config/queue.ts` with configuration keys, such as `memory: { adapter: 'inMemory', persistence: { path: paths.storage('queue') } }` and `redis: { adapter: 'redis', connection: { host, port, db } }`, and set `queue.default` in `config.yml` to the one to run on; an application running more than one instance needs `redis`.
+  3. Move each `server/jobs` Job to `@nocobase/jobs`: a `JobExecutor` job registered and set up by the provider that owns it, submitted with `addJob(new Job(payload))`, or a `ScheduleExecutor` rule for recurring work. Use a queue handler registered with `queueServiceToken` in a provider's `boot()`, published with `producer(queue).publish(channel, message)`, only for work that needs a delay, a priority, a deduplicating job ID, a batch, a rate limit or several handlers. Remove `queue: { jobs }` from plugin declarations and `createPluginJobLocations()` from configuration. Jobs still waiting in the former queue storage are not moved.
+
+### Patch Changes
+
+- Updated dependencies [9291dbb]
+- Updated dependencies [9291dbb]
+- Updated dependencies [ec4b764]
+- Updated dependencies [a859ba1]
+- Updated dependencies [e77641b]
+- Updated dependencies [e77641b]
+  - @nocobase/i18n@1.0.0-beta.5
+  - @nocobase/jobs@0.1.0-beta.2
+  - @nocobase/queue@0.1.0-beta.8
+  - @nocobase/caching@0.1.0-beta.2
+  - @nocobase/db@1.0.0-beta.16
+  - @nocobase/db-dameng@0.1.0-beta.2
+  - @nocobase/db-kingbase@0.1.0-beta.2
+  - @nocobase/db-mssql@0.1.0-beta.1
+  - @nocobase/db-mysql@0.1.0-beta.2
+  - @nocobase/db-oceanbase@0.1.0-beta.1
+  - @nocobase/db-oracle@0.1.0-beta.2
+  - @nocobase/db-postgres@0.1.0-beta.2
+  - @nocobase/db-sqlite@0.1.0-beta.3
+  - @nocobase/service-provider@0.0.2-beta.1
+
+## 1.0.0-beta.31
+
+### Patch Changes
+
+- 3d44c4c: Add one-off `JobExecutor` tasks alongside recurring `ScheduleExecutor` rules through the existing application jobs provider and service token. Jobs declare an own stable static `jobName`, accept only payload in their constructors, and reconstruct a fresh instance for every attempt from a strict JSON snapshot. Consumers register classes before setup; producer-only executors use `setup({ consume: false })`.
+
+  Identify ordinary tasks by connection or storage path, namespace and scope, like Schedule, so renaming a configuration key or replacing the built-in default with `jobs.default: memory` keeps pending tasks; they use Redis queues and pending-only memory snapshots separate from Schedule's. Report local attempt events, including `JobProgress` for the 0–100 progress a handler reports through `reportProgress` (stored as BullMQ job progress on Redis), preserve explicitly interrupted work for recovery, and complete successful handlers even when shutdown has aborted their signal. Memory persistence remains setup-read and shutdown-write, so forced exits can lose new tasks or replay work completed since the last snapshot.
+
+  Rename the shared configuration and service types from `Schedule*` to `Jobs*`, because they configure ordinary and recurring executors alike: `ScheduleConfig` is now `JobsConfig`, and `ScheduleAdapterConfig`, `RedisScheduleAdapterConfig`, `MemoryScheduleAdapterConfig`, `ScheduleRedisConnectionOptions`, `ScheduleRetentionPolicy`, `ScheduleLogger` and `ScheduleFallbackEvent` are now `JobsAdapterConfig`, `RedisJobsAdapterConfig`, `MemoryJobsAdapterConfig`, `JobsRedisConnectionOptions`, `JobsRetentionPolicy`, `JobsLogger` and `JobsFallbackEvent`. The old names are removed, so code importing them from `@nocobase/jobs` must switch to the new ones. Shared error messages now say "jobs" instead of "schedule". Types specific to recurring rules, such as `ScheduleExecutor` and `ScheduleJob`, keep their names.
+
+  Document ordinary and recurring executor ownership in app-server and update application-development guidance to distinguish payload-only tasks from the unchanged queue-job and Scheduler APIs.
+
+- Updated dependencies [3d44c4c]
+  - @nocobase/jobs@0.1.0-beta.1
+  - @nocobase/caching@0.1.0-beta.2
+  - @nocobase/db@1.0.0-beta.16
+  - @nocobase/db-dameng@0.1.0-beta.2
+  - @nocobase/db-kingbase@0.1.0-beta.2
+  - @nocobase/db-mssql@0.1.0-beta.1
+  - @nocobase/db-mysql@0.1.0-beta.2
+  - @nocobase/db-oceanbase@0.1.0-beta.1
+  - @nocobase/db-oracle@0.1.0-beta.2
+  - @nocobase/db-postgres@0.1.0-beta.2
+  - @nocobase/db-sqlite@0.1.0-beta.3
+  - @nocobase/i18n@1.0.0-beta.4
+  - @nocobase/queue@0.1.0-beta.7
+  - @nocobase/service-provider@0.0.2-beta.1
+
 ## 1.0.0-beta.30
 
 ### Minor Changes

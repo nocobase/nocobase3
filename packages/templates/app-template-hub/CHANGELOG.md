@@ -1,5 +1,306 @@
 # @nocobase/app-template-hub
 
+## 1.0.0-beta.45
+
+### Patch Changes
+
+- e123790: Move `@nocobase/app-server`, `@nocobase/app-client`, `@nocobase/app-plugin-authentication`, `@nocobase/app-plugin-users`, `@nocobase/app-plugin-hub`, `@nocobase/app-plugin-workflow` and `@nocobase/app-plugin-ai-employee` to the 2.0.0 prerelease line. The HTTP API migration released in 1.0.0-beta.N changed every route and the error body, but in prerelease mode a `major` changeset on a version that is already a `1.0.0` prerelease only increments the prerelease number, so nothing in the version said the change was breaking. These packages now release as `2.0.0-beta.0`, and every package that depends on or peers with one of them is released again so that its published range is `^2.0.0-beta.0` rather than a `^1.0.0-beta` range the new versions do not satisfy. An application upgrading to these versions upgrades all of them together.
+- Updated dependencies [e123790]
+  - @nocobase/app-plugin-authentication@2.0.0-beta.0
+  - @nocobase/app-plugin-hub@2.0.0-beta.0
+  - @nocobase/app-plugin-users@2.0.0-beta.0
+  - @nocobase/app-server@2.0.0-beta.0
+  - @nocobase/app-cli@1.0.0-beta.13
+  - @nocobase/app-plugin-api-keys@1.0.0-beta.12
+  - @nocobase/app-plugin-authorization@1.0.0-beta.24
+  - @nocobase/app-plugin-authz-default-access@1.0.0-beta.9
+  - @nocobase/app-plugin-authz-restriction-rules@1.0.0-beta.8
+  - @nocobase/app-plugin-authz-sharing-rules@1.0.0-beta.9
+  - @nocobase/app-plugin-i18n@1.0.0-beta.13
+  - @nocobase/app-plugin-notification@1.0.0-beta.22
+  - @nocobase/app-plugin-service-provider-example@1.0.0-beta.7
+
+## 1.0.0-beta.44
+
+### Minor Changes
+
+- e44f49c: `hub deploy` and `hub upload` send the archive through the Hub's resumable upload, so an archive may be up to 2 GiB and a reverse proxy in front of the Hub only needs to allow a request the size of one chunk (8 MiB). A chunk whose answer is lost is sent again from the offset the Hub reports, after up to five consecutive failures of the chunk or of the read that finds the offset; a run that gives up leaves its session on the Hub for 24 hours so the same command resumes it, and an archive the Hub already has is not sent again. Progress is reported by the tenth.
+
+  The Hub accepts resumable Release uploads under `/api/hub/apps/:appId/releases/uploads` with the `upload-release` action or publishing-key scope: `POST` starts a session for `{ size, sha256 }` (resuming an unfinished one for the same archive, or answering with the Release when the App already has it), `PATCH /:uploadId` appends a chunk at `Upload-Offset` (`409` with reason `UPLOAD_OFFSET_MISMATCH` reports the offset to continue from in `error.metadata.offset`), `GET /:uploadId` reports the offset, and `POST /:uploadId/complete` verifies the archive and creates the Release through the same checks as the single upload, answering a retried completion with the same Release. Sessions are staged on the Hub's local disk under the new `uploadsDir` option, which the Hub template sets to `storage/hub/uploads`, one directory per App, and expire 24 hours after their last chunk; an App's expired sessions are removed when one of its uploads starts, and every App's once an hour. `POST /api/hub/apps/:appId/releases`, which the management console uses, keeps its 256 MiB limit.
+
+### Patch Changes
+
+- 21d274c: An application can set global limits for every `/api` request in a new `api` section of `config.yml`. All three are off by default and nothing is installed for one that is unset, so an application that does not set them behaves as before.
+
+  ```yaml
+  api:
+    bodyLimit: 10mb
+    timeout: 30s
+    rateLimit:
+      max: 600
+      window: 1m
+  ```
+
+  - `bodyLimit` refuses a larger body, whether it declares its length or streams it, with `413 INVALID_ARGUMENT`, reason `BODY_TOO_LARGE`. It is a ceiling over every route; a route that needs a smaller limit sets its own.
+  - `timeout` answers `503 UNAVAILABLE`, reason `REQUEST_TIMEOUT`, when a handler has not returned its response within the deadline. It covers only the time until the response exists, so a streaming response (SSE, NDJSON) that has started is not cut off. The handler is not cancelled; what it returns or throws after the deadline is discarded.
+  - `rateLimit` allows `max` requests per `window` from each client connection address and answers `429 RESOURCE_EXHAUSTED`, reason `RATE_LIMITED`, with a `Retry-After` header in seconds. `GET /api/healthz` is exempt; Better Auth's routes under `/api/auth/` are counted. Counters are fixed windows kept in process memory and bounded, so each instance of a multi-instance deployment counts on its own, and behind a reverse proxy every request shares the proxy's address. A request whose address is unknown, such as one a Hub forwards to an application it hosts in process, is not counted.
+
+  All three answer in the standard error body with domain `app` and the request's `x-request-id`. Sizes are a number of bytes or a string such as `512kb`, `10mb` or `1gb`; durations a number of milliseconds or a string such as `500ms`, `30s`, `1m` or `1h`.
+
+  `@nocobase/app-server/router` exports `defineApiConfig()`, which declares the section with its validation, so `pnpm nocobase config check` and every start report a malformed value, and maps `API_BODY_LIMIT` and `API_TIMEOUT`; `installApiLimits()` and the individual middlewares are exported too. The three templates declare the section in `server/config/api.ts` and document it, commented out, in `config.example.yml`. An existing application adds the same `server/config/api.ts` and registers it in `server/config/index.ts` to get validation and the environment variables; without it, the limits it sets in `config.yml` still apply, but `config check` reports `api` as an unknown section.
+
+  The `nocobase-app-development` Skill's HTTP API reference describes the limits and their reasons, and the `nocobase-deployment` Skill lists them among the production settings to review.
+
+- 3f01f61: Document the HTTP API design every `/api` route follows. The `nocobase-app-development` Skill gains `references/http-api.md`: camelCase paths under a plugin's namespace, standard and custom methods, `{ data }` and `{ data, meta }` responses with `pageSize`/`pageToken` or `page`/`pageSize` paging, `ApiError` and the standard error body, and input validated with zod through `parseApiInput()` after the permission check, with an optional `bodyLimit` on a route whose body needs one. It also fixes when a custom method answers `200`, `202` or `204`, which lists may skip paging, that a `GET` never changes state, that a plugin has one error `domain`, and that streaming routes answer errors detectable before the stream opens with the standard body. Its route, frontend API, testing, i18n and organization references, and the frontend projects example, now throw `ApiError`, branch on `error.reason`, and use `q`, `orderBy`, `page`/`pageSize` and string ids. Generated plugins and applications point to it from `AGENTS.md`.
+- 21d274c: Workflow, scheduler, i18n and notification routes follow the HTTP API specification: every success is `{ data }` (lists `{ data, meta }`), every failure is the standard error body, and every input is validated, with unknown JSON body fields rejected as 400 `INVALID_INPUT`.
+
+  **Workflow** (domain `workflows`). Runs move under the workflow namespace: `/api/workflow-runs` -> `/api/workflows/runs`, `/api/workflow-runs/{id}` -> `/api/workflows/runs/{runId}`, `/api/workflow-runs/{id}/node-runs[/{nodeRunId}/payload]` -> `/api/workflows/runs/{runId}/nodeRuns[/{nodeRunId}/payload]`. Source previews move from `/api/workflows/by-key/{key}/source[/revisions]` to `/api/workflows/sources/{key}[/revisions]`. `PATCH /api/workflows/{id}/status` is removed (use `POST .../enable` and `.../disable`), and `GET /api/workflows/{id}/runs` is removed (use `GET /api/workflows/runs?workflowId=`). Revision and node-run lists answer `{ data, meta: { page, pageSize, total } }`. `POST /api/workflows/{id}/run` requires `{ input }` and validates the `Event-Key` header; `PUT /api/workflows/{id}/parameters` requires `{ parameterValues }`. A workflow, source, run or node run named by the path that does not exist is 404 (was 400); permission denial is 403 `WORKFLOW_MANAGEMENT_REQUIRED`; an unconfigured service is 503 `WORKFLOW_SERVICE_NOT_CONFIGURED`. Invocation codes are kept as reasons: `WORKFLOW_NOT_FOUND` is 404, `WORKFLOW_DISABLED`, `PARENT_RUN_NOT_FOUND` and `STACK_LIMIT_EXCEEDED` are `FAILED_PRECONDITION`, `INVALID_INPUT` is `INVALID_ARGUMENT` with field violations, and `INPUT_TOO_LARGE` answers 413. Translated text is in `localizedMessage`.
+
+  **Scheduler** (domain `scheduler`). `/api/schedules` -> `/api/scheduler/schedules`, paged by `page` and `pageSize` with `meta: { page, pageSize, total }`. New `GET /api/scheduler/schedules/{scheduleId}`. `GET /api/scheduler/schedules/{scheduleId}/occurrences` is cursor-paged by `pageSize` and `pageToken` with `meta: { nextPageToken }`, replacing the fixed latest-100 list. `POST .../enable` and `.../disable` keep their shape under the new prefix. A caller without access gets 403 `SCHEDULE_ACCESS_REQUIRED` (was `{ error: 'Schedule access is required.' }`), and an unknown schedule id gets 404 `SCHEDULE_NOT_FOUND` (was 500, or an empty occurrence list).
+
+  **i18n** (domain `i18n`). `GET /api/i18n/locales` answers `{ data: { defaultLocale, locales } }`. `POST /api/i18n/locale` -> `PUT /api/i18n/locale`, answering `{ data: { locale, requestedLocale, fallback } }`; an unsupported language still falls back to English successfully. A missing or invalid `locale` is 400 `INVALID_INPUT` with a field violation (was `{ error: 'A locale is required.' }`), in the standard error body even when the router is mounted on its own.
+
+  **Notification** (domain `notifications`). `GET /api/notifications/logs` is cursor-paged (`pageSize`, `pageToken`) and answers `{ data, meta: { nextPageToken } }`; `/api/notifications/logs/:id` is `/api/notifications/logs/{logId}`. `GET /api/notifications/test/targets` -> `GET /api/notifications/testTargets`, `POST /api/notifications/test/send` -> `POST /api/notifications/testSends` (strict `{ channel, values }`, 202), `GET /api/notifications/test/{id}/status` -> `GET /api/notifications/testSends/{testSendId}`. The `{ error: { code, message, ns, key, params } }` body is gone: `reason` carries the former code, `localizedMessage` the translated text and `metadata` its parameters; invalid test fields report `fieldViolations`, and `NOTIFICATION_TEST_FAILED` is 503 `UNAVAILABLE` only when the Channel's transport cannot be reached (the new exported `NotificationTransportUnavailableError`); any other failure of a test send is no longer reported as `NOTIFICATION_TEST_FAILED`. `GET /api/notifications/testTargets` answers `{ data, meta: { total } }`. `NotificationTestApiError` exposes `reason` instead of `code`, `ns`, `key` and `params`, and `NotificationStore.listLogs()` accepts an optional cursor.
+
+  **In-app notification** (domain `notificationInApp`). The inbox moves from `/api/notifications/in-app` to `/api/notificationInApp`: `GET /messages` (`pageSize`, `pageToken`, `unreadOnly` -> `{ data, meta: { nextPageToken } }`, replacing `limit`, `cursor` and `nextCursor`), `GET /messages/unreadCount` -> `{ data: { count } }`, `POST /messages/markAllRead` (was `/read-all`), `POST /messages/{messageId}/markRead` and `/markUnread` and `DELETE /messages/{messageId}` (204), replacing `POST /:id { action }`. Every inbox route runs behind the authentication plugin's `auth.required()` and reads the user only from the Better Auth session: it no longer falls back to, or writes, a `userId` in the NocoBase session, so an inbox request after sign-out or without a session is 401 `UNAUTHENTICATED` with reason `AUTHENTICATION_REQUIRED` in the `authentication` domain. `createInAppRouter(store, options)` requires `options.authenticate`, a middleware that sets `auth`, and `resolveUserId` and `InAppUserIdResolver` are removed. An anonymous request reaching `createInAppRouter` without `auth` is 401 `UNAUTHENTICATED` with reason `IN_APP_NOTIFICATION_AUTHENTICATION_REQUIRED`, `IN_APP_NOTIFICATION_INVALID_CURSOR` is now `IN_APP_NOTIFICATION_INVALID_PAGE_TOKEN`, and the limit, body and action errors are gone. The client helpers take `pageSize` and `pageToken`, return `nextPageToken`, and `mutateInboxItem` deletes with `DELETE`.
+
+  The application templates' tests follow the new locale and inbox response shapes.
+
+- 0b933b3: Document the application's OpenAPI document for the agents and people who work on generated plugins and applications. A generated plugin's `AGENTS.md` now says that every `/api` route declares itself with `describeRoute()` and validates its input with `apiValidator()`, lists only the error statuses it can produce — no `400` for input validation, which `apiValidator()` adds, and `...apiErrorResponses` (`401`, `403`, `500`) only for an authenticated route with a permission check — declares `security: []` when it needs no credential and is hidden only for the listed reasons, that a plugin with its own runtime dispatcher registers its routers with `addApiRouter({ owner, prefix, scope?, router })` and any other target with `addUndeclaredApiRoute()`, and that its tests expect `findUndeclaredApiRoutes()` and `findApiDocumentSchemaProblems()` to be empty; it also says how to read an application's document at `<APP_BASE_PATH>/api/swagger` with an API key. The comment in a generated plugin's `server/routes/index.ts` names `apiValidator()` and `describeRoute()` instead of `parseApiInput()`. The default and Hub templates' `AGENTS.md` and `README.MD`, like the examples template's, explain where the Swagger UI and the JSON document are served, that reading them needs a signed-in session or an API key, the `curl -H "x-api-key: <key>"` form, and that an agent learns the endpoints from the document; their server route example uses `describeRoute()` and `apiValidator()` and states the same rule for error statuses.
+- 463a7a8: The templates' tests take their databases from `@nocobase/app-testing`, now a development dependency of every template and of the applications they generate. The application server tests start the template on test databases written by `createTestAppConfig()` instead of SQLite files, so they run on the dialect `NOCOBASE_TEST_DB_DIALECT` selects. The examples template gains a test that signs in through the application with `@nocobase/app-plugin-authentication/testing` and checks that the sales confidentiality restriction leaves confidential quotes out of a proposal engineer's list and in an administrator's, and that they appear once the restriction is no longer assigned. The `nocobase-app-development` Skill's testing reference describes testing through the whole application, where a test's databases come from, and `describeMigration()` for migrations.
+- 7e5b7d4: Build the sign-in, sign-up and password pages from the UI Library's new presentational `auth-forms`, `auth-methods` and `auth-split-layout` blocks, installed in `client/extensions/nocobase-<item>/`, which replace the `auth-ui` block in `client/extensions/nocobase-auth-ui/`. The forms are made of shadcn `Field`, `InputGroup`, `Alert` and `Button`, method switching uses shadcn `Tabs`, and none of them imports a plugin: `client/pages/auth/` wires each form to `@nocobase/app-plugin-authentication/client/actions`, passes translated labels from `client/locales/` (the `auth.*` keys now live there directly), and keeps the NocoBase brand panel as the layout's aside. Routes, redirects, the sign-up switch and error messages behave as before. The templates gain the shadcn `alert`, `field`, `input-group`, `tabs` and `textarea` primitives.
+
+  An application generated earlier keeps working with its own `client/extensions/nocobase-auth-ui/`. To follow, install `@nocobase/auth-forms`, `@nocobase/auth-methods` and `@nocobase/auth-split-layout`, rewrite `client/pages/auth/` after the template's pages, move the `auth.*` keys from the block's `locales/` into `client/locales/`, and delete the old directory.
+
+- 7e5b7d4: Build the App, Settings and Dev sidebars from shadcn's Sidebar primitives, keeping the collapsed-menu tooltips and popovers, permission filtering, shared collapse preference and phone navigation. The shadcn `sidebar.tsx` stays as the CLI writes it: widths follow the spacing scale, the phone sheet has a translated title, and Ctrl/Cmd+B no longer toggles the sidebar. The Sheet close button is translated. The edge rail toggles the icon mode with a translated label, and the footer spaces its slogan, name and version like the menu above it, leaving only the shield with a tooltip in icon mode.
+- Updated dependencies [21d274c]
+- Updated dependencies [21d274c]
+- Updated dependencies [463a7a8]
+- Updated dependencies [463a7a8]
+- Updated dependencies [7e5b7d4]
+- Updated dependencies [463a7a8]
+- Updated dependencies [21d274c]
+- Updated dependencies [be0fbbd]
+- Updated dependencies [e44f49c]
+- Updated dependencies [7f9450e]
+- Updated dependencies [4403687]
+- Updated dependencies [be0fbbd]
+- Updated dependencies [463a7a8]
+- Updated dependencies [be0fbbd]
+- Updated dependencies [7dbc54b]
+- Updated dependencies [27f09bd]
+- Updated dependencies [463a7a8]
+- Updated dependencies [be0fbbd]
+- Updated dependencies [463a7a8]
+- Updated dependencies [7dbc54b]
+- Updated dependencies [3f01f61]
+- Updated dependencies [3f01f61]
+- Updated dependencies [21d274c]
+- Updated dependencies [21d274c]
+- Updated dependencies [21d274c]
+- Updated dependencies [21d274c]
+- Updated dependencies [21d274c]
+- Updated dependencies [be0fbbd]
+- Updated dependencies [e44f49c]
+- Updated dependencies [e44f49c]
+- Updated dependencies [e44f49c]
+- Updated dependencies [be0fbbd]
+- Updated dependencies [7dbc54b]
+- Updated dependencies [0b933b3]
+- Updated dependencies [0b933b3]
+- Updated dependencies [0b933b3]
+- Updated dependencies [0b933b3]
+- Updated dependencies [0b933b3]
+- Updated dependencies [0b933b3]
+- Updated dependencies [be0fbbd]
+- Updated dependencies [be0fbbd]
+- Updated dependencies [21d274c]
+  - @nocobase/app-server@1.0.0-beta.33
+  - @nocobase/app-cli@1.0.0-beta.12
+  - @nocobase/app-plugin-authentication@1.0.0-beta.25
+  - @nocobase/db@1.0.0-beta.17
+  - @nocobase/app-plugin-authorization@1.0.0-beta.23
+  - @nocobase/db-sqlite@0.1.0-beta.4
+  - @nocobase/repository-input@0.1.0-beta.2
+  - @nocobase/app-plugin-users@1.0.0-beta.14
+  - @nocobase/authorization@1.0.0-beta.11
+  - @nocobase/app-plugin-service-provider-example@1.0.0-beta.6
+  - @nocobase/app-plugin-hub@1.0.0-beta.25
+  - @nocobase/app-plugin-api-keys@1.0.0-beta.11
+  - @nocobase/app-plugin-authz-default-access@1.0.0-beta.8
+  - @nocobase/app-plugin-authz-sharing-rules@1.0.0-beta.8
+  - @nocobase/app-plugin-authz-restriction-rules@1.0.0-beta.7
+  - @nocobase/app-plugin-i18n@1.0.0-beta.12
+  - @nocobase/app-plugin-notification@1.0.0-beta.21
+
+## 1.0.0-beta.43
+
+### Minor Changes
+
+- e77641b: Rebuild `@nocobase/queue` on BullMQ 6.3.6, with producers, consumers and managers per application
+
+  **Breaking.** `@nocobase/queue` no longer wraps `@boringnode/queue`. `createQueueService(config, { appName, storagePath, logger?, onFallback? })` creates one application's `QueueService`, whose `producer(queue, configKey?)`, `consumer(queue, configKey?)` and `manager(queue, configKey?)` are bound to a named queue:
+
+  - `producer().publish(channel, message, options?)` and `publishMany([{ channel, message }], options?)` write JSON messages with `priority`, `delay`, `attempts`, `backoff` (`fixed` or `exponential`), `removeOnComplete`, `removeOnFail` and a `jobIdProducer`. A batch is prepared entirely before anything is written.
+  - `consumer().consume(handler)` registers a handler `(channel, message, signal)` and returns the function that unregisters it once its running calls settle. Every handler of a queue runs for every job; `withChannel(channels, handler)` filters channels.
+  - `manager().configure()` changes concurrency, job defaults and the global rate limit at runtime; `drain()` empties waiting jobs; `cancelJob()` and `cancelAllJobs()` cancel jobs this instance runs, without a retry.
+  - An `adapter: 'redis'` configuration runs on BullMQ through its public Queue and Worker APIs, each queue under the hash-tagged prefix `nbq:{<digest>}`. `adapter: 'inMemory'` runs in the process and writes unfinished jobs to `storage/queue` when it shuts down; it serves one process. Its optional `queueBackend` names a BullMQ backend factory registered with `registerBackend()`, such as a PostgreSQL one; left out, BullMQ's own Redis backend is used. Redis Cluster is not supported yet.
+  - `Job`, `Locator`, `Worker`, `Schedule`, `QueueManager`, `createQueueManager`, `createSyncQueueConfig`, the `sync` and `database` drivers, job discovery, job factories and the OpenTelemetry instrumentation are removed. So is the database driver's migration.
+
+  The `queue` configuration section now has the shape of `jobs`: `default` names a key, and every other key is one complete configuration. Without `queue.default`, queues run on the built-in memory configuration, reported once outside development. A section in the former `connections`/`worker`/`jobs` format is ignored with one warning instead of stopping the application, and its `default` is ignored unless it names a key of the new format.
+
+  `@nocobase/app-server/queue` exports `QueueServiceProvider`, constructed with `{ nodeEnv }`, `queueServiceToken` and `AppQueueConfig`; `QueueProvider`, `queueManagerToken` and `queueJobFactoryRegistryToken` are removed. The provider sets the service up in `start()`, after every provider has booted, and shuts it down last. `planAppRuntimeDatabaseTasks` and `AppRuntimeDatabaseTaskPlanOptions` are removed: planning no longer adds a queue migration source, and `runAppDatabaseTasks` keeps its `runtimeConfig` option. The plugin field `queue: { jobs }` and `createPluginJobLocations()` are deprecated: the field is accepted and ignored, each plugin declaring it is reported once at startup, plugin inspection reports it as the `SERVER_QUEUE_JOBS_DEPRECATED` warning in place of `SERVER_JOB_LOCATION_MISSING`, and `createPluginJobLocations()` returns an empty list.
+
+  The templates compose `QueueServiceProvider`, declare a `memory` and a `redis` key in `server/config/queue.ts`, and drop the `@/jobs` path alias. `create-plugin`'s `server.jobs` capability now generates a `@nocobase/jobs` job and the provider that owns the plugin's `JobExecutor`, instead of a Queue Job; the plugin declares `@nocobase/jobs` as a peer. The Vitest presets no longer inline `@boringnode/queue`. The application development Skill makes `@nocobase/jobs` the default for background work — `JobExecutor` for one-off tasks, `ScheduleExecutor` for recurring ones — and keeps queues for delays, priorities, deduplicating IDs, batches, rate limits and fan-out; the deployment Skill covers the `queue` backend next to the `jobs` one. The queue example plugin now publishes greetings and digest batches and consumes them with two handlers.
+
+  The `queue_jobs` and `queue_schedules` tables of the former database driver, and their migration's history record, are left in place: the migrator only checks packages that still contribute migrations, so startup is unaffected. Drop the tables by hand when nothing reads them. `pnpm nocobase db rollback` refuses to roll back a batch that contains that history record, so it fails while the latest batch is the one that created the tables, as in an application that has applied no migration since.
+
+  Upgrading an application:
+
+  1. In `server/app.ts`, replace `app.addServiceProvider(QueueProvider)` with `app.addServiceProvider(QueueServiceProvider, { nodeEnv: runtime.env.NODE_ENV })`, imported from `@nocobase/app-server/queue`.
+  2. Replace `server/config/queue.ts` with configuration keys, such as `memory: { adapter: 'inMemory', persistence: { path: paths.storage('queue') } }` and `redis: { adapter: 'redis', connection: { host, port, db } }`, and set `queue.default` in `config.yml` to the one to run on; an application running more than one instance needs `redis`.
+  3. Move each `server/jobs` Job to `@nocobase/jobs`: a `JobExecutor` job registered and set up by the provider that owns it, submitted with `addJob(new Job(payload))`, or a `ScheduleExecutor` rule for recurring work. Use a queue handler registered with `queueServiceToken` in a provider's `boot()`, published with `producer(queue).publish(channel, message)`, only for work that needs a delay, a priority, a deduplicating job ID, a batch, a rate limit or several handlers. Remove `queue: { jobs }` from plugin declarations and `createPluginJobLocations()` from configuration. Jobs still waiting in the former queue storage are not moved.
+
+### Patch Changes
+
+- 9291dbb: Pass `locales` the same way on the client and the server
+
+  `defineClientPlugin`, `defineServerPlugin` and both sides' `defineAppRuntime` now accept the `locales/index.ts` module itself or a function importing it, typed as the new `LocalesContribution` from `@nocobase/i18n`, which also exports `resolveLocalesContribution` to turn either into the module. Previously the client took only the module and the server only a function, so a plugin wired the same file two different ways. The module is the recommended form on both sides: each language in it is already a separate dynamic import, so importing the map statically loads no translations early. Existing `locales: () => import('./locales/index.js')` declarations keep working unchanged. `@nocobase/app-server` exports `AppServerPluginLocales` for the widened type and keeps `AppServerPluginLocalesLoader` as a deprecated alias. The bundled plugins, the application templates' `server/runtime.ts` and plugins generated by `create-plugin` now import their server locales statically.
+
+- 9c5d0c2: `client/extensions/nocobase-auth-ui/` now holds exactly the files the UI Library's `auth-ui` installs, and `tests/scripts/template-ui-library.test.mjs` keeps it that way. Its relative imports carry the `.js` extension, it ships its `locales/`, which `client/locales/en-US.ts` and `zh-CN.ts` spread ahead of the application's own keys in `messages` instead of repeating them, and the out-of-date `README.md` the templates kept beside it is gone. No wording changes, and `PasswordLoginForm` still shows the sign-up link only while `useSignUpAvailable()` allows it. The development Skill's copy reference describes the new layout, and its steps for adding a language now translate the sign-in pages' copy too.
+
+  An application generated earlier keeps working as it is. To follow, merge the new `client/extensions/nocobase-auth-ui/` into its own copy, `locales/` included, keeping its own changes, and in `client/locales/` replace the `auth.*` keys the block provides with a spread of its locale files, as the [block's README](https://github.com/nocobase/nocobase3/blob/develop/ui-library/registry/auth/auth-ui/README.md#translations) shows. Keep the application's own `auth.*` keys, such as `auth.welcome`, which the block does not provide. Its `client/extensions/nocobase-auth-ui/README.md` can be deleted.
+
+- 7534fb6: Add `BackButton` (`client/components/back-button.tsx`), the way back from a page below another one. It stands on its own above the page's heading, where breadcrumbs would sit, and needs no `PageHeader`: a muted text link with an arrow, labelled through `navigation.back`, that leads to the parent route with the current query string and replaces the history entry, as closing a route overlay does. `to` sends it elsewhere and `children` replaces the label. `Breadcrumbs` stays for applications whose users ask for a trail.
+
+  The `DataTablePagination` that the NocoBase UI Library's `data-table` item installs gives the page count a minimum width instead of a fixed one, so "第 1 页，共 13 页" no longer wraps. `AGENTS.md` states that a page below another one leaves by `BackButton`, and that a record opens over the page the user is on.
+
+  An application generated earlier adds `navigation.back` to its locale files when it copies `back-button.tsx`, and can change `w-[100px]` to `min-w-[100px] whitespace-nowrap` in its own `data-table-pagination.tsx`.
+
+- 7534fb6: The Compact preset left two controls out of proportion because their geometry is fixed in pixels while the box around it follows `--spacing`: a Switch thumb smaller than its track, and a donut chart whose ring grew visibly thinner. `compact.css` now derives the Switch track from the spacing token and renders a pie chart's subtree at the spacious density, so both look right in the preset that applications default to, without touching the shadcn primitives an application adds.
+- 7534fb6: `AGENTS.md` states that a child page of its own, such as a record's page or a form too long for a dialog, returns `RouteChildPage` around its `PageContainer`. Only tab content renders inline: a child route that returns a bare `PageContainer` renders at the parent's `Outlet`, below the parent's content, instead of covering it.
+- 7534fb6: Ship only the shadcn/ui primitives the template's own code uses, and remove `client/pages/reference/`. Default and Hub keep `button`, `dialog`, `dropdown-menu`, `input`, `label`, `popover`, `spinner`, `toast` and `tooltip`; Examples also keeps `badge`, `card`, `field`, `select`, `separator`, `skeleton`, `table`, `textarea`, `toggle` and `toggle-group` for its example pages. Everything else is added with the shadcn CLI when a page needs it, as the development Skill describes. `use-mobile.ts` goes with the sidebar primitive, and the devDependencies only the removed primitives used (`recharts`, `cmdk`, `embla-carousel-react`, `input-otp`, `react-resizable-panels`, `@shadcn/react`) are dropped; `cn`, which registry primitives now import, is added.
+
+  `toast.tsx` names its close button through `actions.close`, as `dialog.tsx` and `spinner.tsx` already translate their labels, and `tests/components/primitive-labels.test.tsx` fails when an update brings the registry's English back. New tests cover a page test harness and application locale coverage.
+
+  An application generated earlier keeps its reference pages and primitives until it removes them: search the application for imports of a primitive or of `client/pages/reference/` first, then delete what nothing imports along with the reference tests, and drop a dependency only when no remaining file imports it.
+
+- 7534fb6: The templates no longer ship `client/components/typography.tsx`. Its `Typography*` components held the class strings from the shadcn Typography guide for hand-written long-form text, and nothing in the templates or the plugins used them. The development Skill no longer lists them.
+
+  An application generated earlier keeps its copy. Delete it, and `tests/components/typography.test.tsx`, only when nothing else in the application imports it.
+
+- 7534fb6: `RouteChildPage` covers the page it is rendered in even when it is rendered inside another child page, as a covering page under a tab of a record's page is. It was one element that both positioned and scrolled, so a layer inside it scrolled out of sight once that page had been scrolled. It is now two elements, the way the layout's content area is: the outer one positions and never scrolls, the inner one scrolls and stops scrolling at the layer instead of carrying on into the page beneath. Inside another child page it also switches off everything of that page around it — its header and tab bar — not only its own siblings.
+
+  `AGENTS.md` states that on a page with tabs an overlay the page's header opens is declared under every tab and linked through the current tab. An application generated earlier can copy `client/components/route-child-page.tsx` from the template; its API is unchanged, and the layer now carries `data-slot='route-child-page'`.
+
+- 7534fb6: `BackButton` is published by the NocoBase UI Library as the `back-button` component, and the templates preinstall it the way they do `PageHeader` and the route overlays: `client/components/back-button.tsx` is an exact copy of the item, which `tests/scripts/template-ui-library.test.mjs` keeps in step with the library, and `AGENTS.md` lists `BackButton` among the components that come from it. The development Skill's list of composed components now says which of them come from the UI Library.
+
+  An application generated earlier can take it with `yes n | pnpm exec shadcn add @nocobase/back-button` instead of copying the file, then add `navigation.back` (`Back`, `返回`) to its locale files and correct `package.json` as its `AGENTS.md` describes for any UI Library item.
+
+- 7534fb6: The templates no longer ship `DataTable` or `DatePicker`. Both are NocoBase UI Library items, added when a page first needs one: `yes n | pnpm exec shadcn add @nocobase/data-table` installs `DataTable`, `DataTableColumnHeader`, `DataTablePagination` and `DataTableViewOptions` into `client/components/data-table/`, and `@nocobase/date-picker` installs `DatePicker` and `DateRangePicker` into `client/components/date-picker.tsx`. The `calendar` primitive goes with them, and so do `select` and `table` in Default and Hub; Examples keeps those two for its example pages. `@tanstack/react-table`, `date-fns` and `react-day-picker` leave `devDependencies`, except that Hub keeps `react-day-picker`, which `@nocobase/app-plugin-hub` requires as a peer. The `dataTable` and `datePicker` keys stay in the locale files, so an item added later is translated at once. The development Skill names the items on the **Add first** lines of its worked example and says which of the CLI's changes to `package.json` to correct, and the upgrade Skill covers an application that still has the old copies.
+
+  An application generated earlier keeps its copies: they are its own code, and nothing in it has to change. Before removing any of them, search the application for imports of `@/components/data-table`, its companions, `@/components/date-picker` and the three primitives, and drop a package only when nothing imports it. An application that wants the library's `DataTable` deletes its `data-table.tsx` and the three `data-table-*.tsx` files before adding `@nocobase/data-table`, because `@/components/data-table` resolves to `data-table.tsx` while that file exists, and rewrites the companion imports to `@/components/data-table/column-header`, `@/components/data-table/pagination` and `@/components/data-table/view-options`.
+
+- Updated dependencies [ec4b764]
+- Updated dependencies [3117923]
+- Updated dependencies [ec4b764]
+- Updated dependencies [9291dbb]
+- Updated dependencies [9291dbb]
+- Updated dependencies [ec4b764]
+- Updated dependencies [a859ba1]
+- Updated dependencies [e77641b]
+- Updated dependencies [e77641b]
+  - @nocobase/app-plugin-i18n@0.1.0-beta.11
+  - @nocobase/app-cli@1.0.0-beta.11
+  - @nocobase/app-plugin-hub@1.0.0-beta.24
+  - @nocobase/i18n@1.0.0-beta.5
+  - @nocobase/app-server@1.0.0-beta.32
+  - @nocobase/app-plugin-authorization@0.2.0-beta.22
+  - @nocobase/app-plugin-authz-default-access@0.1.0-beta.7
+  - @nocobase/app-plugin-authz-restriction-rules@0.1.0-beta.6
+  - @nocobase/app-plugin-authz-sharing-rules@0.1.0-beta.7
+  - @nocobase/app-plugin-notification@0.1.0-beta.20
+  - @nocobase/app-plugin-users@1.0.0-beta.13
+  - @nocobase/jobs@0.1.0-beta.2
+  - @nocobase/app-plugin-api-keys@0.1.0-beta.10
+  - @nocobase/queue@0.1.0-beta.8
+
+## 1.0.0-beta.42
+
+### Patch Changes
+
+- dfdd449: ### Typed workflow DSL
+
+  Author workflow definitions with a typed, immutable builder instead of hand-written variable templates.
+
+  `workflow()`, exported from `@nocobase/app-plugin-workflow/dsl`, returns a builder that owns the definition's identity. `addNode()` returns a new builder over its own node list rather than mutating the one it was called on, so chained authoring works as before but code that called `addNode()` for its side effect has to keep the returned builder. `finalize()` rejects a node borrowed from another workflow, a node added to two workflows, and a duplicate node key. Give the `input` or `parameters` surface a TypeBox `Type.*` schema to type it; a raw JSON Schema still describes the surface and leaves it untyped. Workflow and node `options` are typed and validated, and preserved through artifacts and database materialization.
+
+  Handlers are declared with `defineHandler<typeof handler>('./server/handler')` over a type-only import, so evaluating a definition never loads server implementations or their dependencies. A handler reads invocation input, parameters, and upstream results from one shared context rather than from per-node argument mappings, and each node's result type is inferred from its handler's return type and accumulates through the chain, nested branches included. `finalize()` checks that every handler's context requirements are satisfied by the typed surfaces and upstream results.
+
+  The Workflow Skill now explains how to author typed DSL definitions and migrate mapped arguments and JSON Logic conditions to context handlers.
+
+  Conditions now run a handler module that returns a boolean, and the JSON Logic engine is removed along with the `expression` config field and the `evaluateJsonLogic`, `validateJsonLogicExpression`, and `JSON_LOGIC_*` exports. An existing definition that configures `expression` must move that comparison into a handler module. A condition's branches can be declared with the chainable `yes()` and `no()` methods, which reject empty and duplicate branch declarations; generic `branch()` authoring still works.
+
+  `parameters` accepts the same JSON Schema object shape as `inputSchema`, and `compileToFlatIr()` lowers it to the flat declaration map the parameter editor, the value resolver, and the materializer read. The lower-level `defineWorkflow()` API with `RunInstruction.create()` and friends is unchanged and still exported, together with `createReference()` and `lowerBindings()` for its `{{$input.x}}`, `{{$parameters.x}}`, and `{{$nodeResults.key.path}}` templates. A run node that carries no `args` receives the shared handler context, so both authoring styles execute on one engine.
+
+  The examples template's workflows are migrated to the typed builder and read their shared inferred contexts without result casts.
+
+  ### Custom Instruction nodes
+
+  Open the typed workflow builder to application-registered Instructions.
+
+  The builder resolved a node's expression metadata from a table holding `run`, `terminate` and `condition`, so a node of any other type failed with `Unknown workflow instruction`. It now reads the node's own type, configuration and branch structure, which is all the expression needs, and `createNode()` is exported so an extension can supply a node factory beside its Instruction class. The custom Instruction reference documents that factory alongside the existing `defineWorkflow()` form.
+
+  ### Builder validation
+
+  Fail finalization when a workflow builder's `addNode()` result was discarded.
+
+  `addNode()` returns the workflow containing the node, so calling it for its side effect and finalizing the receiver compiled a definition the node was simply missing from — and with it every handler context requirement `finalize()` would otherwise have checked. Types cannot catch this, because the discarded builder is the only value that carries the node. The builder now records what it has claimed and rejects `finalize()` and `compile()` naming each node that was never compiled, including nodes nested in a branch.
+
+  ### Workflow client forms
+
+  Let a workflow revision render its own custom input and parameter forms.
+
+  A workflow package may declare `input.form` and `parameters.form`, resolved inside its own `client/` directory. Those `client` declarations are persisted with the workflow revision and returned by the management API, and the form itself is published under the revision's Artifact hash, so a later build that changes a form cannot change how an already published revision renders. `@nocobase/app-plugin-workflow/vite` exposes those forms to the application build through a virtual module keyed by workflow, revision, and path. In development the module index refreshes when workflow sources change, including added and removed resources, without restarting Vite. Forms get React through bridge exports generated from the installed React modules and the matching host JSX runtimes, so they can use the full React API without bundling a second instance.
+
+  Workflow management addresses unpublished candidates by Artifact hash, so a detail URL identifies one exact version. Hot updates refresh the workflow list and version picker; reopen a changed candidate from there, since an unpublished hash can expire. Materialized revision URLs and mutations stay bound to exact versions. Parameter settings and manual run on a version that has not been materialized yet prompt to enable it first, then navigate to the materialized id. A version that was already materialized stays usable while disabled.
+
+  ### Custom input form schemas
+
+  Hand a custom input form the declarations it is typed for.
+
+  The manual run dialog passed a workflow's raw input schema properties to a custom input form through an `as never` cast, so a form received whatever the schema happened to hold rather than the `string`, `number` and `boolean` declarations `WorkflowParameterFormProps` promises. The properties are now narrowed at that boundary: a property the contract cannot describe is left out instead of being handed over under a type it does not have.
+
+  ### Artifact materialization
+
+  Materialize workflow revisions on demand rather than at startup.
+
+  Startup persists immutable artifact snapshots and publishes client resources, in development as well as production, without creating database revisions. A revision is materialized when a user enables a version, configures its parameters, or runs it manually, and its forms and handlers are resolved from that version's artifact hash. Persisting artifacts, materializing, publishing client resources, and selecting the current version are separate steps: reading parameters and running manually no longer select the current revision, while the first successful parameter save still does. Browser assets are served before the development SPA fallback and restored from persistent storage on startup.
+
+  ### Application workflow layout
+
+  Keep application workflow definitions in a top-level `workflows/` directory and build them to `dist/workflows`.
+
+  Development discovery, `workflow build`, `workflow check`, production artifact loading, and the application Skill all use that location.
+
+  Application server source may now use extensionless relative imports, so a workflow package can import a handler as `./server/calculate-risk`. All three templates set `module: "ESNext"`, `moduleResolution: "Bundler"`, and `tsc-alias.resolveFullPaths: true` in `tsconfig.server.json`: development runs under `tsx`, and the build runs `tsc-alias` after `tsc` to complete the paths for native Node ESM before workflow resources are collected. Workflow source checking and evaluation resolve extensionless handler imports the same way. A workflow package's `client/` form is typechecked and linted as browser code, through the client project rather than the server build.
+
+  `loadAppVitePlugins()` in `@nocobase/dev-config` loads the Vite contribution of every client plugin an application registers, so a template's `vite.config.ts` does not name individual plugins. An application without a `client/plugins.ts` contributes none rather than failing config resolution. A registered package that does not export its `package.json` is read from disk rather than failing config resolution.
+
+  The Workflow Vite contribution refreshes the workflow list and materialized revision picker during development by injecting its module index into the development page. The plugin's published client code no longer imports that index, so an application installing the plugin from a registry no longer fails Vite's dependency pre-bundling with `Could not resolve "virtual:nocobase-workflow-client-entries"`, and an application whose `vite.config.ts` does not call `loadAppVitePlugins()` still builds and runs; it only loses the live candidate refresh. To get it, call `loadAppVitePlugins()` as the templates' `vite.config.ts` does.
+
+  ### Vite source root
+
+  Read a Vite contribution's registration options from the application that registered it.
+
+  `AppVitePluginRegistration.config` was declared but never populated, so the Workflow Vite plugin's configurable `sourceRoot` could not be set by any application and always resolved to the default. `loadAppVitePlugins()` now parses the options literal the application passed to the plugin factory in its `client/plugins.ts`. Only statically writable values are read — an argument that is not a literal object of literal values leaves `config` undefined rather than reporting a partial one, because the declaration is parsed and never executed. `workflow({ sourceRoot })` is the supported way to point the Workflow client build at a directory other than `workflows`; keep it equal to the `sourceRoot` in the application's server workflow configuration.
+
+- Updated dependencies [52f9811]
+- Updated dependencies [3d44c4c]
+  - @nocobase/app-plugin-notification@0.1.0-beta.19
+  - @nocobase/jobs@0.1.0-beta.1
+  - @nocobase/app-server@1.0.0-beta.31
+
 ## 1.0.0-beta.41
 
 ### Patch Changes

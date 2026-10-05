@@ -11,7 +11,8 @@ import {
 } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import locales from '../client/locales/index.js';
-import SkillsSettingsPage from '../client/pages/skills-settings-page.js';
+import { RouterProvider } from 'react-router';
+import { createCatalogTestRouter } from './catalog-test-router.js';
 import type {
   ManagedSkillDetail,
   ManagedSkillSummary,
@@ -84,19 +85,19 @@ async function renderPage(locale = 'en-US') {
   await runtime.init(locale);
   return render(
     <I18nProvider runtime={runtime}>
-      <SkillsSettingsPage />
+      <RouterProvider router={createCatalogTestRouter('skills')} />
     </I18nProvider>,
   );
 }
 
 beforeEach(() => {
-  mocks.api.request.mockReset().mockResolvedValue({ rows: skills });
+  mocks.api.request.mockReset().mockResolvedValue({ data: skills });
 });
 
 describe('Skills settings page', () => {
   it('sorts by title with a name fallback rather than API order or identifier', async () => {
     mocks.api.request.mockResolvedValue({
-      rows: [
+      data: [
         { ...skills[0], name: 'a-first', title: 'Zebra' },
         { ...skills[1], name: 'middle', title: ' ' },
         { ...skills[0], name: 'z-last', title: 'alpha' },
@@ -187,7 +188,7 @@ describe('Skills settings page', () => {
       screen.queryByRole('button', { name: /create|edit|delete|execute/i }),
     ).not.toBeInTheDocument();
     expect(mocks.api.request).toHaveBeenCalledExactlyOnceWith({
-      path: 'ai/aiSkills:listAll',
+      path: 'aiEmployee/skills',
       method: 'GET',
       signal: expect.any(AbortSignal),
     });
@@ -220,8 +221,8 @@ describe('Skills settings page', () => {
       })),
     };
     mocks.api.request
-      .mockResolvedValueOnce({ rows: [longSkill] })
-      .mockResolvedValueOnce({ ...longSkill, content: '' });
+      .mockResolvedValueOnce({ data: [longSkill] })
+      .mockResolvedValueOnce({ data: { ...longSkill, content: '' } });
     await renderPage();
     const list = await screen.findByRole('list', { name: 'Skills' });
     const trigger = within(list).getByRole('button', { name: longSkill.title });
@@ -278,10 +279,10 @@ describe('Skills settings page', () => {
   });
 
   it('shows list loading, empty and retry states', async () => {
-    const pending = deferred<{ rows: ManagedSkillSummary[] }>();
+    const pending = deferred<{ data: ManagedSkillSummary[] }>();
     mocks.api.request
       .mockReturnValueOnce(pending.promise)
-      .mockResolvedValueOnce({ rows: [] });
+      .mockResolvedValueOnce({ data: [] });
     await renderPage();
     expect(screen.getByRole('status')).toHaveTextContent('Loading skills…');
     await act(async () => pending.reject(new Error('Unavailable')));
@@ -293,8 +294,8 @@ describe('Skills settings page', () => {
 
   it('opens from the card, renders safe Markdown and descriptive tools, and closes with Escape', async () => {
     mocks.api.request
-      .mockResolvedValueOnce({ rows: skills })
-      .mockResolvedValueOnce(detail);
+      .mockResolvedValueOnce({ data: skills })
+      .mockResolvedValueOnce({ data: detail });
     await renderPage();
     const title = await screen.findByRole('button', { name: 'Data analysis' });
     fireEvent.click(title.closest('[data-slot="card"]')!);
@@ -335,7 +336,7 @@ describe('Skills settings page', () => {
       'Browse business data safely.',
     );
     for (const row of within(tools).getAllByRole('listitem'))
-      expect(row).toHaveClass('h-32');
+      expect(row).toHaveClass('min-h-32');
     expect(
       within(tools).queryByText('Read collection records'),
     ).not.toBeInTheDocument();
@@ -347,11 +348,10 @@ describe('Skills settings page', () => {
     expect(within(dialog).getAllByRole('button')).toHaveLength(1);
     expect(dialog).toHaveClass(
       'right-0',
-      'inset-y-0',
-      'h-dvh',
-      'max-w-2xl',
+      'top-0',
+      'h-svh',
+      'sm:max-w-2xl',
       'overflow-hidden',
-      'data-starting-style:translate-x-full',
       'motion-reduce:transition-none',
     );
     expect(dialog).not.toHaveClass('left-1/2', 'top-1/2', 'overflow-y-auto');
@@ -359,11 +359,7 @@ describe('Skills settings page', () => {
       .getByRole('heading', { name: 'Skill details' })
       .closest('header')!;
     expect(header).toHaveClass('shrink-0');
-    expect(header.nextElementSibling).toHaveClass(
-      'min-h-0',
-      'overflow-y-auto',
-      'overscroll-contain',
-    );
+    expect(header.nextElementSibling).toHaveClass('min-h-0', 'overflow-y-auto');
     expect(within(dialog).getByRole('tablist').parentElement).toHaveClass(
       'sticky',
       'top-0',
@@ -378,8 +374,8 @@ describe('Skills settings page', () => {
 
   it('supports keyboard tab navigation and returns focus to the skill after closing', async () => {
     mocks.api.request
-      .mockResolvedValueOnce({ rows: skills })
-      .mockResolvedValueOnce(detail);
+      .mockResolvedValueOnce({ data: skills })
+      .mockResolvedValueOnce({ data: detail });
     await renderPage();
     const trigger = await screen.findByRole('button', {
       name: 'Data analysis',
@@ -392,22 +388,25 @@ describe('Skills settings page', () => {
     fireEvent.click(trigger, { detail: 0 });
     const dialog = screen.getByRole('dialog', { name: 'Skill details' });
     const close = within(dialog).getByRole('button', { name: 'Close' });
-    await waitFor(() => expect(close).toHaveFocus());
-    await within(dialog).findByRole('heading', { name: 'Analysis guide' });
     const instructions = within(dialog).getByRole('tab', {
       name: 'Instructions',
     });
+    await waitFor(() => expect(instructions).toHaveFocus());
+    await within(dialog).findByRole('heading', { name: 'Analysis guide' });
     const tools = within(dialog).getByRole('tab', { name: 'Tools (2)' });
     act(() => instructions.focus());
     fireEvent.keyDown(instructions, { key: 'ArrowRight' });
     await waitFor(() => expect(tools).toHaveFocus());
-    expect(tools).toHaveAttribute('aria-selected', 'true');
+    // Selection follows the route, so it lands a navigation after focus.
+    await waitFor(() => expect(tools).toHaveAttribute('aria-selected', 'true'));
     expect(
       within(dialog).getByRole('tabpanel', { name: 'Tools (2)' }),
     ).toBeVisible();
     fireEvent.keyDown(tools, { key: 'ArrowLeft' });
     await waitFor(() => expect(instructions).toHaveFocus());
-    expect(instructions).toHaveAttribute('aria-selected', 'true');
+    await waitFor(() =>
+      expect(instructions).toHaveAttribute('aria-selected', 'true'),
+    );
     expect(
       within(dialog).getByRole('heading', { name: 'Analysis guide' }),
     ).toBeVisible();
@@ -424,8 +423,8 @@ describe('Skills settings page', () => {
       description: '',
     };
     mocks.api.request
-      .mockResolvedValueOnce({ rows: [longSkill] })
-      .mockResolvedValueOnce({ ...longSkill, content: '' });
+      .mockResolvedValueOnce({ data: [longSkill] })
+      .mockResolvedValueOnce({ data: { ...longSkill, content: '' } });
     await renderPage();
     fireEvent.click(
       await screen.findByRole('button', { name: longSkill.title.trim() }),
@@ -447,11 +446,11 @@ describe('Skills settings page', () => {
   });
 
   it('opens from the accessible title button and retries a failed detail request', async () => {
-    const pending = deferred<ManagedSkillDetail>();
+    const pending = deferred<{ data: ManagedSkillDetail }>();
     mocks.api.request
-      .mockResolvedValueOnce({ rows: skills })
+      .mockResolvedValueOnce({ data: skills })
       .mockReturnValueOnce(pending.promise)
-      .mockResolvedValueOnce(detail);
+      .mockResolvedValueOnce({ data: detail });
     await renderPage();
     fireEvent.click(
       await screen.findByRole('button', { name: 'Data analysis' }),
@@ -477,9 +476,8 @@ describe('Skills settings page', () => {
       await within(dialog).findByRole('heading', { name: 'Analysis guide' }),
     ).toBeVisible();
     expect(mocks.api.request).toHaveBeenNthCalledWith(3, {
-      path: 'ai/aiSkills:getDetails',
+      path: 'aiEmployee/skills/analyze-data',
       method: 'GET',
-      query: { name: 'analyze-data' },
       signal: expect.any(AbortSignal),
     });
   });
@@ -487,10 +485,10 @@ describe('Skills settings page', () => {
   it.each(['resolve', 'reject'] as const)(
     'ignores stale detail %s after closing and rapidly opening another skill',
     async (outcome) => {
-      const pending = deferred<ManagedSkillDetail>();
-      const next = deferred<ManagedSkillDetail>();
+      const pending = deferred<{ data: ManagedSkillDetail }>();
+      const next = deferred<{ data: ManagedSkillDetail }>();
       mocks.api.request
-        .mockResolvedValueOnce({ rows: skills })
+        .mockResolvedValueOnce({ data: skills })
         .mockReturnValueOnce(pending.promise)
         .mockReturnValueOnce(next.promise);
       await renderPage();
@@ -501,14 +499,14 @@ describe('Skills settings page', () => {
         mocks.api.request.mock.calls[1][0] as { signal: AbortSignal }
       ).signal;
       fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-      expect(signal.aborted).toBe(true);
+      await waitFor(() => expect(signal.aborted).toBe(true));
       fireEvent.click(screen.getByRole('button', { name: 'draft-document' }));
       const dialog = screen.getByRole('dialog', { name: 'Skill details' });
       expect(
         within(dialog).getByRole('heading', { name: 'draft-document' }),
       ).toBeVisible();
       await act(async () => {
-        if (outcome === 'resolve') pending.resolve(detail);
+        if (outcome === 'resolve') pending.resolve({ data: detail });
         else pending.reject(new Error('Stale failure'));
       });
       expect(within(dialog).getByRole('status')).toHaveTextContent(
@@ -518,7 +516,9 @@ describe('Skills settings page', () => {
       expect(
         within(dialog).queryByText('Analysis guide'),
       ).not.toBeInTheDocument();
-      await act(async () => next.resolve({ ...skills[1], content: '' }));
+      await act(async () =>
+        next.resolve({ data: { ...skills[1], content: '' } }),
+      );
       expect(
         within(dialog).getByText('No instructions are available.'),
       ).toBeVisible();
@@ -528,9 +528,9 @@ describe('Skills settings page', () => {
   );
 
   it('cancels on close and unmount without reopening from late responses', async () => {
-    const pending = deferred<ManagedSkillDetail>();
+    const pending = deferred<{ data: ManagedSkillDetail }>();
     mocks.api.request
-      .mockResolvedValueOnce({ rows: skills })
+      .mockResolvedValueOnce({ data: skills })
       .mockReturnValueOnce(pending.promise);
     const view = await renderPage();
     fireEvent.click(
@@ -543,17 +543,17 @@ describe('Skills settings page', () => {
       mocks.api.request.mock.calls[1][0] as { signal: AbortSignal }
     ).signal;
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-    expect(signal.aborted).toBe(true);
-    await act(async () => pending.resolve(detail));
+    await waitFor(() => expect(signal.aborted).toBe(true));
+    await act(async () => pending.resolve({ data: detail }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     view.unmount();
     expect(listSignal.aborted).toBe(true);
   });
 
   it('cancels a pending detail request when the page unmounts', async () => {
-    const pending = deferred<ManagedSkillDetail>();
+    const pending = deferred<{ data: ManagedSkillDetail }>();
     mocks.api.request
-      .mockResolvedValueOnce({ rows: skills })
+      .mockResolvedValueOnce({ data: skills })
       .mockReturnValueOnce(pending.promise);
     const view = await renderPage();
     fireEvent.click(
@@ -569,7 +569,7 @@ describe('Skills settings page', () => {
   });
 
   it('cancels a pending list request on unmount and ignores its completion', async () => {
-    const pending = deferred<{ rows: ManagedSkillSummary[] }>();
+    const pending = deferred<{ data: ManagedSkillSummary[] }>();
     mocks.api.request.mockReturnValueOnce(pending.promise);
     const view = await renderPage();
     const signal = (
@@ -577,17 +577,17 @@ describe('Skills settings page', () => {
     ).signal;
     view.unmount();
     expect(signal.aborted).toBe(true);
-    await act(async () => pending.resolve({ rows: skills }));
+    await act(async () => pending.resolve({ data: skills }));
     expect(
       screen.queryByRole('list', { name: 'Skills' }),
     ).not.toBeInTheDocument();
   });
 
   it('starts fresh when reopening the same skill and ignores the previous response', async () => {
-    const previous = deferred<ManagedSkillDetail>();
-    const current = deferred<ManagedSkillDetail>();
+    const previous = deferred<{ data: ManagedSkillDetail }>();
+    const current = deferred<{ data: ManagedSkillDetail }>();
     mocks.api.request
-      .mockResolvedValueOnce({ rows: skills })
+      .mockResolvedValueOnce({ data: skills })
       .mockReturnValueOnce(previous.promise)
       .mockReturnValueOnce(current.promise);
     await renderPage();
@@ -595,9 +595,12 @@ describe('Skills settings page', () => {
       await screen.findByRole('button', { name: 'Data analysis' }),
     );
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Data analysis' }));
     const dialog = screen.getByRole('dialog', { name: 'Skill details' });
-    await act(async () => previous.resolve(detail));
+    await act(async () => previous.resolve({ data: detail }));
     expect(within(dialog).getByRole('status')).toHaveTextContent(
       'Loading skill details…',
     );
@@ -605,7 +608,9 @@ describe('Skills settings page', () => {
       within(dialog).queryByText('Analysis guide'),
     ).not.toBeInTheDocument();
     await act(async () =>
-      current.resolve({ ...detail, content: '# Current instructions' }),
+      current.resolve({
+        data: { ...detail, content: '# Current instructions' },
+      }),
     );
     expect(
       within(dialog).getByRole('heading', { name: 'Current instructions' }),
@@ -613,11 +618,11 @@ describe('Skills settings page', () => {
   });
 
   it('renders Chinese card footers, dialog loading, error and tool statuses', async () => {
-    const pending = deferred<ManagedSkillDetail>();
+    const pending = deferred<{ data: ManagedSkillDetail }>();
     mocks.api.request
-      .mockResolvedValueOnce({ rows: skills })
+      .mockResolvedValueOnce({ data: skills })
       .mockReturnValueOnce(pending.promise)
-      .mockResolvedValueOnce(detail);
+      .mockResolvedValueOnce({ data: detail });
     await renderPage('zh-CN');
     const list = await screen.findByRole('list', { name: '技能' });
     expect(screen.getByText('共 2 个技能')).toBeVisible();

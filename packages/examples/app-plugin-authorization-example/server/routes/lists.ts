@@ -1,88 +1,143 @@
-import type {
-  AuthorizationEnv,
-  AuthorizationContext,
-} from '@nocobase/app-plugin-authorization';
-import { AuthorizationDeniedError } from '@nocobase/authorization/core';
-import type { DatabaseManager } from '@nocobase/db';
+import type { AuthorizationContext } from '@nocobase/app-plugin-authorization';
+import {
+  apiErrorResponses,
+  apiValidator,
+  describeRoute,
+  listResponse,
+} from '@nocobase/app-server/router';
+import type { DatabaseManager, RepositoryPolicy } from '@nocobase/db';
 import { Hono } from 'hono';
 
 import { PROJECTS, QUOTES, ORDERS } from '../sales-authorization.js';
-import { writableRepository } from './mutations.js';
+import {
+  AUTHORIZATION_EXAMPLE_TAGS as tags,
+  authorizeSalesAction,
+  forbiddenResponse,
+  writableRepository,
+  type SalesActionEnv,
+} from './mutations.js';
+import {
+  SalesListMeta,
+  SalesListQuery,
+  SalesOrderRow,
+  SalesProjectRow,
+  SalesQuoteRow,
+} from './schemas.js';
 
+/**
+ * The sales lists page by page number. Each answers `{ data, meta }`, where `meta` carries the paging fields and the
+ * page links the caller may follow (`navigation`), since those describe the list rather than any one record.
+ */
 export function createSalesListRoutes(
   database: DatabaseManager,
-): Hono<AuthorizationEnv> {
-  const router = new Hono<AuthorizationEnv>();
+): Hono<SalesActionEnv> {
+  const router = new Hono<SalesActionEnv>();
+  const listQuery = apiValidator('query', SalesListQuery);
 
-  router.get('/sales/projects', async (c) => {
-    const scope = c.var.authz;
-    const items = await viewRecords(
-      database,
-      scope,
-      'example.sales.projects',
-      PROJECTS,
-    );
-    const edit = await operationAccess(
-      database,
-      scope,
-      'example.sales.projects',
-      PROJECTS,
-      'edit',
-      ['notes'],
-    );
-    const navigation = await pageNavigation(scope);
+  // Each list is declared after its permission check and before the query validator, which documents the paging.
+  router.get(
+    '/sales/projects',
+    authorizeSalesAction('example.sales.projects', 'view'),
+    describeRoute({
+      tags,
+      summary: 'List sales projects',
+      operationId: 'authorizationExampleListProjects',
+      description:
+        "The projects the caller's `view` Policy shows, in id order, paged by `page` and `pageSize`. Each row says whether the caller may edit it, and `meta.navigation` which sales pages it may open. Requires `composite:example.sales.projects` `view`.",
+      responses: {
+        200: listResponse(SalesProjectRow, SalesListMeta),
+        ...apiErrorResponses,
+        403: forbiddenResponse,
+      },
+    }),
+    listQuery,
+    async (c) => {
+      const scope = c.var.authz;
+      const page = await viewRecords(
+        database,
+        c.var.salesPolicies[PROJECTS],
+        PROJECTS,
+        c.req.valid('query'),
+      );
+      const items = page.rows;
+      const edit = await operationAccess(
+        database,
+        scope,
+        'example.sales.projects',
+        PROJECTS,
+        'edit',
+        ['notes'],
+      );
+      const navigation = await pageNavigation(scope);
 
-    return c.json({
-      data: {
-        navigation,
-        items: items.map((row) => {
+      return c.json({
+        data: items.map((row) => {
           let editAccess = 'allowed';
           if (!edit.policies) editAccess = 'notGranted';
           else if (!edit.ids.has(row.id)) editAccess = 'outsideScope';
 
           return { ...row, operations: { edit: editAccess } };
         }),
+        meta: { ...page.meta, navigation },
+      });
+    },
+  );
+
+  router.get(
+    '/sales/quotes',
+    authorizeSalesAction('example.sales.quotes', 'view'),
+    describeRoute({
+      tags,
+      summary: 'List sales quotes',
+      operationId: 'authorizationExampleListQuotes',
+      description:
+        "The quotes the caller's `view` Policy shows, in id order, paged by `page` and `pageSize`. Each row says whether the caller may edit or submit it, and `meta.navigation` which sales pages it may open. Requires `composite:example.sales.quotes` `view`.",
+      responses: {
+        200: listResponse(SalesQuoteRow, SalesListMeta),
+        ...apiErrorResponses,
+        403: forbiddenResponse,
       },
-    });
-  });
+    }),
+    listQuery,
+    async (c) => {
+      const scope = c.var.authz;
+      const page = await viewRecords(
+        database,
+        c.var.salesPolicies[QUOTES],
+        QUOTES,
+        c.req.valid('query'),
+      );
+      const items = page.rows;
+      const projects = await projectSummaries(database, scope);
+      const edit = await operationAccess(
+        database,
+        scope,
+        'example.sales.quotes',
+        QUOTES,
+        'edit',
+        ['amount', 'notes'],
+      );
+      const submit = await operationAccess(
+        database,
+        scope,
+        'example.sales.quotes',
+        QUOTES,
+        'submit',
+        ['status'],
+      );
 
-  router.get('/sales/quotes', async (c) => {
-    const scope = c.var.authz;
-    const items = await viewRecords(
-      database,
-      scope,
-      'example.sales.quotes',
-      QUOTES,
-    );
-    const projects = await projectSummaries(database, scope);
-    const edit = await operationAccess(
-      database,
-      scope,
-      'example.sales.quotes',
-      QUOTES,
-      'edit',
-      ['amount', 'notes'],
-    );
-    const submit = await operationAccess(
-      database,
-      scope,
-      'example.sales.quotes',
-      QUOTES,
-      'submit',
-      ['status'],
-    );
+      const projectPolicy = submit.policies?.[PROJECTS];
+      const submittableProjects = projectPolicy?.read
+        ? await database
+            .repository(PROJECTS)
+            .withPolicy(projectPolicy)
+            .findMany()
+        : [];
+      const projectIds = new Set(submittableProjects.map((row) => row.id));
+      const navigation = await pageNavigation(scope);
 
-    const projectPolicy = submit.policies?.[PROJECTS];
-    const submittableProjects = projectPolicy?.read
-      ? await database.repository(PROJECTS).withPolicy(projectPolicy).findMany()
-      : [];
-    const projectIds = new Set(submittableProjects.map((row) => row.id));
-    const navigation = await pageNavigation(scope);
-
-    return c.json({
-      data: {
-        navigation,
-        items: items.map((row) => {
+      return c.json({
+        data: items.map((row) => {
           let editAccess = 'allowed';
           if (!edit.policies) editAccess = 'notGranted';
           else if (!edit.ids.has(row.id)) editAccess = 'outsideScope';
@@ -106,33 +161,49 @@ export function createSalesListRoutes(
             operations: { edit: editAccess, submit: submitAccess },
           };
         }),
+        meta: { ...page.meta, navigation },
+      });
+    },
+  );
+
+  router.get(
+    '/sales/orders',
+    authorizeSalesAction('example.sales.orders', 'view'),
+    describeRoute({
+      tags,
+      summary: 'List sales orders',
+      operationId: 'authorizationExampleListOrders',
+      description:
+        "The orders the caller's `view` Policy shows, in id order, paged by `page` and `pageSize`. Each row says whether the caller may deliver it, and `meta.navigation` which sales pages it may open. Requires `composite:example.sales.orders` `view`.",
+      responses: {
+        200: listResponse(SalesOrderRow, SalesListMeta),
+        ...apiErrorResponses,
+        403: forbiddenResponse,
       },
-    });
-  });
+    }),
+    listQuery,
+    async (c) => {
+      const scope = c.var.authz;
+      const page = await viewRecords(
+        database,
+        c.var.salesPolicies[ORDERS],
+        ORDERS,
+        c.req.valid('query'),
+      );
+      const items = page.rows;
+      const projects = await projectSummaries(database, scope);
+      const deliver = await operationAccess(
+        database,
+        scope,
+        'example.sales.orders',
+        ORDERS,
+        'deliver',
+        ['status', 'deliveryReference'],
+      );
+      const navigation = await pageNavigation(scope);
 
-  router.get('/sales/orders', async (c) => {
-    const scope = c.var.authz;
-    const items = await viewRecords(
-      database,
-      scope,
-      'example.sales.orders',
-      ORDERS,
-    );
-    const projects = await projectSummaries(database, scope);
-    const deliver = await operationAccess(
-      database,
-      scope,
-      'example.sales.orders',
-      ORDERS,
-      'deliver',
-      ['status', 'deliveryReference'],
-    );
-    const navigation = await pageNavigation(scope);
-
-    return c.json({
-      data: {
-        navigation,
-        items: items.map((row) => {
+      return c.json({
+        data: items.map((row) => {
           let deliverAccess = 'allowed';
           if (!deliver.policies) deliverAccess = 'notGranted';
           else if (!deliver.ids.has(row.id)) deliverAccess = 'outsideScope';
@@ -147,33 +218,33 @@ export function createSalesListRoutes(
             operations: { deliver: deliverAccess },
           };
         }),
-      },
-    });
-  });
+        meta: { ...page.meta, navigation },
+      });
+    },
+  );
 
   return router;
 }
 
+/** One page of the records the `view` Policy shows, in id order, with its paging `meta`. */
 async function viewRecords(
   database: DatabaseManager,
-  scope: AuthorizationContext,
-  resource: string,
+  policy: RepositoryPolicy,
   collection: string,
+  { page, pageSize }: SalesListQuery,
 ) {
-  const decision = await scope.authorize({
-    resource: { type: 'composite', id: resource },
-    action: 'view',
-  });
-  if (decision.effect === 'deny' || !decision.conditions?.database)
-    throw new AuthorizationDeniedError(decision);
-
-  const policy = decision.conditions.database[collection];
-  if (!policy.read) return [];
-
-  return database
-    .repository(collection)
-    .withPolicy(policy)
-    .findMany({ sort: (sort) => sort.field('id').asc() });
+  const meta = { page, pageSize, total: 0 };
+  if (!policy.read) return { rows: [], meta };
+  const repository = database.repository(collection).withPolicy(policy);
+  const [rows, total] = await Promise.all([
+    repository.findMany({
+      sort: (sort) => sort.field('id').asc(),
+      limit: pageSize,
+      offset: (page - 1) * pageSize,
+    }),
+    repository.count(),
+  ]);
+  return { rows, meta: { ...meta, total } };
 }
 
 async function pageNavigation(

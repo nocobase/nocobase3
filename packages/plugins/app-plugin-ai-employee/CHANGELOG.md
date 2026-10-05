@@ -1,5 +1,194 @@
 # @nocobase/app-plugin-ai-employee
 
+## 2.0.0-beta.0
+
+### Major Changes
+
+- e123790: Move `@nocobase/app-server`, `@nocobase/app-client`, `@nocobase/app-plugin-authentication`, `@nocobase/app-plugin-users`, `@nocobase/app-plugin-hub`, `@nocobase/app-plugin-workflow` and `@nocobase/app-plugin-ai-employee` to the 2.0.0 prerelease line. The HTTP API migration released in 1.0.0-beta.N changed every route and the error body, but in prerelease mode a `major` changeset on a version that is already a `1.0.0` prerelease only increments the prerelease number, so nothing in the version said the change was breaking. These packages now release as `2.0.0-beta.0`, and every package that depends on or peers with one of them is released again so that its published range is `^2.0.0-beta.0` rather than a `^1.0.0-beta` range the new versions do not satisfy. An application upgrading to these versions upgrades all of them together.
+
+### Patch Changes
+
+- Updated dependencies [e123790]
+  - @nocobase/app-client@2.0.0-beta.0
+  - @nocobase/app-plugin-authentication@2.0.0-beta.0
+  - @nocobase/app-server@2.0.0-beta.0
+  - @nocobase/app-cli@1.0.0-beta.13
+  - @nocobase/app-plugin-authorization@1.0.0-beta.24
+
+## 2.0.0-beta
+
+Moves the package to the 2.0.0 prerelease line, so that the breaking changes released as 1.0.0-beta.30 show in the major version. This version is never published; the first release on the line is 2.0.0-beta.0.
+
+## 1.0.0-beta.30
+
+### Major Changes
+
+- 21d274c: Move the AI employee routes onto the HTTP API rules. The employees themselves are now under `/api/aiEmployees`, and every other AI resource under `/api/aiEmployee`, without an `ai` prefix; the `/api/ai/{resource}:{action}` routes are gone. The `nocobase-ai` Registry item, the settings pages and the plugin client send the new requests, so an application's installed `client/extensions/nocobase-ai` copy must be updated from the Registry together with the plugin.
+
+  Employees:
+
+  - `GET aiEmployees:listByUser` → `GET /api/aiEmployees/roster`
+  - `GET aiEmployees:list` → `GET /api/aiEmployees`
+  - `GET aiEmployees:get?key=` → `GET /api/aiEmployees/{username}`
+  - `GET aiEmployees:getTemplates` → `GET /api/aiEmployees/templates`
+  - `POST aiEmployees:create` → `POST /api/aiEmployees` (201). An existing username is now `409 AI_EMPLOYEE_ALREADY_EXISTS` instead of an update, and `roster` and `templates` are reserved usernames.
+  - `PUT aiEmployees:update?key=` → `PATCH /api/aiEmployees/{username}`; `DELETE aiEmployees:destroy?key=` → `DELETE /api/aiEmployees/{username}` (204). Both answer 404 for an unknown employee.
+  - `POST aiEmployees:updateUserPrompt` `{ aiEmployee, prompt }` → `PUT /api/aiEmployees/{username}/userPrompt` `{ prompt }`
+
+  Models and LLM services:
+
+  - `GET ai:listAllEnabledModels` → `GET /api/aiEmployee/models`; `GET ai:listLLMServices?model=EMBEDDING` and `GET ai:listModels?model=EMBEDDING` → `GET /api/aiEmployee/models?type=EMBEDDING`, one group per service with its suggested embedding models
+  - `GET ai:listLLMProviders` → `GET /api/aiEmployee/llmProviders`
+  - `POST ai:listProviderModels` `{ llmService, search }` → `GET /api/aiEmployee/llmServices/{name}/providerModels?q=`
+  - `GET llmServices:list` / `get?key=` → `GET /api/aiEmployee/llmServices` / `GET /api/aiEmployee/llmServices/{name}`
+  - `POST llmServices:updateEnabled` → `POST /api/aiEmployee/llmServices/{name}/enable` and `.../disable`
+  - `POST llmServices:updateEnabledModels` → `PUT /api/aiEmployee/llmServices/{name}/enabledModels`
+  - `POST ai:testFlight` is removed; it only ever failed.
+
+  MCP servers, skills, tools, files and usage:
+
+  - `GET aiMcpServers:list` / `get?key=` / `listTools` → `GET /api/aiEmployee/mcpServers`, `.../mcpServers/{name}`, `.../mcpServers/tools`
+  - `POST aiMcpServers:testConnection` → `POST /api/aiEmployee/mcpServers/{name}/testConnection` for a configured server, `POST /api/aiEmployee/mcpServers/testConnection` for unsaved remote values
+  - `POST aiMcpServers:updateEnabled` → `POST /api/aiEmployee/mcpServers/{name}/enable` and `.../disable`
+  - `tools` and `testConnection` are fixed segments beside `/api/aiEmployee/mcpServers/{name}`, so an MCP server configured under either name in `ai.mcpServers` is now a configuration error: `config check` reports it and the plugin refuses to start until it is renamed.
+  - `POST aiMcpServers:updateToolPermission` `{ toolName, permission }` → `PATCH /api/aiEmployee/mcpServers/{name}/tools/{toolName}` `{ permission }`
+  - `GET aiSkills:list` and `listAll` → `GET /api/aiEmployee/skills`; `GET aiSkills:get?key=` and `getDetails?name=` → `GET /api/aiEmployee/skills/{name}`; create, update and destroy → `POST` (201, `409 SKILL_ALREADY_EXISTS`), `PATCH` and `DELETE` (204) on the same paths. The list and detail are the management summary, now with `about`, `scope` and `source`.
+  - The same for tools at `/api/aiEmployee/tools`, whose summary now carries `defaultPermission`; `409 TOOL_ALREADY_EXISTS`.
+  - `POST aiFiles:create` → `POST /api/aiEmployee/files` (201); `GET aiFiles:preview?id=` → `GET /api/aiEmployee/files/{fileId}/preview`. Upload results and history attachments carry the new preview address, and history replaces an old `/aiFiles:preview?id=` address a message stored.
+  - `GET aiUsage:summary|series|breakdown|filterOptions` → `GET /api/aiEmployee/usage/summary|series|breakdown|filterOptions`. `start` and `end` are now RFC 3339 times instead of epoch milliseconds, and every time in an answer (`range`, `previousRange`, bucket `start`) is an RFC 3339 string; the breakdown's `limit` is now `top`, since it ranks rather than pages.
+  - The employee settings page reads the commercial knowledge base plugin's list at `GET /api/aiKnowledgeBases` instead of `GET /api/ai/aiKnowledgeBase:list`.
+
+  Conversations:
+
+  - `GET aiConversations:list?keyword=` → `GET /api/aiEmployee/conversations?q=`
+  - `POST aiConversations:create` → `POST /api/aiEmployee/conversations` (201)
+  - `GET aiConversations:get?sessionId=` → `GET /api/aiEmployee/conversations/{sessionId}`, now the conversation record with `llmActiveState`, and 404 instead of `idle` for a conversation that is not the caller's
+  - `PUT aiConversations:update` → `PATCH /api/aiEmployee/conversations/{sessionId}`; `PUT aiConversations:updateOptions` → `PUT /api/aiEmployee/conversations/{sessionId}/options`, which now replaces the options rather than merging into them; `DELETE aiConversations:destroy` → `DELETE /api/aiEmployee/conversations/{sessionId}` (204)
+  - `GET aiConversations:getMessages` → `GET /api/aiEmployee/conversations/{sessionId}/messages?pageToken=&pageSize=`. Reading no longer marks a conversation read; `updateRead` is replaced by `POST /api/aiEmployee/conversations/{sessionId}/markRead`, and `paginate=false` by `pageSize` (up to 200).
+  - `GET aiConversations:unreadCount` and `unreadCounts` → `GET /api/aiEmployee/conversations/unreadCount`, `{ data: { count } }`
+  - `POST aiConversations:sendMessages` / `resendMessages` / `resumeToolCall` / `resumeStream` → `POST /api/aiEmployee/conversations/{sessionId}/send` / `resend` / `resumeToolCall` / `resumeStream`, with `sessionId` taken from the path rather than the body. The SSE stream is unchanged; the request is now checked before it opens, so these answer in the standard error body instead of an `error` frame: a malformed body or one without a user message (400 `INVALID_INPUT`), an employee the body names that does not exist (400 `AI_EMPLOYEE_NOT_FOUND` on `aiEmployee`), a `messageId` the conversation does not have (400 `MESSAGE_NOT_FOUND`), an unknown conversation (404), a `resend` or `resumeToolCall` with nothing to run (400 `FAILED_PRECONDITION`: `AI_EMPLOYEE_NOT_FOUND`, `CONVERSATION_EMPTY`, `NO_TOOL_CALLS`), and the parallel run limit (429 `CONVERSATION_LIMIT_REACHED`). `stream` is no longer accepted.
+  - `POST aiConversations:abort` → `POST /api/aiEmployee/conversations/{sessionId}/abort`
+  - `POST aiConversations:updateUserDecision` → `PUT /api/aiEmployee/conversations/{sessionId}/messages/{messageId}/toolCalls/{toolCallId}/userDecision`, with the decision as the body
+  - `POST aiConversations:updateToolArgs` → `PATCH /api/aiEmployee/conversations/{sessionId}/messages/{messageId}/toolCalls/{toolCallId}` `{ args }`, answering 404 instead of `null` for an unknown tool call
+  - `GET aiConversations:listAll` → `GET /api/aiEmployee/managedConversations?q=&page=&pageSize=`, `{ data, meta: { page, pageSize, total } }`; `GET aiConversations:getAllMessages` → `GET /api/aiEmployee/managedConversations/{sessionId}/messages?pageToken=`; `GET aiConversations:listUsers?keyword=&limit=` → `GET /api/aiEmployee/conversationOwners?q=&page=&pageSize=`, `{ data, meta: { page, pageSize, total } }`. A managed conversation's `sessionId` that is not a UUID is now `400 INVALID_INPUT` from the path schema.
+
+  Responses and errors:
+
+  - Every JSON success is `{ data }`, and a list `{ data, meta }`; a history page reports `meta.nextPageToken` instead of `hasMore` and `cursor`. Lists read whole (roster, templates, employees, skills, tools, models, LLM providers and services, provider models, MCP servers, a user's own conversations) report `meta: { total }`. MCP `testConnection` keeps answering `{ data: { success, error } }`.
+  - Request bodies are limited: 1 MiB for JSON routes, 5 MiB for `send`, `resend` and `resumeToolCall`, and 20 MiB for `POST /api/aiEmployee/files` (`AI_FILE_UPLOAD_MAX_BYTES`, overridable through the routes' `uploadMaxSize` option). A larger body answers `413 BODY_TOO_LARGE`; an upload without a multipart content type answers `415 UNSUPPORTED_MEDIA_TYPE`. Nested request objects reject unknown fields.
+  - `GET /api/aiEmployee/files/{fileId}/preview` checks permission before existence: a caller without AI settings access gets `403 FILE_ACCESS_DENIED` for a missing id just as for another user's file; only a caller who may read any file sees `404 FILE_NOT_FOUND`.
+  - The employee settings page offers a knowledge base only when its `enabled` is the boolean `true`.
+  - Every failure uses the standard error body with domain `aiEmployees` instead of `{ errors: [{ message }], error }`, and its status no longer depends on the wording of the message. Reasons: `AI_SETTINGS_ACCESS_REQUIRED` and `FILE_ACCESS_DENIED` (403); `AI_EMPLOYEE_NOT_FOUND`, `SKILL_NOT_FOUND`, `TOOL_NOT_FOUND`, `LLM_SERVICE_NOT_FOUND`, `MCP_SERVER_NOT_FOUND`, `MCP_TOOL_NOT_FOUND`, `CONVERSATION_NOT_FOUND`, `MESSAGE_NOT_FOUND`, `TOOL_CALL_NOT_FOUND`, `FILE_NOT_FOUND` and `FILE_CONTENT_NOT_FOUND` (404, where several answered 400 before); the three `*_ALREADY_EXISTS` (409); `AI_EMPLOYEE_DISABLED`, `FRONTEND_TOOL_UNAVAILABLE` and `LLM_PROVIDER_NOT_FOUND` (`FAILED_PRECONDITION`); `UNSUPPORTED_MEDIA_TYPE` (415); `PROVIDER_MODELS_UNAVAILABLE` (503, instead of the provider's own status); and `INVALID_REQUEST` (400) for other refused requests. Invalid input answers `400 INVALID_INPUT` with a field violation for each problem, and an unknown body field is rejected.
+  - A run that fails over SSE keeps its `error` frame; an agent failure that is not streamed now reports 503 instead of 502 for provider failures and 400 instead of 422 for a recursion limit.
+
+### Patch Changes
+
+- be0fbbd: Tool messages and the tool replies written when a tool call is interrupted get their ids from the application's id generator, like every other message. They were given random UUIDs, which the bigint `aiToolMessages.id` and `aiMessages.messageId` columns reject on PostgreSQL and MySQL, so on those databases every agent tool call failed to save and the run stopped with `Tool call messageId is required`. SQLite stored the strings.
+- 0b933b3: Declare every `/api/aiEmployees` and `/api/aiEmployee` route in the application's OpenAPI document, served at `/api/swagger/docs`: each route names its summary, an `operationId` starting `aiEmployees` under the tag `AiEmployee`, its input schemas, its response schemas and the errors it answers, including `413` for oversized bodies, `415` for a non-multipart upload, `429` when too many runs are in progress and `503` when a provider cannot list its models. The streaming runs (`send`, `resend`, `resumeToolCall`, `resumeStream`) are documented as `text/event-stream` with their frame format. Input is now validated through `apiValidator()`, which answers invalid input exactly as before. A route lists `403` only where it checks AI settings access or file ownership, so the signed-in roster, model list, upload and own-conversation routes list `401` and `500`; the `400` for invalid input comes from the input validators, and the routes that can answer `400` for another reason, such as an invalid usage range, a missing or disabled AI employee, or a conversation with nothing to resend, declare it with its reasons.
+- be0fbbd: Tests in these plugins and example plugins take their fixtures from `@nocobase/app-testing` alone: database fixtures such as `createDatabaseTest()`, `describeMigration()` and `expectCollection()` from `@nocobase/app-testing/server`, and the command runner from `@nocobase/app-testing/cli`. Each package replaces its `@nocobase/db-testing` development dependency with `@nocobase/app-testing`. Nothing any of them ships changes.
+- be0fbbd: Database tests in these plugins and example plugins take their database from `@nocobase/db-testing` instead of configuring an in-memory SQLite database, so they run on SQLite by default and on the database `NOCOBASE_TEST_DB_DIALECT` selects otherwise. Schema assertions that read `PRAGMA` output or `sqlite_master` are written with `expectCollection()` against Field and Collection names, migration up and down tests use `describeMigration()`, and the SQLite triggers that made a write fail are replaced by spies on the write. Each package replaces its `@nocobase/db-sqlite` development dependency with `@nocobase/db-testing`; nothing any of them ships changes.
+- Updated dependencies [21d274c]
+- Updated dependencies [21d274c]
+- Updated dependencies [463a7a8]
+- Updated dependencies [299b35a]
+- Updated dependencies [463a7a8]
+- Updated dependencies [7e5b7d4]
+- Updated dependencies [463a7a8]
+- Updated dependencies [21d274c]
+- Updated dependencies [be0fbbd]
+- Updated dependencies [e44f49c]
+- Updated dependencies [7f9450e]
+- Updated dependencies [4403687]
+- Updated dependencies [be0fbbd]
+- Updated dependencies [463a7a8]
+- Updated dependencies [be0fbbd]
+- Updated dependencies [7dbc54b]
+- Updated dependencies [463a7a8]
+- Updated dependencies [be0fbbd]
+- Updated dependencies [463a7a8]
+- Updated dependencies [7dbc54b]
+- Updated dependencies [3f01f61]
+- Updated dependencies [21d274c]
+- Updated dependencies [21d274c]
+- Updated dependencies [7dbc54b]
+- Updated dependencies [0b933b3]
+- Updated dependencies [0b933b3]
+- Updated dependencies [0b933b3]
+- Updated dependencies [be0fbbd]
+- Updated dependencies [be0fbbd]
+- Updated dependencies [21d274c]
+  - @nocobase/app-server@1.0.0-beta.33
+  - @nocobase/app-cli@1.0.0-beta.12
+  - @nocobase/app-client@1.0.0-beta.25
+  - @nocobase/app-plugin-authentication@1.0.0-beta.25
+  - @nocobase/db@1.0.0-beta.17
+  - @nocobase/app-plugin-authorization@1.0.0-beta.23
+  - @nocobase/ai-employee@0.2.0-beta.8
+  - @nocobase/caching@0.1.0-beta.2
+  - @nocobase/i18n@1.0.0-beta.5
+  - @nocobase/service-provider@0.0.2-beta.1
+
+## 1.0.0-beta.29
+
+### Minor Changes
+
+- 6d371ad: Add a conversation center to AI settings at `/settings/ai/conversations`. Users who can access AI settings page through every user's conversations, filter them by user, AI employee, and title in any combination, and open one in a routed drawer to read its full history with the chat's read-only message list, loading earlier messages on request. Nothing can be sent, retried, or edited there, and reading does not mark a conversation as read. The filters and the page are kept in the URL, so refreshing, sharing a link, or going back and forward restores them. `conversationCenterPath` is no longer deprecated and points at the new page.
+
+  `GET aiConversations:listAll` accepts `userId` and `aiEmployeeUsername` filters alongside `keyword`, and each row now carries the owning `user` (`id`, `name`, `username`) and the `aiEmployee` (`username`, `nickname`, `avatar`), read in two batched queries per page. It now lists main conversations only: a sub-agent session is shown inside the main conversation that delegated to it and is no longer listed on its own. The new `GET aiConversations:listUsers` suggests users for the user filter, returning only users who own a main conversation, and requires the same AI settings access. The client adds `listConversationUsers` and `listConversationEmployees` to `useAIEmployeeClient()`, and exports the conversation center's types.
+
+- 98d0050: Add a usage statistics page under the AI settings group, reporting token consumption and call volume from the events `aiUsageEvents` already records.
+
+  The page shows range totals against the same window one period earlier — today against the same hours yesterday, not against the stretch that just ended, which a range ending midway through a day would otherwise be measured against — a trend chart of input and output tokens, and a breakdown by model, AI employee, or user that exports to CSV. Cached tokens are already counted inside the input tokens, so the chart splits the input bar into its uncached and cached halves instead of adding a segment that would count them twice. Filters cover the time range, AI employee, and model, and they live in the URL so a view can be shared. It reuses the `ai.settings` page grant rather than introducing a permission of its own, and is built from the plugin's own UI primitives like the other AI settings pages: its trend chart is drawn in the host theme's `--chart-1` to `--chart-3` colors, so it follows theme and color-scheme changes, and carries the same values in a table for assistive technology.
+
+  The four backing actions — `aiUsage:summary`, `aiUsage:series`, `aiUsage:breakdown` and `aiUsage:filterOptions` — aggregate in SQL rather than reading events into memory. Grouping by period needs a column to group by: `occurredAt` is an epoch-millisecond bigint, and the portable query builder exposes no date function, so a migration adds `aiUsageEvents.occurredHour`, a UTC hour index, backfills it from the existing rows, and indexes it. Day, week, and month buckets are folded from those hours in the service, which is also what lets the day boundary follow the viewer's timezone instead of being fixed to UTC; offsets are rounded to whole hours, so a half-hour zone such as +05:30 places its bucket edge up to 30 minutes from local midnight.
+
+  `AIEmployeeClient` gains `fetchUsageSummary`, `fetchUsageSeries`, `fetchUsageBreakdown` and `fetchUsageFilterOptions`, which call those actions through the application's API client.
+
+### Patch Changes
+
+- 7cf0c0f: Fix an AI chat task that could be silently dropped when it was triggered right after the chat's employees and models loaded. The queued task was taken by an effect of an earlier render, whose stale model selection made the send abort, so the task's context was attached but nothing was sent.
+- 7cf0c0f: Cancel a pending throttled message update when an AI chat stops listening to a conversation. The update used to fire after the chat unmounted, which reached React after the page, or a test environment, had already been torn down.
+- 85a2f3c: Use the default application template's switch in the AI settings pages, so switches match the rest of the application and their thumb sits evenly in the track in both states under compact themes.
+- Updated dependencies [3117923]
+- Updated dependencies [9291dbb]
+- Updated dependencies [9291dbb]
+- Updated dependencies [ec4b764]
+- Updated dependencies [e77641b]
+  - @nocobase/app-cli@1.0.0-beta.11
+  - @nocobase/i18n@1.0.0-beta.5
+  - @nocobase/app-client@1.0.0-beta.24
+  - @nocobase/app-server@1.0.0-beta.32
+  - @nocobase/app-plugin-authorization@0.2.0-beta.22
+  - @nocobase/app-plugin-authentication@1.0.0-beta.24
+  - @nocobase/ai-employee@0.2.0-beta.8
+  - @nocobase/caching@0.1.0-beta.2
+  - @nocobase/db@1.0.0-beta.16
+  - @nocobase/service-provider@0.0.2-beta.1
+
+## 1.0.0-beta.28
+
+### Minor Changes
+
+- 0459df1: Use plugin-owned Base UI shadcn primitives for AI employee settings, with accessible multi-select controls, density-aware switches, and consistent theme tokens. Employee detail Tabs, notices, errors, empty states, badges, list rows and form fields now use the shared Tabs, Alert, Empty, Badge, Item and Field primitives, so labels are associated with their controls and the active employee is announced. MCP tool permissions use the same Ask/Allow menu as employee tools, and the MCP tool count is a single translated message. Make employee tabs and skill, tool, model, and MCP details addressable through child routes, preserve unsaved drafts across tabs, and ask before unsaved edits are discarded by switching employees, closing the model editor, or going back or forward to another employee or out of the model editor. These guards work under the host application's `BrowserRouter` and need no data router; reloading or closing the page warns through the browser. Report MCP permission update failures without losing the previous selection. When no LLM or MCP service is configured, its settings page explains that services are declared in the application configuration and offers a prompt to copy to a coding agent opened in the application directory.
+
+  Remove the unused conversation-center settings page and its route. Retain the public conversation client methods and deprecated path constant for compatibility. The public Registry recipes and authorization model are unchanged.
+
+  **Breaking.** The deprecated AI settings tab registry is removed: `registerAISettingsTabs`, `getAISettingsTabs` and `AISettingsTabDefinition` are no longer exported from `@nocobase/app-plugin-ai-employee/client` or `./client/ai-settings`, and `AISettingsShellProps` no longer accepts `activeTabKey` or `onTabChange`. Registered tabs had already stopped rendering, so only code that still calls or passes them has to change: contribute a Settings route with `parent: 'aiGroup'` instead.
+
+### Patch Changes
+
+- Updated dependencies [3d44c4c]
+  - @nocobase/app-server@1.0.0-beta.31
+  - @nocobase/app-plugin-authentication@1.0.0-beta.24
+  - @nocobase/app-cli@1.0.0-beta.10
+  - @nocobase/app-client@1.0.0-beta.23
+  - @nocobase/ai-employee@0.2.0-beta.8
+  - @nocobase/caching@0.1.0-beta.2
+  - @nocobase/db@1.0.0-beta.16
+  - @nocobase/i18n@1.0.0-beta.4
+  - @nocobase/service-provider@0.0.2-beta.1
+  - @nocobase/app-plugin-authorization@0.2.0-beta.21
+
 ## 1.0.0-beta.27
 
 ### Minor Changes

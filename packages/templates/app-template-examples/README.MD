@@ -27,7 +27,9 @@ node packages/tools/create-app/bin/run.js my-examples --template ./packages/temp
 
 The scaffolder creates an independent configuration and database. Never copy another application's `config.yml`, `.env`, `storage/`, or generated `dist/` into this template.
 
-Article migration and seed sources create six articles on a fresh managed default connection. Every signed-in user can view, create, and edit all articles. Article pages and APIs do not participate in permission-set authorization. Other examples retain their plugins' authorization policies.
+Article migration and seed sources create six articles on a fresh managed default connection. Every signed-in user can view, create, and edit all articles. Article pages and APIs do not participate in permission-set authorization. Other examples retain their plugins' authorization policies. The article API follows the HTTP API rules: `GET /api/articles` takes `q`, `status`, `page` and `pageSize` and answers `{ data, meta: { page, pageSize, total } }`, `POST /api/articles` answers `201` with the created article, and `PATCH /api/articles/{articleId}` updates the fields it is sent. Article ids are strings.
+
+Every `/api` route the application writes declares itself for the API document that signed-in users and API keys read at `/api/swagger/docs`. `server/routes/articles.ts` shows the pattern: `describeRoute()` from `@nocobase/app-server/router` with the application's `Examples` tag, a summary, an `operationId` such as `examplesCreateArticle`, and the responses through `dataResponse()`, `listResponse()` and `apiErrorResponse()` for each status the route can produce; `apiValidator()` validates the query, path and body and documents them along with the `400` it answers, so a route lists `400` itself only for another reason; the response schemas live in `server/routes/schemas.ts` with `.meta({ ref })`. The public `GET /api/example` declares `security: []`, and the stand-ins that answer `503 DATABASE_UNAVAILABLE` while no database is configured are hidden with `describeRoute({ hide: true })`. Data endpoints such as the analytics and CRM exposures are documented by the framework without a declaration. `tests/logic/openapi.test.ts` starts the whole application and checks that every route is declared, every `operationId` is present and unique, and `findApiDocumentSchemaProblems()` finds nothing.
 
 ## Internationalization example
 
@@ -230,8 +232,8 @@ plugin, all signed-in users can manage the sample records. Server write policies
 allow only declared fields; use `channel.connect` and `campaign.connect` for
 relations. IDs are accepted on creation but cannot be changed through updates.
 
-Requests use `POST <app-base>/api/<repository>:<action>`, for example
-`POST /main/api/analyticsDailyMetrics:groupBy` with this JSON body:
+Requests use `POST <app-base>/api/<repository>/<action>`, for example
+`POST /main/api/analyticsDailyMetrics/groupBy` with this JSON body:
 
 ```json
 {
@@ -287,7 +289,7 @@ Each supports `findMany` (maximum 100), `findOne`, `count`, `exists`,
 Logical names work as they do for managed tables — filter on `status`, sort by
 `id`, select `orderNo` and include the `customer` relation — because the
 Repository resolves them through the connection's naming and metadata. For
-example, `POST /main/api/crmOrders:findMany` with:
+example, `POST /main/api/crmOrders/findMany` with:
 
 ```json
 {
@@ -543,9 +545,24 @@ After signing in with the `notification:test` `send` permission, use the notific
 
 The form is generated from safe Channel test metadata; Email tests require an address and IM tests use the configured logical target. The button remains visible so configuration problems are discoverable. The server enforces the `notification:test` `send` permission only when the message is submitted.
 
+## API documentation
+
+The application documents every `/api` endpoint it serves — its own routes, every registered plugin's, the data endpoints and Better Auth's sign-in endpoints — in an OpenAPI 3.1 document:
+
+- Swagger UI: `<origin><APP_BASE_PATH>/api/swagger/docs`, such as `http://127.0.0.1:13000/main/api/swagger/docs`
+- JSON: `<origin><APP_BASE_PATH>/api/swagger`
+
+Only a signed-in user or an API key may read them; anyone else gets `401`. Open the Swagger UI in a browser where you are signed in, or, from a script, send an API key created at `<APP_BASE_PATH>/settings/api-keys` in the `x-api-key` header. Swagger UI's **Authorize** button takes a key too and keeps it across reloads.
+
+```bash
+curl -H "x-api-key: <key>" http://127.0.0.1:13000/main/api/swagger
+```
+
+Replace `/main` with the application's `APP_BASE_PATH`. An application without the authentication plugin registers no way to tell who is asking, so it does not serve the documentation at all and both URLs answer `404`. There is no setting that makes it public.
+
 ## Working with an AI agent
 
-`AGENTS.md` describes how to build features here, and `.agents/skills/` contains package-owned guidance generated by `pnpm nocobase skills sync`. If you use Claude Code, `CLAUDE.md` points at the same guidance. Keep application-specific rules in committed `AGENTS.md` files because synchronization replaces package-owned Skill directories.
+`AGENTS.md` describes how to build features here, and `.agents/skills/` contains package-owned guidance generated by `pnpm nocobase skills sync`. Give an agent an API key when it needs to call the application: it learns the available endpoints from the API document above rather than from route sources. If you use Claude Code, `CLAUDE.md` points at the same guidance. Keep application-specific rules in committed `AGENTS.md` files because synchronization replaces package-owned Skill directories.
 
 ## License
 
@@ -553,11 +570,7 @@ MIT
 
 ## Workflow examples
 
-Open **Workflow examples** on the homepage, or **Settings → Automation → Workflows**.
-The three application-owned packages under `server/workflows/` are built by
-`pnpm dev` and `pnpm build`. Enable a definition, open its detail page, choose
-**Run**, and enter the sample values below. Inspect the run diagram and select a
-node to see its output, errors, and logs.
+Open **Workflow examples** on the homepage, or **Settings → Automation → Workflows**. The three application-owned packages under `workflows/` are built by `pnpm dev` and `pnpm build`. Enable a definition, open its detail page, choose **Run**, and enter the sample values below. Inspect the run diagram and select a node to see its output, errors, and logs.
 
 | Workflow                        | Sample input                                    | Expected result                                                                    |
 | ------------------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------- |
@@ -568,56 +581,27 @@ node to see its output, errors, and logs.
 | Example: Failure diagnostics    | `reference: DIAG-100`, `simulateFailure: true`  | The execute node fails deliberately; the finish node does not run.                 |
 | Example: Failure diagnostics    | `reference: DIAG-100`, `simulateFailure: false` | A new run completes all three steps.                                               |
 
-Quotation routing exposes an administrator parameter, `reviewThresholdCents`,
-whose default is `100000`. Amounts at or above the threshold take the follow-up
-branch. Parameter changes apply to new runs; existing executions retain their
-parameter snapshots. The quotation and diagnostic examples only produce workflow
-execution evidence, with no external side effects.
+Quotation routing exposes an administrator parameter, `reviewThresholdCents`, whose default is `100000`. Amounts at or above the threshold take the follow-up branch. The quotation and diagnostic examples only produce workflow execution evidence, with no external side effects.
 
-The report reads `analytics.dailyMetrics` and upserts `exampleDailyReports` in the
-application's default database by its unique date. With unchanged seed data,
-`2026-09-08` produces 96,000 impressions, 3,120 clicks, 168 conversions, 93,000
-spend cents, 672,000 revenue cents, and 579,000 profit cents. The `saveReport`
-node output contains the saved report. Repeating the workflow refreshes that date's
-report instead of inserting duplicates. Reports are application-owned data;
-workflow definitions and execution history remain owned by the plugin. Reading
-analytics and writing the report are separate operations, not a cross-database
-transaction.
+The report reads `analytics.dailyMetrics` and upserts `exampleDailyReports` in the application's default database by its unique date. With unchanged seed data, `2026-09-08` produces 96,000 impressions, 3,120 clicks, 168 conversions, 93,000 spend cents, 672,000 revenue cents, and 579,000 profit cents. The `saveReport` node output contains the saved report. Repeating the workflow refreshes that date's report instead of inserting duplicates. Reading analytics and writing the report are separate operations, not a cross-database transaction.
 
-For development, check a package and regenerate development artifacts after editing:
+After editing a package, check it and regenerate development artifacts, then enable the new revision in the management UI:
 
 ```bash
-pnpm nocobase workflow check server/workflows/example-quotation-routing
-pnpm nocobase workflow check server/workflows/example-analytics-report
-pnpm nocobase workflow check server/workflows/example-failure-diagnostics
+pnpm nocobase workflow check workflows/example-quotation-routing
+pnpm nocobase workflow check workflows/example-analytics-report
+pnpm nocobase workflow check workflows/example-failure-diagnostics
 pnpm nocobase workflow build
 ```
 
-Enable the newly built revision in the management UI before invoking it as a
-business workflow. Source validation, artifact generation, enablement, and
-execution are distinct steps. Never seed or edit the plugin's materialized tables.
-Production artifacts contain the JavaScript emitted by the normal server build.
-Keep the workflow artifact disk under the deployed application directory (the
-default local storage layout), so run modules resolve the same application
-`node_modules` and service tokens. Moving that disk outside the application tree
-currently requires a deployment-level module-resolution arrangement; an arbitrary
-external storage directory cannot resolve the report workflow’s `@nocobase/db`
-import on its own.
+When deploying, keep the workflow artifact disk under the application directory, which is the default local storage layout. The report's run modules import `@nocobase/db` and resolve it from the application's `node_modules`, which an artifact directory outside the application tree cannot reach.
 
-Application code invokes an enabled package through the public
-`workflowServiceToken.trigger(key, input, { eventKey })` contract. An `accepted`
-receipt is not completion; execution is asynchronous. A `skipped` receipt creates
-no run. Reusing an event key deduplicates the same submission and does not replay
-a failed execution. The management UI starts a new manual run for each Run action.
-These examples do not implement approval, durable waits, node replay, or automatic
-retry. The plugin's management APIs currently require sign-in without per-action
-ACL; keep these workflows on demonstration data. Business trigger endpoints must
-supply their own authentication, authorization, and input validation.
+These examples run on demonstration data only. How the workflow plugin versions, enables, and triggers packages, including the `workflowServiceToken.trigger()` contract, is documented in its Skill at `.agents/skills/nocobase-app-plugin-workflow/`; read it before invoking a workflow from application code. A business endpoint that triggers a workflow supplies its own authentication, authorization, and input validation.
 
 ## 数字类型示例
 
 首页的“数字类型”卡片和侧栏入口打开 `/numeric-examples`。页面调用当前默认数据库的
-`GET /api/numeric-examples`，可切换 Query / Repository 和全部样本、空值样本、空结果。
+`GET /api/numericExamples`，可切换 Query / Repository 和全部样本、空值样本、空结果。
 接口仅供已登录用户读取共享示例数据，不开放写入或任意 SQL。
 
 `database/main/migrations/202609100002_create_numeric_examples.ts` 创建
@@ -646,7 +630,7 @@ pnpm nocobase db apply
 
 Open **Numeric types** from the homepage or navigation (`/numeric-examples`).
 The page reads the current default database through the authenticated, read-only
-`GET /api/numeric-examples` endpoint. Switch between Query and Repository, or
+`GET /api/numericExamples` endpoint. Switch between Query and Repository, or
 select all samples, the null sample, and empty input. Tables show actual JSON
 values and JavaScript types, plus COUNT(field), SUM, AVG, MIN and MAX.
 

@@ -1,5 +1,17 @@
 # @nocobase/create-app
 
+## 0.1.0-beta.27
+
+### Patch Changes
+
+- e44f49c: A generated application's `.gitignore` no longer ignores `.nocobase/`. `hub remote add` keeps the Hub Apps an application deploys to in `.nocobase/hub.json`, which is meant to be committed so every checkout and CI deploys to the same place; ignoring the directory kept the file out of every commit. An application generated earlier keeps its own `.gitignore`: remove the `/.nocobase/` line before adding a remote, which `hub remote add` also warns about.
+
+## 0.1.0-beta.26
+
+### Patch Changes
+
+- 3117923: Stop running the `better-sqlite3` install script in generated applications and deployment output. The driver ships prebuilt binaries for Linux (glibc and musl), macOS and Windows on x64 and arm64, so its `node-gyp rebuild` compiled nothing on those platforms, yet it failed the whole install on a machine without `make`, such as a slim Node.js container. `allowBuilds` now records it as `false`. After installing, `create-app` no longer runs `pnpm rebuild` when the driver fails to load, because that rebuild skips a package whose build is skipped; it reports the platform instead, with how to compile the driver there.
+
 ## 0.1.0-beta.25
 
 ### Patch Changes

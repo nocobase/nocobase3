@@ -214,8 +214,11 @@ export function createRemoteRepository<
 >(
   options: CreateRemoteRepositoryOptions,
 ): RemoteRepository<TRecord, TCreate, TUpdate> {
+  // The server accepts only camelCase exposure names, which encoding leaves
+  // unchanged. Encoding still keeps a malformed name inside its own segment, so
+  // it reaches no other route and is answered 404.
   const actionPath = (action: RemoteRepositoryAction): string =>
-    `/${encodeURIComponent(options.name)}:${action}`;
+    `/${encodeURIComponent(options.name)}/${action}`;
   const call = <TResult, TJson>(
     action: RemoteRepositoryAction,
     json: TJson,
@@ -333,7 +336,8 @@ interface RepositoryEndFrame {
 interface RepositoryErrorFrame {
   readonly type: 'error';
   readonly error: {
-    readonly code?: string;
+    readonly reason?: string;
+    readonly domain?: string;
     readonly message: string;
   };
 }
@@ -371,9 +375,10 @@ async function* iterateRepositoryStream<T>(
         case 'error':
           throw repositoryStreamError(
             frame.error.message,
-            frame.error.code,
+            frame.error.reason,
             path,
             frame,
+            frame.error.domain,
           );
       }
     }
@@ -436,7 +441,9 @@ function parseRepositoryStreamFrame<T>(
     value.type === 'error' &&
     isObject(value.error) &&
     typeof value.error.message === 'string' &&
-    (value.error.code === undefined || typeof value.error.code === 'string')
+    (value.error.reason === undefined ||
+      typeof value.error.reason === 'string') &&
+    (value.error.domain === undefined || typeof value.error.domain === 'string')
   ) {
     return value as unknown as RepositoryErrorFrame;
   }
@@ -454,13 +461,15 @@ function invalidFrame(path: string, payload: unknown): ApiClientError {
 
 function repositoryStreamError(
   message: string,
-  code: string | undefined,
+  reason: string | undefined,
   path: string,
   payload?: unknown,
+  domain?: string,
 ): ApiClientError {
   return new ApiClientError(message, {
     status: 200,
-    code,
+    reason,
+    domain,
     payload,
     method: 'POST',
     url: path,

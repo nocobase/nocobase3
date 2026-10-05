@@ -11,14 +11,19 @@ const reactSetupFile: string = fileURLToPath(
 const reactConfig: ViteUserConfig = {
   plugins: [react()],
   test: {
-    // Queue discovery dynamically imports application TypeScript. Keep its
-    // loader inside Vitest so those imports use the same transform and registry.
-    server: { deps: { inline: ['@boringnode/queue'] } },
     environment: 'jsdom',
     exclude: ['**/node_modules/**', '**/dist/**', '**/build/**'],
     setupFiles: [reactSetupFile],
     testTimeout: sharedTestTimeout,
     hookTimeout: sharedHookTimeout,
+    server: {
+      deps: {
+        // Refine's React Router bindings are loaded by Node unless inlined, and Node hands them a different copy of
+        // react-router than the one a test and the application import, so `useLocation()` inside Refine finds no
+        // router under a test's `MemoryRouter`. Inlined, they resolve react-router the way the rest of the test does.
+        inline: [/@refinedev\/react-router/u],
+      },
+    },
   },
 };
 

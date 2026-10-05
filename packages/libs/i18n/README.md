@@ -6,26 +6,26 @@ This package provides only the mechanism: namespaces, resource loading, locale r
 
 ## Entry points
 
-| Entry                   | Contents                                                                           |
-| ----------------------- | ---------------------------------------------------------------------------------- |
-| `@nocobase/i18n`        | Isomorphic core: the i18next instance, namespace registry, locale resolution       |
-| `@nocobase/i18n/client` | React bindings: `I18nProvider`, `NamespaceScope`, `useTranslation`, Refine adapter |
-| `@nocobase/i18n/server` | Node bindings: request middleware, request translator, `AppI18nError`              |
+| Entry                    | Contents                                                                           |
+| ------------------------ | ---------------------------------------------------------------------------------- |
+| `@nocobase/i18n`         | Isomorphic core: the i18next instance, namespace registry, locale resolution       |
+| `@nocobase/i18n/client`  | React bindings: `I18nProvider`, `NamespaceScope`, `useTranslation`, Refine adapter |
+| `@nocobase/i18n/server`  | Node bindings: request middleware, request translator, `AppI18nError`              |
+| `@nocobase/i18n/testing` | Component tests: `createTestI18nRuntime`, `TestI18nProvider`                       |
 
 The core depends on `i18next`; `/client` depends on `react-i18next` with `react` as a peer; `/server` takes `hono` as a peer. The entries are separate so a browser build never reaches `/server` and Node never reaches `/client`.
 
-Most packages never import this directly. `defineClientPlugin` and `defineServerPlugin` accept a `locales` loader and do the registration, so a plugin declares resources without naming this package. Import `/client` when a component needs to translate.
+Most packages never import this directly. `defineClientPlugin` and `defineServerPlugin` accept the `locales/index.ts` module as `locales` and do the registration, so a plugin declares resources without naming this package. Import `/client` when a component needs to translate.
 
 ## Namespaces
 
 A namespace is a package name. Nothing is declared and nothing collides, because npm already guarantees the names are unique.
 
-| Source                | Namespace                       |
-| --------------------- | ------------------------------- |
-| The application       | its `package.json` name         |
-| An official plugin    | `@nocobase/app-plugin-workflow` |
-| A third-party plugin  | `@acme/app-plugin-crm`          |
-| Built-in common terms | `@nocobase/i18n`                |
+| Source               | Namespace                       |
+| -------------------- | ------------------------------- |
+| The application      | its `package.json` name         |
+| An official plugin   | `@nocobase/app-plugin-workflow` |
+| A third-party plugin | `@acme/app-plugin-crm`          |
 
 ### The fallback chain
 
@@ -35,7 +35,7 @@ A key falls back along two axes, and they are independent. Across namespaces:
 the current namespace  →  the application's  →  @nocobase/i18n
 ```
 
-So a plugin writing `t('save')` reuses the application's wording without naming a namespace, and only falls through to the built-in term when the application has not defined one. Naming a namespace explicitly still falls back behind it.
+So a plugin writing `t('save')` reuses the application's wording without naming a namespace. Naming a namespace explicitly still falls back behind it. The last link, `@nocobase/i18n` (`BASE_NAMESPACE`), is reserved: this package ships no resources under it, so a key the application does not define either renders its `defaultValue` or its key.
 
 A plugin cannot write the application's namespace as a literal — it is the user's own package name, chosen long after the plugin was published. `APP_NS` stands in for it and resolves when the translation runs:
 
@@ -82,7 +82,7 @@ import { useTranslation } from '@nocobase/i18n/client';
 
 const { t } = useTranslation();
 t('trigger.title'); // this package's own key
-t('save'); // falls back to the application, then the base package
+t('save'); // falls back to the application's key
 t('label', { ns: APP_NS }); // named explicitly
 ```
 
@@ -154,6 +154,8 @@ const locales: LocaleLoaders = {
 export default locales;
 ```
 
+Hand that module to `defineClientPlugin` and `defineServerPlugin` the same way on both sides — `import locales from './locales/index.js'` and then `locales` in the definition. The per-locale loaders are what keep resources lazy, so there is nothing to gain by deferring the map as well. A function importing it, `locales: () => import('./locales/index.js')`, is still accepted on both sides.
+
 The browser loads only the language it is showing and fetches another on switch, keeping what it has already loaded. The server loads the default language at startup and lazy-loads another the first time it serves one.
 
 Loading is per **language**, not per namespace: the navigation renders labels owned by every plugin, so their namespaces have to be present from the first frame regardless.
@@ -197,17 +199,15 @@ const t = getRequestTranslator(c, NS);
 t('errors.notFound');
 ```
 
-Omit the namespace to use the translator's application namespace. Passing one binds it as the default for that
-translator; an explicit `ns` on an individual call still overrides the binding. The accessor throws a wiring error if
-the i18n HTTP middleware has not run before the route.
+Omit the namespace to use the translator's application namespace. Passing one binds it as the default for that translator; an explicit `ns` on an individual call still overrides the binding. The accessor throws a wiring error if the i18n HTTP middleware has not run before the route.
 
 ### Outside a request
 
-Queue jobs, cron, and webhooks have no request to read, and must load the locale themselves:
+Background jobs, cron, and webhooks have no request to read, and must load the locale themselves:
 
 ```ts
 await i18n.ensureLocaleLoaded(user.appLang);
-const t = i18n.getFixedT(user.appLang, NS);
+const t = i18n.getFixedT(NS, user.appLang);
 t('job.failed', { name: workflow.title });
 ```
 
@@ -227,21 +227,112 @@ throw new AppI18nError('WORKFLOW_TRIGGER_INVALID', {
 });
 ```
 
-Translation happens at serialization, where the request's locale is known, so one error object serves callers in different languages:
+Translation happens at serialization, where the request's locale is known, so one error object serves callers in different languages. `serializeI18nError(runtime, error, locale)` produces the translated `message` together with `code`, `ns`, `key`, and `params`.
+
+A NocoBase application renders every `/api` failure as its standard error body, `{ error: { code, status, reason, domain, message, requestId } }`. An `AppI18nError` that reaches it unhandled is rendered by its status alone, without its namespace, key, parameters, or translated text. A router that throws one therefore translates it in its own `onError` into an `ApiError` from `@nocobase/app-server/router`, and hands everything else to `apiErrorHandler` unchanged:
+
+```ts
+import {
+  ApiError,
+  apiErrorHandler,
+  apiErrorStatusFromHttp,
+} from '@nocobase/app-server/router';
+import {
+  type AppI18nError,
+  getRequestLocale,
+  isAppI18nError,
+  serializeI18nError,
+} from '@nocobase/i18n/server';
+import type { Context } from 'hono';
+
+function toWorkflowsApiError(error: AppI18nError, context: Context): ApiError {
+  const locale = getRequestLocale(context) ?? 'en-US';
+  const serialized = serializeI18nError(i18n, error, locale);
+  return new ApiError({
+    status: apiErrorStatusFromHttp(error.status),
+    reason: serialized.code,
+    domain: 'workflows',
+    message: error.message,
+    localizedMessage: { locale, message: serialized.message },
+    metadata: {
+      ns: serialized.ns,
+      key: serialized.key,
+      ...(serialized.params ? { params: serialized.params } : {}),
+    },
+    cause: error,
+  });
+}
+
+router.onError((error, context) =>
+  apiErrorHandler(
+    isAppI18nError(error) ? toWorkflowsApiError(error, context) : error,
+    context,
+  ),
+);
+```
+
+The response then carries the error's code as `reason`, the translated text as `localizedMessage`, and the translation inputs in `metadata`:
 
 ```jsonc
 {
   "error": {
-    "code": "WORKFLOW_TRIGGER_INVALID",
-    "message": "触发条件配置无效：缺少 name 字段",
-    "ns": "@nocobase/app-plugin-workflow",
-    "key": "errors.triggerInvalid",
-    "params": { "field": "name" },
+    "code": 400,
+    "status": "INVALID_ARGUMENT",
+    "reason": "WORKFLOW_TRIGGER_INVALID",
+    "domain": "workflows",
+    "message": "WORKFLOW_TRIGGER_INVALID: @nocobase/app-plugin-workflow:errors.triggerInvalid",
+    "localizedMessage": {
+      "locale": "zh-CN",
+      "message": "触发条件配置无效：缺少 name 字段",
+    },
+    "metadata": {
+      "ns": "@nocobase/app-plugin-workflow",
+      "key": "errors.triggerInvalid",
+      "params": { "field": "name" },
+    },
+    "requestId": "7f1c9a3e-…",
   },
 }
 ```
 
-`message` is enough for an API-only application. A frontend can ignore it and re-render from `ns`, `key`, and `params` in whatever language its interface is currently showing.
+Clients branch on `reason`, never on either message. `localizedMessage` is enough for an API-only consumer; a frontend can ignore it and re-render from `metadata.ns`, `metadata.key`, and `metadata.params` in whatever language its interface is currently showing.
+
+## Testing components
+
+`@nocobase/i18n/testing` builds a real runtime from in-memory resources and mounts it the way an application does. Use it instead of mocking `useTranslation`: a mock returns whatever the test told it to, so a misspelt key, a key read from the wrong namespace, or broken interpolation or plurals all pass.
+
+```tsx
+import {
+  TestI18nProvider,
+  createTestI18nRuntime,
+} from '@nocobase/i18n/testing';
+import { render, screen } from '@testing-library/react';
+
+import enUS from '../client/locales/en-US.js';
+import OrdersPage from '../client/pages/orders.js';
+
+it('shows the page title', async () => {
+  const runtime = await createTestI18nRuntime({
+    namespaces: { '@acme/app-plugin-orders': enUS },
+  });
+
+  render(
+    <TestI18nProvider runtime={runtime} namespace='@acme/app-plugin-orders'>
+      <OrdersPage />
+    </TestI18nProvider>,
+  );
+
+  expect(screen.getByRole('heading', { name: 'Orders' })).toBeInTheDocument();
+});
+```
+
+- **Pass the package's own locale files**, not a copy of their wording, so the test follows the copy when it changes. A namespace takes either a resource, registered for the test's locale, or the `locales/index.ts` loader map, which lets the test call `runtime.changeLanguage('zh-CN')` inside `act`.
+- **`application`** registers the application namespace, `{ namespace, resources }`, for a component that reads application wording or `APP_NS`. **`locale`** and **`defaultLocale`** default to `en-US`.
+- **Strict by default.** A key that the whole fallback chain lacks throws `MissingTranslationError` from the render, even when the call passed a `defaultValue` that would otherwise have hidden it. Pass `strict: false` only when the component renders strings that are not keys any namespace owns, such as a route title passed through `t(title, { defaultValue: title })`.
+- **`namespace` on the provider is the scope the application host gives the component**: set it for a page rendered under its own package's routes. Leave it out for a component a plugin exports for the application to render. There the component must name its namespace itself, and a strict runtime reports it when it does not.
+- `createTestI18nRuntime` resolves once the locale is loaded, so the first render is already translated and needs no `findBy*`.
+
+`TestI18nProvider` renders this package's own `I18nProvider` and `NamespaceScope`. The helper therefore has to come from the same copy of `@nocobase/i18n` as the component under test, which a test importing it from its own dependency does.
 
 ## Key completion
 

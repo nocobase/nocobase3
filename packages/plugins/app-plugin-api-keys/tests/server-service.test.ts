@@ -1,24 +1,21 @@
 // @vitest-environment node
 import { fileURLToPath } from 'node:url';
+import { createMigrator, type DatabaseManager } from '@nocobase/db';
 import {
-  createDatabaseManager,
-  createMigrator,
-  type DatabaseManager,
-} from '@nocobase/db';
-import sqlite from '@nocobase/db-sqlite';
+  createTestDatabase,
+  type TestDatabase,
+} from '@nocobase/app-testing/server';
 import { Auth } from '@nocobase/app-plugin-authentication/server';
 import { APIError, createAuthMiddleware } from 'better-auth/api';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiKey, ApiKeyService } from '../server/index.js';
 
+let testDatabase: TestDatabase;
 let database: DatabaseManager;
 let auth: Auth;
 beforeEach(async () => {
-  database = createDatabaseManager({
-    drivers: { sqlite },
-    default: 'main',
-    connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
-  });
+  testDatabase = await createTestDatabase();
+  database = testDatabase.database;
   for (const [packageName, directory] of [
     ['authentication', '../../app-plugin-authentication/database/migrations'],
     ['api-keys', '../database/migrations'],
@@ -58,7 +55,7 @@ beforeEach(async () => {
     .execute();
 });
 afterEach(async () => {
-  await database.destroy();
+  await testDatabase.destroy();
 });
 
 describe('configuration-bound server API key management', () => {

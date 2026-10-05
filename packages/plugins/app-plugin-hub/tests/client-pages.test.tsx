@@ -13,14 +13,19 @@ import {
   useLocation,
   useNavigate,
 } from 'react-router';
-import { useEffect, type ReactElement } from 'react';
+import { useEffect, type ReactElement, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  TestI18nProvider,
+  createTestI18nRuntime,
+} from '@nocobase/i18n/testing';
 import { render } from './render.js';
 import { useHostToaster } from './host-toaster.js';
 
 import type {
   AppOverview,
-  AppPageResponse,
+  ListResponse,
+  PageMeta,
   AppSummary,
   ReleaseRecord,
 } from '../client/pages/hub/types.js';
@@ -39,7 +44,27 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@nocobase/app-client', () => ({
-  ApiClientError: class ApiClientError extends Error {},
+  ApiClientError: class ApiClientError extends Error {
+    readonly status: number;
+    readonly payload: unknown;
+    readonly reason?: string;
+    readonly domain?: string;
+    constructor(
+      message: string,
+      options: {
+        status: number;
+        payload?: unknown;
+        reason?: string;
+        domain?: string;
+      },
+    ) {
+      super(message);
+      this.status = options.status;
+      this.payload = options.payload;
+      this.reason = options.reason;
+      this.domain = options.domain;
+    }
+  },
   resolveAppUrl: (value: string) => value,
   useApiClient: () => mocks.client,
   useService: (token: unknown) => {
@@ -53,20 +78,6 @@ vi.mock('@nocobase/app-plugin-authorization/client', () => ({
   authorizationClientToken: mocks.authorizationClientToken,
 }));
 
-vi.mock('@nocobase/i18n/client', () => ({
-  useTranslation: () => ({
-    t: (
-      key: string,
-      options?: {
-        readonly defaultValue?: string;
-        readonly [key: string]: unknown;
-      },
-    ) => options?.defaultValue ?? key,
-    // Date formatting reads the application's language from here, so the mock has to carry it as the real hook does.
-    i18n: { language: 'en-US' },
-  }),
-}));
-
 import { Releases } from '../client/pages/hub/releases.js';
 import AppPage from '../client/pages/hub/app-page.js';
 import DevelopmentPage from '../client/pages/hub/tabs/development-page.js';
@@ -77,6 +88,19 @@ import { Detail } from '../client/pages/hub/detail.js';
 import { ApplicationsCatalog } from '../client/pages/hub-page.js';
 import { ErrorNotification } from '../client/pages/hub/shared.js';
 import { readError } from '../client/pages/hub/utils.js';
+import { ApiClientError } from '@nocobase/app-client';
+import enUS from '../client/locales/en-US.js';
+
+const runtime = await createTestI18nRuntime({
+  namespaces: { '@nocobase/app-plugin-hub': enUS },
+});
+function I18n({ children }: { readonly children: ReactNode }) {
+  return (
+    <TestI18nProvider runtime={runtime} namespace='@nocobase/app-plugin-hub'>
+      {children}
+    </TestI18nProvider>
+  );
+}
 
 const appSummary = (id: string, name = id): AppSummary => ({
   app: {
@@ -93,15 +117,18 @@ const appSummary = (id: string, name = id): AppSummary => ({
   startupMode: 'eager',
 });
 
+/** A list response, all on one page. */
+const list = <T,>(data: readonly T[]) => ({
+  data,
+  meta: { page: 1, pageSize: 100, total: data.length },
+});
+
 const page = (
   items: readonly AppSummary[],
-  overrides: Partial<AppPageResponse> = {},
-): AppPageResponse => ({
-  items,
-  total: items.length,
-  page: 1,
-  pageSize: 24,
-  ...overrides,
+  overrides: Partial<PageMeta> = {},
+): ListResponse<AppSummary> => ({
+  data: items,
+  meta: { total: items.length, page: 1, pageSize: 24, ...overrides },
 });
 
 const renderCatalog = (): void => {
@@ -109,6 +136,7 @@ const renderCatalog = (): void => {
     <MemoryRouter initialEntries={['/apps']}>
       <ApplicationsCatalog />
     </MemoryRouter>,
+    { wrapper: I18n },
   );
 };
 
@@ -177,11 +205,11 @@ const renderAppPage = (
     if (path === 'hub/apps/customer') {
       return Promise.resolve({ data: appDetail });
     }
-    if (path === 'hub/apps/customer/releases')
-      return Promise.resolve({ data: [] });
+    if (path === 'hub/apps/customer/releases') return Promise.resolve(list([]));
     if (path === 'hub/apps/customer/deployments') {
       return Promise.resolve({
-        data: { items: [], page: 1, pageSize: 20, total: 0 },
+        data: [],
+        meta: { page: 1, pageSize: 20, total: 0 },
       });
     }
     return Promise.reject(new Error(`Unexpected request: ${path}`));
@@ -202,6 +230,7 @@ const renderAppPage = (
         </Route>
       </Routes>
     </MemoryRouter>,
+    { wrapper: I18n },
   );
 };
 
@@ -262,9 +291,10 @@ describe('Hub client pages', () => {
         if (path.endsWith('/refresh')) return response;
         if (path === 'hub/apps/customer')
           return Promise.resolve({ data: detail() });
-        if (path.endsWith('/releases')) return Promise.resolve({ data: [] });
+        if (path.endsWith('/releases')) return Promise.resolve(list([]));
         return Promise.resolve({
-          data: { items: [], page: 1, pageSize: 20, total: 0 },
+          data: [],
+          meta: { page: 1, pageSize: 20, total: 0 },
         });
       });
       fireEvent.click(button);
@@ -306,9 +336,10 @@ describe('Hub client pages', () => {
       });
       mocks.client.request.mockImplementation(({ path }: { path: string }) => {
         if (path === 'hub/apps/customer') return response;
-        if (path.endsWith('/releases')) return Promise.resolve({ data: [] });
+        if (path.endsWith('/releases')) return Promise.resolve(list([]));
         return Promise.resolve({
-          data: { items: [], page: 1, pageSize: 20, total: 0 },
+          data: [],
+          meta: { page: 1, pageSize: 20, total: 0 },
         });
       });
       expect(button.querySelector('svg')).not.toHaveClass('animate-spin');
@@ -359,9 +390,10 @@ describe('Hub client pages', () => {
             }),
           });
         }
-        if (path.endsWith('/releases')) return Promise.resolve({ data: [] });
+        if (path.endsWith('/releases')) return Promise.resolve(list([]));
         return Promise.resolve({
-          data: { items: [], page: 1, pageSize: 20, total: 0 },
+          data: [],
+          meta: { page: 1, pageSize: 20, total: 0 },
         });
       });
       for (let i = 1; i <= 3; i += 1) {
@@ -403,9 +435,10 @@ describe('Hub client pages', () => {
           data: detail({ hasPendingDeployment: true }),
         });
       }
-      if (path.endsWith('/releases')) return Promise.resolve({ data: [] });
+      if (path.endsWith('/releases')) return Promise.resolve(list([]));
       return Promise.resolve({
-        data: { items: [], page: 1, pageSize: 20, total: 0 },
+        data: [],
+        meta: { page: 1, pageSize: 20, total: 0 },
       });
     });
     await act(async () => {
@@ -441,7 +474,7 @@ describe('Hub client pages', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(requestedDeletion()).toBe(false);
     fireEvent.click(screen.getByRole('button', { name: 'Remove application' }));
-    mocks.client.request.mockResolvedValueOnce({ data: { success: true } });
+    mocks.client.request.mockResolvedValueOnce({ data: {} });
     fireEvent.click(
       screen.getByRole('button', { name: 'Remove', exact: true }),
     );
@@ -475,14 +508,14 @@ describe('Hub client pages', () => {
     expect(save).toBeEnabled();
     mocks.client.request.mockImplementation(
       ({ path, method }: { path: string; method?: string }) => {
-        if (method === 'PUT')
-          return Promise.resolve({ data: { success: true } });
+        if (method === 'PATCH') return Promise.resolve({ data: {} });
         if (path === 'hub/apps/customer')
           return Promise.resolve({
             data: detail({ app: { ...detail().app, name: 'New name' } }),
           });
         return Promise.resolve({
-          data: { items: [], total: 0, page: 1, pageSize: 20 },
+          data: [],
+          meta: { page: 1, pageSize: 20, total: 0 },
         });
       },
     );
@@ -490,7 +523,7 @@ describe('Hub client pages', () => {
     await screen.findByRole('heading', { name: 'New name' });
     expect(mocks.client.request).toHaveBeenCalledWith({
       path: 'hub/apps/customer/settings',
-      method: 'PUT',
+      method: 'PATCH',
       json: { name: 'New name', activation: 'eager' },
     });
     expect(
@@ -519,7 +552,7 @@ describe('Hub client pages', () => {
 
   it('requires a manually entered ID on every creation', async () => {
     mocks.client.request.mockImplementation(({ method }: { method?: string }) =>
-      Promise.resolve(method === 'POST' ? { data: {} } : { data: page([]) }),
+      Promise.resolve(method === 'POST' ? { data: {} } : { ...page([]) }),
     );
     renderCatalog();
     const ids: string[] = [];
@@ -578,10 +611,15 @@ describe('Hub client pages', () => {
   });
 
   it('preserves manually entered IDs when names change and reports conflicts', async () => {
-    const conflict = Object.assign(new Error('ID conflict'), {
+    const conflict = new ApiClientError('ID conflict', {
+      status: 409,
+      reason: 'APP_EXISTS',
+      domain: 'hub',
       payload: {
         error: {
-          code: 'APP_EXISTS',
+          code: 409,
+          reason: 'APP_EXISTS',
+          domain: 'hub',
           message: 'Application ID is unavailable.',
         },
       },
@@ -590,7 +628,7 @@ describe('Hub client pages', () => {
       ({ method }: { method?: string }) =>
         method === 'POST'
           ? Promise.reject(conflict)
-          : Promise.resolve({ data: page([]) }),
+          : Promise.resolve({ ...page([]) }),
     );
     renderCatalog();
     fireEvent.click(
@@ -623,14 +661,14 @@ describe('Hub client pages', () => {
 
   it('debounces catalog search and sends the trimmed query to the server', async () => {
     mocks.client.request.mockResolvedValue({
-      data: page([appSummary('customer', 'Customer Portal')]),
+      ...page([appSummary('customer', 'Customer Portal')]),
     });
     renderCatalog();
 
     await waitFor(() =>
       expect(mocks.client.request).toHaveBeenCalledWith({
         path: 'hub/apps',
-        query: { search: undefined, page: 1, pageSize: 24 },
+        query: { q: undefined, page: 1, pageSize: 24 },
       }),
     );
     const input = screen.getByPlaceholderText('Search applications…');
@@ -639,7 +677,7 @@ describe('Hub client pages', () => {
     await new Promise((resolve) => window.setTimeout(resolve, 320));
     expect(mocks.client.request).toHaveBeenLastCalledWith({
       path: 'hub/apps',
-      query: { search: 'customer', page: 1, pageSize: 24 },
+      query: { q: 'customer', page: 1, pageSize: 24 },
     });
   });
 
@@ -647,7 +685,7 @@ describe('Hub client pages', () => {
     mocks.client.request.mockImplementation(
       ({ query }: { query?: { page?: number } }) =>
         Promise.resolve({
-          data: page([appSummary(`app-${query?.page ?? 1}`)], {
+          ...page([appSummary(`app-${query?.page ?? 1}`)], {
             total: 48,
             page: query?.page ?? 1,
           }),
@@ -662,7 +700,7 @@ describe('Hub client pages', () => {
     await waitFor(() =>
       expect(mocks.client.request).toHaveBeenLastCalledWith({
         path: 'hub/apps',
-        query: { search: undefined, page: 2, pageSize: 24 },
+        query: { q: undefined, page: 2, pageSize: 24 },
       }),
     );
 
@@ -672,18 +710,18 @@ describe('Hub client pages', () => {
     await new Promise((resolve) => window.setTimeout(resolve, 320));
     expect(mocks.client.request).toHaveBeenLastCalledWith({
       path: 'hub/apps',
-      query: { search: 'customer', page: 1, pageSize: 24 },
+      query: { q: 'customer', page: 1, pageSize: 24 },
     });
   });
 
   it('keeps the previous catalog visible while loading another page', async () => {
-    const nextPage = deferred<{ data: AppPageResponse }>();
+    const nextPage = deferred<ListResponse<AppSummary>>();
     mocks.client.request.mockImplementation(
       ({ query }: { query?: { page?: number } }) =>
         query?.page === 2
           ? nextPage.promise
           : Promise.resolve({
-              data: page([appSummary('first', 'First application')], {
+              ...page([appSummary('first', 'First application')], {
                 total: 48,
               }),
             }),
@@ -698,12 +736,12 @@ describe('Hub client pages', () => {
     await waitFor(() =>
       expect(mocks.client.request).toHaveBeenLastCalledWith({
         path: 'hub/apps',
-        query: { search: undefined, page: 2, pageSize: 24 },
+        query: { q: undefined, page: 2, pageSize: 24 },
       }),
     );
 
     nextPage.resolve({
-      data: page([appSummary('second', 'Second application')], {
+      ...page([appSummary('second', 'Second application')], {
         total: 48,
         page: 2,
       }),
@@ -714,13 +752,13 @@ describe('Hub client pages', () => {
   });
 
   it('ignores an older search response when a newer query finishes first', async () => {
-    const firstSearch = deferred<{ data: AppPageResponse }>();
-    const secondSearch = deferred<{ data: AppPageResponse }>();
+    const firstSearch = deferred<ListResponse<AppSummary>>();
+    const secondSearch = deferred<ListResponse<AppSummary>>();
     mocks.client.request.mockImplementation(
-      ({ query }: { query?: { search?: string } }) => {
-        if (query?.search === 'a') return firstSearch.promise;
-        if (query?.search === 'ab') return secondSearch.promise;
-        return Promise.resolve({ data: page([]) });
+      ({ query }: { query?: { q?: string } }) => {
+        if (query?.q === 'a') return firstSearch.promise;
+        if (query?.q === 'ab') return secondSearch.promise;
+        return Promise.resolve({ ...page([]) });
       },
     );
     renderCatalog();
@@ -732,21 +770,21 @@ describe('Hub client pages', () => {
     await waitFor(() =>
       expect(mocks.client.request).toHaveBeenLastCalledWith({
         path: 'hub/apps',
-        query: { search: 'a', page: 1, pageSize: 24 },
+        query: { q: 'a', page: 1, pageSize: 24 },
       }),
     );
 
     fireEvent.change(input, { target: { value: 'ab' } });
     await new Promise((resolve) => window.setTimeout(resolve, 320));
     secondSearch.resolve({
-      data: page([appSummary('ab', 'AB application')]),
+      ...page([appSummary('ab', 'AB application')]),
     });
     await waitFor(() =>
       expect(screen.getByText('AB application')).toBeInTheDocument(),
     );
 
     firstSearch.resolve({
-      data: page([appSummary('a', 'A application')]),
+      ...page([appSummary('a', 'A application')]),
     });
     await new Promise((resolve) => window.setTimeout(resolve, 0));
     expect(screen.queryByText('A application')).not.toBeInTheDocument();
@@ -755,7 +793,7 @@ describe('Hub client pages', () => {
 
   it('uses the same catalog data source for Grid and List views', async () => {
     mocks.client.request.mockResolvedValue({
-      data: page([appSummary('customer', 'Customer Portal')]),
+      ...page([appSummary('customer', 'Customer Portal')]),
     });
     renderCatalog();
     await waitFor(() =>
@@ -770,7 +808,7 @@ describe('Hub client pages', () => {
 
   it('uses a user-facing label for an unresolved catalog status', async () => {
     mocks.client.request.mockResolvedValue({
-      data: page([
+      ...page([
         {
           ...appSummary('customer', 'Customer Portal'),
           runtime: { hostAvailable: true, state: 'unknown' },
@@ -788,15 +826,22 @@ describe('Hub client pages', () => {
 
   it('notifies a friendly restart failure while keeping raw details collapsed', async () => {
     const rawMessage = 'Restart failed: App "hdsp" failed to reload';
-    const apiError = Object.assign(new Error(rawMessage), {
+    const apiError = new ApiClientError(rawMessage, {
+      status: 503,
+      reason: 'RESTART_FAILED',
+      domain: 'hub',
       payload: {
         error: {
-          code: 'RESTART_FAILED',
+          code: 503,
+          reason: 'RESTART_FAILED',
+          domain: 'hub',
           message: rawMessage,
         },
       },
     });
-    render(<ErrorNotification error={readError(apiError)} />);
+    render(<ErrorNotification error={readError(apiError)} />, {
+      wrapper: I18n,
+    });
 
     expect(await screen.findByText('Restart failed')).toBeInTheDocument();
     expect(
@@ -817,6 +862,7 @@ describe('Hub client pages', () => {
     const onClose = vi.fn();
     const view = render(
       <ErrorNotification message='First failure' onClose={onClose} />,
+      { wrapper: I18n },
     );
     expect(await screen.findByText('First failure')).toBeInTheDocument();
 
@@ -833,7 +879,9 @@ describe('Hub client pages', () => {
   it('reports an error notification that closed on its own', () => {
     vi.useFakeTimers();
     const onClose = vi.fn();
-    render(<ErrorNotification message='Timed failure' onClose={onClose} />);
+    render(<ErrorNotification message='Timed failure' onClose={onClose} />, {
+      wrapper: I18n,
+    });
 
     act(() => {
       vi.advanceTimersByTime(8000);
@@ -843,10 +891,15 @@ describe('Hub client pages', () => {
 
   it('closes the lifecycle confirmation before showing a restart failure', async () => {
     const rawMessage = 'Restart failed: App "hdsp" failed to reload';
-    const apiError = Object.assign(new Error(rawMessage), {
+    const apiError = new ApiClientError(rawMessage, {
+      status: 503,
+      reason: 'RESTART_FAILED',
+      domain: 'hub',
       payload: {
         error: {
-          code: 'RESTART_FAILED',
+          code: 503,
+          reason: 'RESTART_FAILED',
+          domain: 'hub',
           message: rawMessage,
         },
       },
@@ -1009,11 +1062,12 @@ describe('Hub client pages', () => {
         return Promise.resolve({ data: detail() });
       }
       if (path === 'hub/apps/customer/releases') {
-        return Promise.resolve({ data: [] });
+        return Promise.resolve(list([]));
       }
       if (path.endsWith('/deployments'))
         return Promise.resolve({
-          data: { items: [], page: 1, pageSize: 20, total: 0 },
+          data: [],
+          meta: { page: 1, pageSize: 20, total: 0 },
         });
       return Promise.reject(new Error(`Unexpected request: ${path}`));
     });
@@ -1028,6 +1082,7 @@ describe('Hub client pages', () => {
           </Route>
         </Routes>
       </MemoryRouter>,
+      { wrapper: I18n },
     );
 
     fireEvent.click(
@@ -1124,16 +1179,17 @@ describe('Hub client pages', () => {
       }
       if (path === 'hub/apps/customer/deployments') {
         return Promise.resolve({
-          data: { items: [], page: 1, pageSize: 20, total: 0 },
+          data: [],
+          meta: { page: 1, pageSize: 20, total: 0 },
         });
       }
       if (path === 'hub/apps/customer/releases') {
-        return Promise.resolve({
-          data: [
+        return Promise.resolve(
+          list([
             release('release-2', '2026-09-14T00:00:00Z'),
             release('release-1', '2026-09-13T00:00:00Z'),
-          ],
-        });
+          ]),
+        );
       }
       if (path === 'hub/apps/customer/config') {
         return Promise.resolve({ data: { mode: 'external', content: null } });
@@ -1149,6 +1205,7 @@ describe('Hub client pages', () => {
           </Route>
         </Routes>
       </MemoryRouter>,
+      { wrapper: I18n },
     );
 
     fireEvent.click(
@@ -1180,11 +1237,12 @@ describe('Hub client pages', () => {
       }
       if (path.endsWith('/deployments'))
         return Promise.resolve({
-          data: { items: [], page: 1, pageSize: 20, total: 0 },
+          data: [],
+          meta: { page: 1, pageSize: 20, total: 0 },
         });
       if (path.endsWith('/releases'))
-        return Promise.resolve({
-          data: [
+        return Promise.resolve(
+          list([
             {
               id: 'release-1',
               version: '1.0.0',
@@ -1193,11 +1251,11 @@ describe('Hub client pages', () => {
               hasConfigTemplate: false,
               createdAt: '2026-09-18T00:00:00Z',
             },
-          ],
-        });
+          ]),
+        );
       if (path.endsWith('/config'))
         return Promise.resolve({ data: { mode: 'external', content: null } });
-      if (path.endsWith('/config-template'))
+      if (path.endsWith('/configTemplate'))
         return Promise.resolve({ data: { content: null } });
       if (path.endsWith('/deploy')) {
         accepted = true;
@@ -1224,6 +1282,7 @@ describe('Hub client pages', () => {
           </Route>
         </Routes>
       </MemoryRouter>,
+      { wrapper: I18n },
     );
     const deploy = await screen.findByRole('button', { name: 'Deploy v1.0.0' });
     await waitFor(() => expect(deploy).toBeEnabled());
@@ -1259,7 +1318,7 @@ describe('Hub client pages', () => {
     );
     expect(screen.getByText('Automatic deployment logs')).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'releases.expand' }),
+      screen.getByRole('button', { name: 'Expand releases' }),
     ).toHaveAttribute('aria-expanded', 'false');
   });
 
@@ -1271,9 +1330,10 @@ describe('Hub client pages', () => {
         return Promise.resolve({
           data: detail({ hasPendingDeployment: true }),
         });
-      if (path.endsWith('/releases')) return Promise.resolve({ data: [] });
+      if (path.endsWith('/releases')) return Promise.resolve(list([]));
       return Promise.resolve({
-        data: { items: [], page: 1, pageSize: 20, total: 0 },
+        data: [],
+        meta: { page: 1, pageSize: 20, total: 0 },
       });
     });
     render(
@@ -1288,6 +1348,7 @@ describe('Hub client pages', () => {
           </Route>
         </Routes>
       </MemoryRouter>,
+      { wrapper: I18n },
     );
     await act(async () => {
       await Promise.resolve();
@@ -1365,6 +1426,7 @@ describe('Hub client pages', () => {
           tab='deployments'
         />
       </MemoryRouter>,
+      { wrapper: I18n },
     );
 
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
@@ -1391,8 +1453,8 @@ describe('Hub client pages', () => {
         if (path === 'hub/apps/customer')
           return Promise.resolve({ data: detail() });
         if (path.endsWith('/releases'))
-          return Promise.resolve({
-            data: [
+          return Promise.resolve(
+            list([
               {
                 id: 'release-1',
                 version: '1.0.0',
@@ -1400,11 +1462,12 @@ describe('Hub client pages', () => {
                 checksum: 'checksum',
                 createdAt: '2026-09-18T00:00:00Z',
               },
-            ],
-          });
+            ]),
+          );
         if (path.endsWith('/deployments'))
           return Promise.resolve({
-            data: { items: [], total: 0, page: 1, pageSize: 20 },
+            data: [],
+            meta: { page: 1, pageSize: 20, total: 0 },
           });
         throw new Error(`Unexpected request: ${path}`);
       });
@@ -1416,6 +1479,7 @@ describe('Hub client pages', () => {
             </Route>
           </Routes>
         </MemoryRouter>,
+        { wrapper: I18n },
       );
       await screen.findByText('checksum');
       expect(
@@ -1433,10 +1497,11 @@ describe('Hub client pages', () => {
       mocks.client.request.mockImplementation(({ path }: { path: string }) => {
         if (path === 'hub/apps/customer')
           return Promise.resolve({ data: detail() });
-        if (path.endsWith('/releases')) return Promise.resolve({ data: [] });
+        if (path.endsWith('/releases')) return Promise.resolve(list([]));
         if (path.endsWith('/deployments'))
           return Promise.resolve({
-            data: { items: [], total: 0, page: 1, pageSize: 20 },
+            data: [],
+            meta: { page: 1, pageSize: 20, total: 0 },
           });
         throw new Error(`Unexpected request: ${path}`);
       });
@@ -1448,10 +1513,14 @@ describe('Hub client pages', () => {
             </Route>
           </Routes>
         </MemoryRouter>,
+        { wrapper: I18n },
       );
       if (allowed === 'read-deployment')
         await screen.findByText('No deployments yet');
-      else await screen.findByRole('heading', { name: /Releases/ });
+      else
+        await screen.findByRole('heading', {
+          name: new RegExp(enUS.releases.title),
+        });
       expect(
         mocks.client.request.mock.calls.some(([r]) =>
           r.path.endsWith('/releases'),
@@ -1490,15 +1559,18 @@ describe('Hub client pages', () => {
             uploaded = true;
             return Promise.resolve({ data: release });
           }
-          return Promise.resolve({
-            data: uploaded
-              ? [release]
-              : [{ ...release, id: 'old', version: '1.0.0' }],
-          });
+          return Promise.resolve(
+            list(
+              uploaded
+                ? [release]
+                : [{ ...release, id: 'old', version: '1.0.0' }],
+            ),
+          );
         }
         if (path.endsWith('/deployments'))
           return Promise.resolve({
-            data: { items: [], total: 0, page: 1, pageSize: 20 },
+            data: [],
+            meta: { page: 1, pageSize: 20, total: 0 },
           });
         throw new Error(`Unexpected request: ${path}`);
       },
@@ -1522,9 +1594,10 @@ describe('Hub client pages', () => {
           </Route>
         </Routes>
       </MemoryRouter>,
+      { wrapper: I18n },
     );
     fireEvent.click(
-      await screen.findByRole('button', { name: 'releases.collapse' }),
+      await screen.findByRole('button', { name: 'Collapse releases' }),
     );
     expect(screen.getByTestId('legacy-location')).toHaveTextContent(
       '/apps/customer/deployments?filter=recent',
@@ -1548,10 +1621,10 @@ describe('Hub client pages', () => {
       await screen.findByRole('button', { name: 'Deploy v2.0.0' }),
     ).toBeEnabled();
     expect(
-      screen.getByRole('button', { name: 'releases.collapse' }),
+      screen.getByRole('button', { name: 'Collapse releases' }),
     ).toHaveAttribute('aria-expanded', 'true');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(screen.getByText('releases.uploaded')).toBeInTheDocument();
+    expect(screen.getByText(enUS.releases.uploaded)).toBeInTheDocument();
     expect(
       mocks.client.request.mock.calls.some(([r]) => r.path.endsWith('/deploy')),
     ).toBe(false);
@@ -1583,15 +1656,13 @@ describe('Hub client pages', () => {
         onUpload={vi.fn()}
       />
     );
-    const first = render(page('older'));
+    const first = render(page('older'), { wrapper: I18n });
     const latestRow = () => screen.getByText('newer-checks').closest('tr')!;
-    expect(
-      within(latestRow()).getByText('releases.latestUpload'),
-    ).toBeInTheDocument();
+    expect(within(latestRow()).getByText('Latest upload')).toBeInTheDocument();
     expect(latestRow()).toHaveClass('bg-primary/5');
     expect(within(latestRow()).getByRole('button')).toHaveClass('bg-primary');
     first.unmount();
-    const refreshed = render(page('older'));
+    const refreshed = render(page('older'), { wrapper: I18n });
     expect(latestRow()).toHaveClass('bg-primary/5');
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
     refreshed.rerender(page('newer'));
@@ -1599,12 +1670,8 @@ describe('Hub client pages', () => {
     expect(within(latestRow()).getByRole('button')).not.toHaveClass(
       'bg-primary',
     );
-    expect(
-      within(latestRow()).getByText('releases.active'),
-    ).toBeInTheDocument();
-    expect(
-      within(latestRow()).getByText('releases.latestUpload'),
-    ).toBeInTheDocument();
+    expect(within(latestRow()).getByText('Active')).toBeInTheDocument();
+    expect(within(latestRow()).getByText('Latest upload')).toBeInTheDocument();
     refreshed.rerender(page('older'));
     expect(latestRow()).toHaveClass('bg-primary/5');
   });

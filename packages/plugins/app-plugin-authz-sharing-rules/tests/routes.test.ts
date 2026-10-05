@@ -6,9 +6,18 @@ import {
 } from '@nocobase/authorization/core';
 import type { SharingRule } from '@nocobase/authorization/sharing-rules';
 import { createAppAuthorization } from '@nocobase/app-plugin-authorization/server';
+import {
+  createSettingsRouter,
+  documentAuthorizationRoutes,
+} from '@nocobase/app-plugin-authorization/server/extension';
+import {
+  ApiDocsService,
+  findUndeclaredApiRoutes,
+  type ApiDocsTarget,
+} from '@nocobase/app-server/router';
 import { sharingRules } from '../server/authorization.js';
 
-const PATH = '/sharing-rules';
+const PATH = '/sharingRules';
 const SETTINGS = { type: 'settings', id: 'authorization.sharing-rules' };
 
 class MemoryStore {
@@ -49,7 +58,7 @@ function fixture(permitted = true) {
   });
   const call = async (path: string, init?: RequestInit): Promise<Response> => {
     const response = await authz.routes.handle({
-      request: new Request(`http://app/api/authz${path}`, init),
+      request: new Request(`http://app/api/authorization${path}`, init),
       path,
       authorization: { require } as unknown as AuthorizationContext,
     });
@@ -84,13 +93,23 @@ describe('sharing rules through the authorization dispatcher', () => {
 
   it('gates every route on its own settings item', async () => {
     const { call, require } = fixture();
-    for (const path of [PATH, `${PATH}/options`, `${PATH}/records/orders`]) {
+    for (const path of [PATH, `${PATH}/options`]) {
       expect((await call(path)).status).toBe(200);
       expect(require).toHaveBeenLastCalledWith({
         resource: SETTINGS,
         action: 'read',
       });
     }
+    // `orders` is registered for authorization but no database holds it, so it has no records to page.
+    const records = await call(`${PATH}/records/orders`);
+    expect(records.status).toBe(404);
+    await expect(records.json()).resolves.toMatchObject({
+      error: { reason: 'COLLECTION_NOT_FOUND', domain: 'authorization' },
+    });
+    expect(require).toHaveBeenLastCalledWith({
+      resource: SETTINGS,
+      action: 'read',
+    });
     expect((await call(`${PATH}/subjects/user`)).status).toBe(404);
   });
 
@@ -108,19 +127,22 @@ describe('sharing rules through the authorization dispatcher', () => {
       resource: SETTINGS,
       action: 'create',
     });
-    expect(await (await call(PATH)).json()).toEqual({ data: [rule] });
+    expect(await (await call(PATH)).json()).toEqual({
+      data: [rule],
+      meta: { total: 1 },
+    });
     const updated = {
       ...rule,
       actions: [{ action: 'read', selection: selection.records(['o2']) }],
     };
     expect(
-      (await call(`${PATH}/orders-rule`, json('PUT', updated))).status,
+      (await call(`${PATH}/orders-rule`, json('PATCH', updated))).status,
     ).toBe(200);
     expect(require).toHaveBeenLastCalledWith({
       resource: SETTINGS,
       action: 'update',
     });
-    expect((await call(`${PATH}/missing`, json('PUT', updated))).status).toBe(
+    expect((await call(`${PATH}/missing`, json('PATCH', updated))).status).toBe(
       404,
     );
     expect(
@@ -172,14 +194,34 @@ describe('sharing rules through the authorization dispatcher', () => {
     expect(created.status).toBe(201);
     expect(await created.json()).toMatchObject({ data: { title } });
     const [saved] = (await (await call(PATH)).json()).data;
-    const updated = await call(`${PATH}/orders-rule`, json('PUT', saved));
+    const updated = await call(`${PATH}/orders-rule`, json('PATCH', saved));
     expect(await updated.json()).toMatchObject({ data: { title } });
     await call(
       `${PATH}/orders-rule`,
-      json('PUT', { ...saved, title: 'My custom title' }),
+      json('PATCH', { ...saved, title: 'My custom title' }),
     );
     expect(await (await call(PATH)).json()).toMatchObject({
       data: [{ key: 'orders-rule', title: 'My custom title' }],
+    });
+    // A partial update changes only the fields it names.
+    expect(
+      (await call(`${PATH}/orders-rule`, json('PATCH', { reason: 'Audit' })))
+        .status,
+    ).toBe(200);
+    expect(await (await call(PATH)).json()).toMatchObject({
+      data: [
+        {
+          key: 'orders-rule',
+          title: 'My custom title',
+          subjects: rule.subjects,
+          reason: 'Audit',
+        },
+      ],
+    });
+    const missing = await call(`${PATH}/missing`, { method: 'DELETE' });
+    expect(missing.status).toBe(404);
+    await expect(missing.json()).resolves.toMatchObject({
+      error: { reason: 'RULE_NOT_FOUND', domain: 'authorization' },
     });
     expect(
       (
@@ -193,5 +235,159 @@ describe('sharing rules through the authorization dispatcher', () => {
         )
       ).status,
     ).toBe(400);
+  });
+  it('refuses a key another rule already uses, on create and on rename', async () => {
+    const { call, json, store } = fixture();
+    expect((await call(PATH, json('POST', rule))).status).toBe(201);
+    const second = { ...rule, key: 'second-rule' };
+    expect((await call(PATH, json('POST', second))).status).toBe(201);
+    for (const response of [
+      await call(PATH, json('POST', rule)),
+      await call(`${PATH}/second-rule`, json('PATCH', { key: rule.key })),
+    ]) {
+      expect(response.status).toBe(409);
+      await expect(response.json()).resolves.toMatchObject({
+        error: {
+          status: 'ALREADY_EXISTS',
+          reason: 'RULE_ALREADY_EXISTS',
+          domain: 'authorization',
+          metadata: { key: rule.key },
+        },
+      });
+    }
+    expect([...store.rules.keys()].sort()).toEqual([
+      'orders-rule',
+      'second-rule',
+    ]);
+    // Keeping its own key is not a conflict.
+    expect(
+      (await call(`${PATH}/second-rule`, json('PATCH', { key: 'second-rule' })))
+        .status,
+    ).toBe(200);
+  });
+
+  it('answers a unique-constraint violation from the store as the same conflict', async () => {
+    const { call, json, store } = fixture();
+    store.create = async () => {
+      throw Object.assign(new Error('duplicate key value'), { code: '23505' });
+    };
+    const response = await call(PATH, json('POST', rule));
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { reason: 'RULE_ALREADY_EXISTS' },
+    });
+  });
+
+  it('refuses the keys of its fixed route segments, on create and on rename', async () => {
+    const { call, json } = fixture();
+    expect((await call(PATH, json('POST', rule))).status).toBe(201);
+    for (const key of ['options', 'subjects', 'records'])
+      for (const response of [
+        await call(PATH, json('POST', { ...rule, key })),
+        await call(`${PATH}/orders-rule`, json('PATCH', { key })),
+      ]) {
+        expect(response.status).toBe(400);
+        await expect(response.json()).resolves.toMatchObject({
+          error: {
+            reason: 'INVALID_INPUT',
+            fieldViolations: [expect.objectContaining({ field: 'key' })],
+          },
+        });
+      }
+  });
+
+  it('names the offending field when the model refuses a rule', async () => {
+    const { call, json } = fixture();
+    const unknownCollection = await call(
+      PATH,
+      json('POST', {
+        ...rule,
+        resource: { type: 'database.collection', id: 'missing' },
+      }),
+    );
+    expect(unknownCollection.status).toBe(400);
+    await expect(unknownCollection.json()).resolves.toMatchObject({
+      error: {
+        reason: 'INVALID_AUTHORIZATION_INPUT',
+        domain: 'authorization',
+        fieldViolations: [
+          { field: 'resource.id', description: expect.any(String) },
+        ],
+      },
+    });
+    const scopeKey = await call(
+      PATH,
+      json('POST', {
+        ...rule,
+        actions: [{ ...rule.actions[0], scopeKey: 'orders' }],
+      }),
+    );
+    await expect(scopeKey.json()).resolves.toMatchObject({
+      error: { fieldViolations: [{ field: 'actions.0.scopeKey' }] },
+    });
+  });
+
+  it('refuses a subject listed twice and names the repeated entry', async () => {
+    const { call, json, store } = fixture();
+    const response = await call(
+      PATH,
+      json('POST', {
+        ...rule,
+        subjects: [...rule.subjects, ...rule.subjects],
+      }),
+    );
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        reason: 'INVALID_INPUT',
+        fieldViolations: [expect.objectContaining({ field: 'subjects.1' })],
+      },
+    });
+    expect(store.rules.size).toBe(0);
+  });
+
+  it('declares its routes for the API document', async () => {
+    const { authz } = fixture();
+    const warnings: string[] = [];
+    // The routes behind the `/api/authorization` dispatcher, registered as the authorization plugin does, below an empty
+    // `/api` router.
+    const docs = new ApiDocsService();
+    documentAuthorizationRoutes(docs, authz.routes, (message) =>
+      warnings.push(message),
+    );
+    docs.attach({
+      api: createSettingsRouter() as unknown as ApiDocsTarget['api'],
+      describe: () => ({ info: { title: 'Test', version: '1.0.0' } }),
+    });
+    expect(findUndeclaredApiRoutes(docs)).toEqual([]);
+
+    const document = await docs.getDocument();
+    expect(warnings).toEqual([]);
+    const operations = Object.entries(document.paths ?? {})
+      .filter(([path]) => path.startsWith('/api/authorization/sharingRules'))
+      .flatMap(([, item]) =>
+        Object.values(item ?? {}).map(
+          (operation) => (operation as { operationId?: string }).operationId,
+        ),
+      )
+      .sort();
+    expect(operations).toEqual(
+      [
+        'authorizationCreateSharingRule',
+        'authorizationDeleteSharingRule',
+        'authorizationListSharingRuleOptions',
+        'authorizationListSharingRuleRecords',
+        'authorizationListSharingRuleSubjects',
+        'authorizationListSharingRules',
+        'authorizationResolveSharingRuleSubjects',
+        'authorizationUpdateSharingRule',
+      ].sort(),
+    );
+    expect(
+      document.paths?.['/api/authorization/sharingRules']?.post?.tags,
+    ).toEqual(['Authorization']);
+    expect(document.components?.schemas).toHaveProperty(
+      'AuthorizationSharingRule',
+    );
   });
 });

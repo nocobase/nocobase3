@@ -1,6 +1,6 @@
 {
   "name": "@nocobase/jobs",
-  "version": "0.1.0-beta.0",
+  "version": "0.1.0-beta.2",
   "description": "Persistent recurring job scheduling for NocoBase applications, backed by BullMQ or an in-process scheduler.",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
@@ -42,7 +42,6 @@
   },
   "dependencies": {
     "bullmq": "6.3.6",
-    "cron": "catalog:",
     "cron-parser": "^5.10.0",
     "ioredis": "catalog:"
   },

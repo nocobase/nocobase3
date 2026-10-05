@@ -15,19 +15,31 @@ import authorizationPlugin, {
   createAppAuthorization,
 } from '@nocobase/app-plugin-authorization';
 import { createAppPaths } from '@nocobase/app-server/config';
-import { createDatabaseManager, databaseManagerToken } from '@nocobase/db';
-import sqlite from '@nocobase/db-sqlite';
+import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
+import { createTestDatabase } from '@nocobase/app-testing/server';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { expect, vi } from 'vitest';
 import setupSeed from '../database/seeds/202609220002_sales_permissions.js';
 import { AuthorizationExampleProvider } from '../server/providers/authorization-example.js';
 import { apiRoutes } from '../server/routes/index.js';
+/**
+ * The seeded sales example on its own database, on the dialect
+ * `NOCOBASE_TEST_DB_DIALECT` selects. Call `destroy()` when the test is done:
+ * on a database server it drops the database the fixture created.
+ */
 export async function createFixture() {
-  const database = createDatabaseManager({
-    drivers: { sqlite },
-    connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
-  });
+  const testDatabase = await createTestDatabase();
+  try {
+    const fixture = await seedFixture(testDatabase.database);
+    return { ...fixture, destroy: () => testDatabase.destroy() };
+  } catch (error) {
+    await testDatabase.destroy();
+    throw error;
+  }
+}
+
+async function seedFixture(database: DatabaseManager) {
   // Each plugin's own migrations, located through its published server plugin.
   for (const plugin of [
     authenticationPlugin,
@@ -120,28 +132,34 @@ export async function createFixture() {
     authorization,
     users,
     router,
-    request: (user: string, path: string, body?: unknown) =>
-      router.request(`/api/authorization-example/${path}`, {
-        method: body ? 'POST' : 'GET',
+    /** A request as `user`; it is a `GET` without a body and a `POST` with one, unless `method` says otherwise. */
+    request: (
+      user: string,
+      path: string,
+      body?: unknown,
+      method: string = body === undefined ? 'GET' : 'POST',
+    ) =>
+      router.request(`/api/authorizationExample/${path}`, {
+        method,
         headers: {
           'x-test-user': users[user] ?? user,
           'Content-Type': 'application/json',
         },
-        ...(body ? { body: JSON.stringify(body) } : {}),
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       }),
   };
 }
 
 export type SalesFixture = Awaited<ReturnType<typeof createFixture>>;
 
-/** A request to `/api/authz/<path>` as the seeded administrator. */
+/** A request to `/api/authorization/<path>` as the seeded administrator. */
 export function adminRequest(
   fixture: SalesFixture,
   path: string,
   method = 'GET',
   body?: unknown,
 ): Promise<Response> {
-  return fixture.router.request(`/api/authz/${path}`, {
+  return fixture.router.request(`/api/authorization/${path}`, {
     method,
     headers: {
       'x-test-user': fixture.users.admin,
@@ -160,5 +178,5 @@ export async function listIds(
   const response = await fixture.request(user, `sales/${path}`);
   expect(response.status).toBe(200);
   const body = await response.json();
-  return body.data.items.map((item: { id: string }) => item.id);
+  return body.data.map((item: { id: string }) => item.id);
 }

@@ -1,5 +1,21 @@
 # `@nocobase/app-server`
 
+## Ordinary and recurring jobs
+
+`JobExecutorServiceProvider` and `jobExecutorServiceToken` from `@nocobase/app-server/jobs` compose both `JobExecutor` and `ScheduleExecutor` from `@nocobase/jobs`. The provider lazily creates one service from the application's `jobs` configuration, application name, storage paths and logger. Owners set up their executors; the provider starts no worker by itself and shuts down all ordinary and schedule executors when the application stops. Repeated shutdown is safe, including executors their owners already stopped.
+
+Resolve the existing token and call `getJobExecutor(scope, name?)` for ordinary one-off tasks or `getScheduleExecutor(scope, name?)` for recurring rules. Use the package name as the scope. Both select the named configuration, then `jobs.default`, then built-in single-process memory under `app.paths.storage('jobs')`. An invalid configured default rejects. The namespace defaults to `app.appName`; configure Redis before running multiple instances. Built-in fallback warns outside `develop` and `development`. Omitted, `default`, and unknown configuration names share the executor selected by the same resolved key and scope. Ordinary and Schedule executors remain separate.
+
+For ordinary tasks, extend `Job` from `@nocobase/jobs` with a payload-only constructor and an explicit own stable `static jobName`. Register every class with `registerJob` before consumer `setup()`, then submit with `addJob(new JobClass(payload))`. A producer-only executor first calls `setup({ consume: false })`. Submission rejects before setup starts and waits if setup is still in progress. Its receipt confirms backend acceptance, not completion. Each task attempt creates a fresh class instance from a strict JSON payload snapshot; there is no job factory, global service container or dependency injection into this constructor. Executor settings come from the selected configuration, not method overrides.
+
+Ordinary task identity is connection or storage path, namespace and scope, like Schedule's, so renaming a configuration key does not strand pending tasks; ordinary tasks still never share a queue or file with Schedule. Ordinary memory snapshots use separate pending-only files and are saved at shutdown; a forced exit can lose new work or replay work completed since the last snapshot. Scheduler plugin behavior is unchanged. See the [jobs package guide](../../libs/jobs/README.md) for examples, persistence identities, local attempt events and cooperative shutdown.
+
+## Queues
+
+Background work goes to the jobs service above by default; queues are for what it does not have — delays, priorities, deduplicating job IDs, batches, rate limits and several handlers per message. `QueueServiceProvider` and `queueServiceToken` from `@nocobase/app-server/queue` compose the application's `QueueService` from `@nocobase/queue`. Add the provider before plugin providers with `app.addServiceProvider(QueueServiceProvider, { nodeEnv })`. It creates the service lazily from the `queue` configuration section, with `app.appName` as the default namespace, `app.paths.storage('queue')` for memory state files, and the `queue` logger. `start()` calls `setup()` after every provider has booted, and `shutdown()` releases the service. `AppQueueConfig` types `server/config/queue.ts`.
+
+Plugins resolve `queueServiceToken`, register backend factories in `register()`, register handlers with `consumer(queue).consume()` in `boot()`, publish after setup, and await their unregister functions in `shutdown()` before releasing what the handlers use. Without `queue.default`, queues run on the built-in memory configuration, which warns outside `develop` and `development`. A `queue` section in the former `connections`/`worker`/`jobs` format is ignored with one warning. See the [queue package guide](../../libs/queue/README.md) for configuration keys, delivery, retries, cancellation and shutdown.
+
 ## Standalone proxy
 
 `defineStandaloneServer()` accepts an optional `proxy: ({ application }) => ({ match, target })` factory, evaluated after application startup. `match(pathname)` chooses requests before the application's public base path adapter; `target()` returns the current upstream HTTP(S) origin or `null`. Both `create()` and `start()` configure this boundary. Applications without a proxy retain their normal routing.
@@ -41,7 +57,7 @@ const repositoryRoutes = defineRepositoryApiRoutes({
       },
     },
     {
-      name: 'sales/orders',
+      name: 'salesOrders',
       collection: 'orders',
       actions: {
         findMany: { maxLimit: 100 },
@@ -66,7 +82,7 @@ migrations. No repositories are exposed automatically.
 
 Each entry requires `name` and an explicit `actions` object. `collection` defaults
 to `name`; optional `connection` selects a configured database connection. Names
-must be unique and non-empty and cannot contain `*`. Empty action objects expose
+must be unique camelCase path segments, such as `salesOrders`. Empty action objects expose
 nothing. `actions.findMany.maxLimit` defaults to 100 and is both the default and maximum
 `findMany` limit. A limit of zero returns an empty list.
 
@@ -196,7 +212,7 @@ single call; it is no longer part of a route declaration. User authentication
 and database cascades remain separate concerns. See the
 [Policy quick start](../../libs/db/docs/zh-CN/repository/policy-quick-start.md).
 
-The application adds `/api` under its deployment mount path. Each action uses `POST /api/<encodeURIComponent(name)>:<action>` with a JSON object containing Repository options.
+The application adds `/api` under its deployment mount path. Each action uses `POST /api/{name}/{action}`, such as `POST /api/salesOrders/findMany`, with a JSON object containing Repository options. An exposure name is a camelCase path segment matching `/^[a-z][a-zA-Z0-9]*$/`; `defineRepositoryApiRoutes` throws for any other name, and for `auth`, `healthz` and `swagger`, which the application already answers under `/api`. The name shares the first path segment with plugin namespaces, so do not give an exposure the name of a plugin's namespace.
 
 The following is an independent HTTP client's call to those server routes, not code to put in a server route handler. A Node script must supply an absolute API URL; replace the example host and mount path with the target application's actual API base URL and provide whatever authentication that application requires.
 
@@ -245,11 +261,7 @@ callbacks and client-supplied `context` are not. `idempotencyKey` is currently
 rejected as an unsupported option rather than silently ignored. `ifVersion` is
 forwarded for updates and deletes.
 
-Input errors return 400, record-not-found errors return 404, and version or
-single-record cardinality conflicts return 409, with `{ code, message }` bodies.
-Malformed JSON returns 400, non-JSON content returns 415, and oversized bodies
-return 413. Unexpected/database-configuration errors propagate to the host error
-handler as server errors.
+Every failure uses the standard error body, `{ error: { code, status, reason, domain, message, requestId } }`, with domain `app`. Input errors return 400 `INVALID_ARGUMENT`, record-not-found errors return 404 `NOT_FOUND`, and version or single-record cardinality conflicts return 409 `ABORTED`, each with the Repository error code as `reason`. Malformed JSON returns 400, non-JSON content returns 415 and oversized bodies return 413 with reason `BODY_TOO_LARGE`, all with status `INVALID_ARGUMENT`. Unexpected and database-configuration errors propagate to the host error handler, which answers an opaque 500 `INTERNAL`.
 
 This basic adapter deliberately does **not** install authentication or
 authorization. Configured endpoints accept anonymous requests and have no field
@@ -259,17 +271,11 @@ policy. No application endpoints are enabled merely by importing this helper.
 ## Repository aggregate endpoints
 
 Add `aggregate` and `groupBy` to an exposure's `actions` to enable
-`POST /<name>:aggregate` and `POST /<name>:groupBy`. Neither endpoint is enabled
+`POST /{name}/aggregate` and `POST /{name}/groupBy`. Neither endpoint is enabled
 implicitly. As with other Repository actions, the contribution installs no
 access policy: the owning application or plugin must guard its declared routes.
 
-`aggregate` accepts a required Aggregate AST and an optional `filter`.
-`groupBy` also requires a non-empty `by` array and accepts `having` and `sort`
-over grouped fields and aggregate aliases. Envelopes must be JSON objects;
-unknown options, callbacks, database context, and pagination are unsupported.
-Repository validates AST versions, expressions, aliases and field capabilities
-and returns the existing `{ code, message }` error response with status 400.
-The 1 MiB body limit also applies to both actions.
+`aggregate` accepts a required Aggregate AST and an optional `filter`. `groupBy` also requires a non-empty `by` array and accepts `having` and `sort` over grouped fields and aggregate aliases. Envelopes must be JSON objects; unknown options, callbacks, database context, and pagination are unsupported. Repository validates AST versions, expressions, aliases and field capabilities and answers an invalid input with status 400 in the standard error body, the Repository error code as `reason` and domain `app`. The 1 MiB body limit also applies to both actions.
 
 `maxLimit` applies only to `findMany`. Aggregations operate over all matching
 rows, and `groupBy` returns all matching groups without pagination. Responses
@@ -280,7 +286,7 @@ for the JSON Aggregate, Filter and Sort AST contracts.
 
 ## Plugin resource directories
 
-Every Server plugin declares an absolute `baseDir`. In `server/plugin.ts`, use `baseDir: path.resolve(import.meta.dirname, '..')`; the same declaration in `dist/server/plugin.js` points to `dist`. Migrations, Seeds, and Queue Jobs resolve only against that directory. The runtime does not try a second source or build directory and does not infer the choice from `NODE_ENV` or the application command. Source and publish exports must load the matching plugin declaration.
+Every Server plugin declares an absolute `baseDir`. In `server/plugin.ts`, use `baseDir: path.resolve(import.meta.dirname, '..')`; the same declaration in `dist/server/plugin.js` points to `dist`. Migrations and Seeds resolve only against that directory. The `queue: { jobs }` contribution is deprecated: it is accepted and ignored, each plugin declaring it is reported once at startup and as a `SERVER_QUEUE_JOBS_DEPRECATED` inspection warning, and `createPluginJobLocations()` returns an empty list. The runtime does not try a second source or build directory and does not infer the choice from `NODE_ENV` or the application command. Source and publish exports must load the matching plugin declaration.
 
 `rootDir` remains the package root: the resolver walks upward from `baseDir` to a `package.json` whose name matches `packageName`. Inspection includes both directories and the resolved contribution paths, so an installed copy cannot silently borrow another copy's metadata. Missing `baseDir` is an API error; update all Server plugin declarations when upgrading.
 

@@ -23,26 +23,36 @@ const mocks = vi.hoisted(() => ({
   inspectBatch: vi.fn(),
   inspectConfigured: vi.fn(),
 }));
-vi.mock('@nocobase/app-client', () => ({
+vi.mock('@nocobase/app-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@nocobase/app-client')>()),
   useClientApplication: () => ({ runtime: { routes: mocks.routes } }),
 }));
 vi.mock('../../client/use-authorization-client.js', () => ({
   useAuthorizationClient: () => mocks,
 }));
-vi.mock('@nocobase/i18n/client', async () => {
-  const { translate } = await import('../helpers/locale-harness.js');
-  return { useTranslation: () => ({ t: translate }) };
-});
 import { InspectionConditions } from '../../client/pages/inspector-conditions.js';
 import InspectorPage from '../../client/pages/inspector-page.js';
 import { inspectionStatus } from '../../client/pages/inspector-status.js';
 import en from '../../client/locales/en-US.js';
+import { AUTHORIZATION_NAMESPACE } from '../../shared.js';
+import { createAuthorizationI18n, i18nWrapper } from '../helpers/i18n.js';
 import {
   pageSubsection,
   subsection,
   wire,
   withSubsections,
 } from '../helpers/workspace-options.js';
+// The inspector renders under this plugin's routes.
+const wrapper = i18nWrapper(
+  await createAuthorizationI18n(),
+  AUTHORIZATION_NAMESPACE,
+);
+// Reason codes other plugins report, and page titles from other packages' routes, are not keys any namespace owns: they
+// are translated with the server message or the title itself as `defaultValue`.
+const lenient = i18nWrapper(
+  await createAuthorizationI18n({ strict: false }),
+  AUTHORIZATION_NAMESPACE,
+);
 const read = { value: 'read', label: 'Read' };
 const view = { value: 'view', label: 'View' };
 const tables = subsection(
@@ -111,11 +121,12 @@ beforeEach(() => {
       ),
   );
 });
-function mount(url = '/?user=alice') {
+function mount(url = '/?user=alice', i18n = wrapper) {
   render(
     <MemoryRouter initialEntries={[url]}>
       <InspectorPage />
     </MemoryRouter>,
+    { wrapper: i18n },
   );
 }
 it('waits for a person before computing access', async () => {
@@ -556,6 +567,7 @@ it('renders an unregistered plugin explanation and source title without assuming
         ],
       }}
     />,
+    { wrapper: lenient },
   );
   expect(screen.getByText('Project membership permits access.')).toBeVisible();
   expect(screen.getByText('Project team')).toBeVisible();
@@ -600,6 +612,7 @@ it('shows a team grant once despite different underlying policies and retains th
         ],
       }}
     />,
+    { wrapper },
   );
   expect(screen.getAllByText('Sales engineer')).toHaveLength(1);
   expect(
@@ -692,7 +705,7 @@ it('shows client-registered pages as the menu tree, in menu order, and inspects 
       sections: withSubsections({ pages: [pageSubsection()] }),
     }),
   );
-  mount();
+  mount(undefined, lenient);
   await screen.findByRole('button', { name: 'deep: Access' });
   expect(
     screen
@@ -753,6 +766,7 @@ it('removes redundant display conditions without mutating the executable scope',
     <InspectionConditions
       value={{ type: 'database', scope: { kind: 'filter', root }, fields: [] }}
     />,
+    { wrapper },
   );
   expect(screen.getByText(/project-1/)).toBeVisible();
   expect(screen.queryByText(/project-2/)).not.toBeInTheDocument();
