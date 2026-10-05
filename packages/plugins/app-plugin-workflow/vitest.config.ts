@@ -12,7 +12,6 @@ export default createNodeVitestConfig({
   },
   test: {
     include: ['tests/**/*.test.{ts,tsx}'],
-    exclude: ['tests/workflow-cli.test.ts'],
     testTimeout: 30_000,
   },
 });
