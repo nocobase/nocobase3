@@ -70,9 +70,7 @@ export function FilePreviewContent(
     );
   switch (kind) {
     case 'image':
-      return (
-        <ImagePreview key={url} file={file} url={url} onDownload={onDownload} />
-      );
+      return <ImagePreview file={file} url={url} onDownload={onDownload} />;
     case 'pdf':
       return (
         <iframe title={file.filename} src={url} className='h-[70vh] w-full' />
@@ -134,8 +132,9 @@ function ImagePreview(inputProps: {
 
   // The browser decodes the image itself, so its error event is the only signal
   // that a corrupt or mislabelled file would otherwise leave as a broken icon.
-  const [failed, setFailed] = useState(false);
-  if (failed)
+  // Remember which URL failed rather than a flag, so a new URL is tried again.
+  const [failedUrl, setFailedUrl] = useState<string>();
+  if (url === failedUrl)
     return (
       <DownloadFallback
         file={file}
@@ -143,6 +142,7 @@ function ImagePreview(inputProps: {
           defaultValue:
             'This image could not be displayed. It may be corrupted or in an unsupported format.',
         })}
+        imageFailed
         onDownload={onDownload}
       />
     );
@@ -151,7 +151,7 @@ function ImagePreview(inputProps: {
       src={url}
       alt={file.filename}
       className='max-h-[70vh] max-w-full object-contain'
-      onError={() => setFailed(true)}
+      onError={() => setFailedUrl(url)}
     />
   );
 }
@@ -223,6 +223,7 @@ function OfficePreview(inputProps: {
 function DownloadFallback(inputProps: {
   readonly file: FileRecord;
   readonly message?: string;
+  readonly imageFailed?: boolean;
   readonly onDownload?: () => void;
 }): ReactElement {
   const { t } = useTranslation('@nocobase/app-plugin-file');
@@ -231,13 +232,16 @@ function DownloadFallback(inputProps: {
     message = t('files.previewUnavailable', {
       defaultValue: 'Preview is unavailable for this file type.',
     }),
+    imageFailed = false,
     onDownload,
   } = inputProps;
 
   return (
     <div className='flex flex-col items-center gap-3 py-8'>
       <div className='h-24 w-24'>
-        <FileThumbnail file={file} />
+        {/* The thumbnail would load the bytes that just failed; an empty URL
+            makes it show the file-type icon instead. */}
+        <FileThumbnail file={file} url={imageFailed ? '' : undefined} />
       </div>
       <p>{message}</p>
       {onDownload ? (

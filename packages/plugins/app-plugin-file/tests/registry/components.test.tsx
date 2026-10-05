@@ -219,9 +219,10 @@ it('replaces an image that fails to decode with a download fallback', async () =
   const onDownload = vi.fn();
   const { FilePreviewContent } =
     await import('../../registry/component-ui/components/previewers/file-preview-content.js');
-  render(
+  const file = record({ filename: 'corrupt.png', mimeType: 'image/png' });
+  const { rerender } = render(
     <FilePreviewContent
-      file={record({ filename: 'corrupt.png', mimeType: 'image/png' })}
+      file={file}
       kind='image'
       url='/main/uploads/invoices/corrupt.png'
       onDownload={onDownload}
@@ -233,9 +234,7 @@ it('replaces an image that fails to decode with a download fallback', async () =
       'This image could not be displayed. It may be corrupted or in an unsupported format.',
     ),
   ).toBeInTheDocument();
-  // The fallback's thumbnail loads the same bytes, so it fails the same way and
-  // must drop to the type icon instead of a second broken image.
-  fireEvent.error(screen.getByAltText('corrupt.png'));
+  // The fallback must not load the bytes that just failed a second time.
   expect(screen.queryByAltText('corrupt.png')).not.toBeInTheDocument();
   expect(screen.getByLabelText('corrupt.png')).toHaveAttribute(
     'data-slot',
@@ -243,6 +242,38 @@ it('replaces an image that fails to decode with a download fallback', async () =
   );
   fireEvent.click(screen.getByRole('button', { name: 'Download file' }));
   expect(onDownload).toHaveBeenCalledOnce();
+  rerender(
+    <FilePreviewContent
+      file={file}
+      kind='image'
+      url='/main/uploads/invoices/fixed.png'
+      onDownload={onDownload}
+    />,
+  );
+  expect(screen.getByAltText('corrupt.png')).toHaveAttribute(
+    'src',
+    '/main/uploads/invoices/fixed.png',
+  );
+});
+
+it('drops a thumbnail that fails to load to its icon and retries a new URL', () => {
+  const file = record({ filename: 'photo.png', mimeType: 'image/png' });
+  const { rerender } = render(
+    <FileThumbnail file={file} url='/main/uploads/invoices/broken.png' />,
+  );
+  fireEvent.error(screen.getByAltText('photo.png'));
+  expect(screen.queryByAltText('photo.png')).not.toBeInTheDocument();
+  expect(screen.getByLabelText('photo.png')).toHaveAttribute(
+    'data-slot',
+    'file-thumbnail',
+  );
+  rerender(
+    <FileThumbnail file={file} url='/main/uploads/invoices/fixed.png' />,
+  );
+  expect(screen.getByAltText('photo.png')).toHaveAttribute(
+    'src',
+    '/main/uploads/invoices/fixed.png',
+  );
 });
 
 it.each([
