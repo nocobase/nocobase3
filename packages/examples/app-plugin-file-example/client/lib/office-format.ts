@@ -48,6 +48,12 @@ const OFFICE_EXTENSIONS: ReadonlySet<string> = new Set([
   '.ppt',
   '.xls',
 ]);
+// Active markup runs script when a browser treats it as a document.
+export function isActiveMarkupMimeType(value: string): boolean {
+  const mimeType = value.split(';', 1)[0]?.trim().toLowerCase() ?? '';
+  return ACTIVE_MIME_TYPES.has(mimeType) || mimeType.endsWith('+xml');
+}
+
 export function resolveOfficeOpenXmlFormat(
   file: FileRecord,
 ): OfficeOpenXmlFormat | undefined {
@@ -55,8 +61,7 @@ export function resolveOfficeOpenXmlFormat(
   const dot = file.filename.lastIndexOf('.');
   const extension = dot < 0 ? '' : file.filename.slice(dot).toLowerCase();
   if (
-    ACTIVE_MIME_TYPES.has(mimeType) ||
-    mimeType.endsWith('+xml') ||
+    isActiveMarkupMimeType(mimeType) ||
     ACTIVE_EXTENSIONS.has(extension) ||
     OFFICE_EXTENSIONS.has(extension)
   ) {

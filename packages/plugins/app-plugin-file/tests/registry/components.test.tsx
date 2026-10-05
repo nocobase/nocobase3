@@ -298,6 +298,10 @@ it('embeds the PDF response as application/pdf whatever type the route sends', a
   );
   await waitFor(() => expect(create).toHaveBeenCalled());
   expect((create.mock.calls[0]?.[0] as Blob).type).toBe('application/pdf');
+  expect(await screen.findByTitle('invoice.pdf')).toHaveAttribute(
+    'src',
+    'blob:http://localhost/preview',
+  );
 });
 
 it('refuses to embed a PDF response that answers with an active document', async () => {

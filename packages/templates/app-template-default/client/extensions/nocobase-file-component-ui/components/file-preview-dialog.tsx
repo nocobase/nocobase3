@@ -167,7 +167,9 @@ function reportDownloadError(
 }
 
 // A blob URL is same-origin, so the frame must receive the bytes as a PDF and
-// never as a document the browser would render and run.
+// never as a document the browser would render and run. This retyping is the
+// safeguard; refusing an active markup response only turns an obvious HTML
+// answer into a readable error instead of a broken PDF viewer.
 function asPdfBlob(blob: Blob): Blob {
   return blob.type === PDF_MIME_TYPE
     ? blob
