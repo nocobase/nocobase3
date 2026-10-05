@@ -274,7 +274,7 @@ it('embeds the PDF response as application/pdf whatever type the route sends', a
         }),
     ),
   );
-  const create = vi.fn(() => 'blob:http://localhost/preview');
+  const create = vi.fn((_blob: Blob) => 'blob:http://localhost/preview');
   Object.defineProperty(URL, 'createObjectURL', {
     configurable: true,
     value: create,
@@ -297,7 +297,7 @@ it('embeds the PDF response as application/pdf whatever type the route sends', a
     />,
   );
   await waitFor(() => expect(create).toHaveBeenCalled());
-  expect((create.mock.calls[0]?.[0] as Blob).type).toBe('application/pdf');
+  expect(create.mock.calls[0]?.[0].type).toBe('application/pdf');
   expect(await screen.findByTitle('invoice.pdf')).toHaveAttribute(
     'src',
     'blob:http://localhost/preview',

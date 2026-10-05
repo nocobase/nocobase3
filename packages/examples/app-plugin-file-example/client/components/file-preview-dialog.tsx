@@ -128,7 +128,7 @@ export function FilePreviewDialog({
       const blob = await response.blob();
       if (controller.signal.aborted) return;
       if (isActiveMarkupMimeType(blob.type))
-        throw new Error('Unable to load the PDF preview.');
+        throw new Error(`Refusing to embed ${blob.type} as a PDF preview.`);
       if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
       const objectUrl = URL.createObjectURL(asPdfBlob(blob));
       objectUrlRef.current = objectUrl;

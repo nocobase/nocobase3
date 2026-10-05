@@ -18,6 +18,7 @@ import { fileUrlCredentials, resolveSafeFileUrl } from '../lib/file-url';
 import { FilePreviewContent } from './previewers/file-preview-content';
 
 const PDF_MIME_TYPE = 'application/pdf';
+const PDF_PREVIEW_ERROR = 'Unable to load the PDF preview.';
 
 export function FilePreviewDialog({
   files,
@@ -203,21 +204,17 @@ function PreviewBody({
       signal: controller.signal,
     })
       .then(async (response) => {
-        if (!response.ok) throw new Error('Unable to load the PDF preview.');
+        if (!response.ok) throw new Error(PDF_PREVIEW_ERROR);
         const blob = await response.blob();
         if (controller.signal.aborted) return;
         if (isActiveMarkupMimeType(blob.type))
-          throw new Error('Unable to load the PDF preview.');
+          throw new Error(PDF_PREVIEW_ERROR);
         objectUrl = URL.createObjectURL(asPdfBlob(blob));
         setBlobUrl(objectUrl);
       })
       .catch((cause: unknown) => {
         if (!controller.signal.aborted)
-          setError(
-            cause instanceof Error
-              ? cause.message
-              : 'Unable to load the PDF preview.',
-          );
+          setError(cause instanceof Error ? cause.message : PDF_PREVIEW_ERROR);
       });
     return () => {
       controller.abort();
