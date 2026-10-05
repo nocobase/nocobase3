@@ -1293,15 +1293,14 @@ export function WorkflowDetailPage(): React.ReactElement {
                         {!selected ? (
                           <DropdownMenuItem
                             className='workflow-version-compare-action'
-                            aria-label={t('comparison.compareWith', {
-                              version: item.version ?? t('common.unpublished'),
-                            })}
                             onClick={() => {
                               setComparisonTarget(item);
                               setDialog('compare');
                             }}
                           >
-                            {t('comparison.compare')}
+                            {t('comparison.compareWith', {
+                              version: item.version ?? t('common.unpublished'),
+                            })}
                           </DropdownMenuItem>
                         ) : null}
                       </div>

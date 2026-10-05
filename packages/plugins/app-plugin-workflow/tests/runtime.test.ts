@@ -1008,6 +1008,44 @@ describe('workflow runtime', () => {
   });
 
   describe('timeout', () => {
+    it('times out after 0.5 seconds without continuing after a 2-second node', async () => {
+      const trace: string[] = [];
+      const workflow = await createTestWorkflow(database, {
+        key: 'half-second-timeout',
+        options: { timeout: 0.5 },
+        nodes: [
+          { key: 'wait', type: 'slow', downstreamKey: 'after' },
+          { key: 'after', type: 'trace', upstreamKey: 'wait' },
+        ],
+      });
+      const runtime = await initializeRuntime(
+        new Map([
+          ['slow', createSlowInstruction(2000)],
+          ['trace', createTraceInstruction(trace)],
+        ]),
+        { timeoutReaper: false },
+      );
+
+      await runtime.trigger(workflow, {}, { eventKey: 'half-second-timeout' });
+
+      const runId = await runIdOf('half-second-timeout');
+      const run = await readRun(database, runId);
+      expect(run).toMatchObject({
+        status: EXECUTION_STATUS.ABORTED,
+        reason: EXECUTION_REASON.TIMEOUT,
+        finishedAt: expect.any(String),
+      });
+      expect(
+        new Date(run.expiresAt!).getTime() - new Date(run.startedAt!).getTime(),
+      ).toBe(500);
+      // The instruction ignores cancellation and completes its wait, but its
+      // late result must not turn the workflow into a success or run its successor.
+      await expect(listNodeRuns(database, runId)).resolves.toEqual([
+        { nodeKey: 'wait', status: NODE_RUN_STATUS.RESOLVED, result: 'slow' },
+      ]);
+      expect(trace).toEqual([]);
+    });
+
     it('aborts a run that outlives its timeout while it is still executing', async () => {
       const workflow = await createTestWorkflow(
         database,

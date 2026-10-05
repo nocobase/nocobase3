@@ -4,6 +4,8 @@
   .workflow-node-result-dialog,
   .workflow-comparison-dialog
 ) {
+  /* Muted type accents are independent of execution-status colors. */
+  --workflow-node-icon-lightness: 0.48;
   --workflow-emphasis: var(--foreground);
   --workflow-emphasis-soft: color-mix(
     in oklab,
@@ -42,7 +44,13 @@
   );
 }
 :where(.dark)
-  :where(.workflow-page, .workflow-runs-dialog, .workflow-node-result-dialog) {
+  :where(
+    .workflow-page,
+    .workflow-runs-dialog,
+    .workflow-node-result-dialog,
+    .workflow-comparison-dialog
+  ) {
+  --workflow-node-icon-lightness: 0.76;
   --workflow-success: var(--color-emerald-300);
   --workflow-pending: var(--color-blue-300);
 }
@@ -158,11 +166,24 @@
   height: 18px;
   stroke-width: 2;
 }
+.workflow-flow-node.instruction-run {
+  --workflow-node-icon-color: oklch(
+    var(--workflow-node-icon-lightness) 0.065 250
+  );
+}
+.workflow-flow-node.instruction-condition {
+  --workflow-node-icon-color: oklch(var(--workflow-node-icon-lightness) 0.1 90);
+}
+.workflow-flow-node.instruction-terminate {
+  --workflow-node-icon-color: oklch(
+    var(--workflow-node-icon-lightness) 0.12 25
+  );
+}
 .workflow-flow-node.instruction-run .workflow-flow-icon,
 .workflow-flow-node.instruction-condition .workflow-flow-icon,
 .workflow-flow-node.instruction-terminate .workflow-flow-icon {
-  background: var(--workflow-emphasis);
-  color: var(--primary-foreground);
+  background: var(--workflow-node-icon-color);
+  color: var(--card);
 }
 .workflow-flow-node.boundary .workflow-flow-icon {
   position: static;

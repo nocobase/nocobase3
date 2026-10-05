@@ -22,7 +22,7 @@ import {
   CircleStop,
   Columns3,
   Flag,
-  GitBranch,
+  Split,
   X,
   Rows3,
   Terminal,
@@ -99,7 +99,7 @@ function CanvasNode({ data }: NodeProps<Node<CanvasNodeData>>): ReactElement {
         : terminateInstruction
           ? CircleStop
           : condition
-            ? GitBranch
+            ? Split
             : Terminal;
   return (
     <div
