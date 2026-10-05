@@ -8,11 +8,17 @@ export default defineConfig({
   test: {
     projects: [
       createNodeVitestConfig({
-        test: { name: 'node', include: ['tests/*.test.ts'] },
+        test: {
+          name: 'node',
+          include: ['tests/**/*.test.ts'],
+          exclude: ['tests/client/**'],
+        },
       }),
       createReactVitestConfig({
-        resolve: { dedupe: ['react', 'react-dom', 'react-router'] },
-        test: { name: 'client', include: ['tests/client/**/*.test.tsx'] },
+        test: {
+          name: 'client',
+          include: ['tests/client/**/*.test.{ts,tsx}'],
+        },
       }),
     ],
   },

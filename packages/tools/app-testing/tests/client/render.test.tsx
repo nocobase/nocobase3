@@ -1,5 +1,6 @@
 import {
   ClientApplication,
+  resolveAppUrl,
   useApiClient,
   useService,
   useToaster,
@@ -34,6 +35,28 @@ class GreeterProvider extends ServiceProvider<ClientApplication> {
     });
   }
 }
+
+/** What the application did with `LifecycleProvider`, so a later test can see that an earlier one's app shut down. */
+const lifecycle: string[] = [];
+
+class LifecycleProvider extends ServiceProvider<ClientApplication> {
+  public readonly name: string = '@example/lifecycle';
+
+  public override start(): Promise<void> {
+    lifecycle.push('start');
+    return Promise.resolve();
+  }
+
+  public override shutdown(): Promise<void> {
+    lifecycle.push('shutdown');
+    return Promise.resolve();
+  }
+}
+
+const lifecyclePlugin = defineClientPlugin({
+  packageName: '@example/lifecycle',
+  serviceProviders: [LifecycleProvider],
+});
 
 const examplePlugin = defineClientPlugin({
   packageName: '@example/plugin',
@@ -148,6 +171,64 @@ describe('renderWithApp', () => {
     ]);
   });
 
+  it("loads a plugin's locales given as a function importing its module", async () => {
+    const loadingPlugin = defineClientPlugin({
+      packageName: '@example/loading',
+      locales: () =>
+        Promise.resolve({
+          'en-US': () => Promise.resolve({ title: 'Loaded orders' }),
+        }),
+    });
+    function Title(): ReactElement {
+      return <h1>{useTranslation().t('title')}</h1>;
+    }
+
+    await renderWithApp(<Title />, {
+      plugins: [loadingPlugin()],
+      namespace: '@example/loading',
+    });
+
+    expect(
+      screen.getByRole('heading', { name: 'Loaded orders' }),
+    ).toBeInTheDocument();
+  });
+
+  it('resolves URLs against the mount path, as a page the server rendered does', async () => {
+    function Link(): ReactElement {
+      return <a href={resolveAppUrl('/files/report.pdf')}>Report</a>;
+    }
+    const server = {
+      publicBasePath: '/main',
+      fetch: (): Response => Response.json({ data: [] }),
+    };
+
+    await renderWithApp(<Link />, { server });
+
+    expect(screen.getByRole('link', { name: 'Report' })).toHaveAttribute(
+      'href',
+      '/main/files/report.pdf',
+    );
+  });
+
+  it('removes the configuration it wrote into the document when the test finishes', () => {
+    expect(document.getElementById('nocobase-runtime-config')).toBeNull();
+  });
+
+  it('shuts the application down when the page throws while rendering', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    function Broken(): ReactElement {
+      throw new Error('broken page');
+    }
+
+    await expect(
+      renderWithApp(<Broken />, { plugins: [lifecyclePlugin()] }),
+    ).rejects.toThrow('broken page');
+  });
+
+  it('leaves no application running after a page that threw while rendering', () => {
+    expect(lifecycle).toEqual(['start', 'shutdown']);
+  });
+
   it('fails a request nothing answers instead of sending it anywhere', async () => {
     const errors: unknown[] = [];
     function Probe(): ReactElement {
@@ -207,5 +288,32 @@ describe('renderWithApp', () => {
       json: { all: true },
     });
     expect(api).toHaveBeenCalledWith({ method: 'GET', path: 'orders' });
+  });
+
+  it('answers a request whose JSON body cannot be parsed with status 500 instead of failing the fetch', async () => {
+    const api = vi.fn(() => ({ data: [] }));
+    const errors: unknown[] = [];
+    function Probe(): ReactElement {
+      const client = useApiClient();
+      useEffect(() => {
+        void client
+          .request({
+            path: 'orders',
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: 'not json',
+          })
+          .catch((error: unknown) => {
+            errors.push(error);
+          });
+      }, [client]);
+      return <p>Probe</p>;
+    }
+
+    await renderWithApp(<Probe />, { fetch: answerApi(api) });
+
+    await waitFor(() => expect(errors).toHaveLength(1));
+    expect(String(errors[0])).toContain('JSON');
+    expect(api).not.toHaveBeenCalled();
   });
 });

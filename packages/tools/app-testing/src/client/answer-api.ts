@@ -14,15 +14,14 @@ export interface ApiCall {
  * way a page uses it rather than by building responses. The handler returns, or resolves to, the body to send as JSON
  * with status 200, or a `Response` to send as it is, such as one with another status. A handler that throws answers
  * with status 500 and the error's message, which the API client reports as a failed request, as it would a server
- * error.
+ * error; so does a request whose JSON body cannot be parsed, as a server would refuse it.
  */
 export function answerApi(
   handler: (call: ApiCall) => unknown,
 ): (request: Request) => Promise<Response> {
   return async (request: Request): Promise<Response> => {
-    const call = await readCall(request);
     try {
-      const answer = await handler(call);
+      const answer = await handler(await readCall(request));
       return answer instanceof Response
         ? answer
         : Response.json(answer ?? null);

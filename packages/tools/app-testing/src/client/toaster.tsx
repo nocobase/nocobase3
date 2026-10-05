@@ -68,13 +68,13 @@ export class TestToaster implements Toaster {
     toast.options.onClose?.();
   }
 
-  /** The toasts open now, oldest first. */
+  /** The toasts open now, oldest first, without the options and timer behind each. */
   public list(): readonly TestToast[] {
     return this.toasts.map(({ id, type, title, description }): TestToast => ({
       id,
-      ...(type === undefined ? {} : { type }),
+      type,
       title,
-      ...(description === undefined ? {} : { description }),
+      description,
     }));
   }
 

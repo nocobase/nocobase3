@@ -14,6 +14,7 @@ import {
   defineAppRuntime,
   resolveAppRuntime,
 } from '@nocobase/app-client/runtime';
+import { resolveLocalesContribution } from '@nocobase/i18n';
 import { I18nProvider, NamespaceScope } from '@nocobase/i18n/client';
 import {
   createTestI18nRuntime,
@@ -101,9 +102,17 @@ export async function renderWithApp(
 ): Promise<RenderedApp> {
   const plugins = options.plugins ?? [];
   const toaster = new TestToaster();
-  const apiRoot = options.server
-    ? `${TEST_ORIGIN}${trimTrailingSlash(options.server.publicBasePath)}/api`
-    : `${TEST_ORIGIN}/api`;
+  const basePath = options.server
+    ? trimTrailingSlash(options.server.publicBasePath)
+    : '';
+  const apiRoot = `${TEST_ORIGIN}${basePath}/api`;
+  const rawConfig = mergeSections(
+    { app: { basePath: basePath || '/' }, api: { baseURL: apiRoot } },
+    options.config ?? {},
+  );
+  // The page reads the mount path the server rendered into it, as `resolveAppUrl()` does, so the block the server
+  // renders is written into the document for the test.
+  const removeConfigBlock = writeRuntimeConfigBlock(rawConfig);
 
   class TestServiceProvider extends ServiceProvider<ClientApplication> {
     public readonly name: string = '@nocobase/app-testing/client';
@@ -116,20 +125,20 @@ export async function renderWithApp(
     }
   }
 
-  const resolved = await resolveAppRuntime(
-    defineAppRuntime({
-      packageName: '@nocobase/app-testing',
-      createAppConfig: createAppClientConfig,
-      serviceProviders: [TestServiceProvider],
-      plugins: defineClientPlugins(plugins),
-    }),
-    {
-      rawConfig: mergeSections(
-        { app: { basePath: '/' }, api: { baseURL: apiRoot } },
-        options.config ?? {},
-      ),
-      rawPublicConfig: {},
-    },
+  // A plugin's locales may be a function importing its locale module; the test runtime takes the module itself.
+  const pluginLocales = await Promise.all(
+    plugins.flatMap((plugin) =>
+      plugin.locales
+        ? [
+            resolveLocalesContribution(plugin.locales).then(
+              (locales): [string, TestNamespaceResources] => [
+                plugin.packageName,
+                locales,
+              ],
+            ),
+          ]
+        : [],
+    ),
   );
   const i18n = await createTestI18nRuntime({
     ...(options.locale ? { locale: options.locale } : {}),
@@ -137,15 +146,20 @@ export async function renderWithApp(
       ? {}
       : { strict: options.strictTranslations }),
     namespaces: {
-      ...Object.fromEntries(
-        plugins.flatMap((plugin) =>
-          plugin.locales ? [[plugin.packageName, plugin.locales]] : [],
-        ),
-      ),
+      ...Object.fromEntries(pluginLocales),
       ...options.namespaces,
     },
   });
-  const runtime = { ...resolved, i18n };
+  // The strict runtime stands in for the one the application would build, so each locale module loads once.
+  const runtime = await resolveAppRuntime(
+    defineAppRuntime({
+      packageName: '@nocobase/app-testing',
+      createAppConfig: createAppClientConfig,
+      serviceProviders: [TestServiceProvider],
+      plugins: defineClientPlugins(plugins),
+    }),
+    { rawConfig, rawPublicConfig: {}, i18n },
+  );
   const AppI18nProvider = ({ children }: PropsWithChildren): ReactElement =>
     createElement(I18nProvider, { runtime: i18n }, children);
   const AppToasts = ({ children }: PropsWithChildren): ReactElement =>
@@ -155,7 +169,7 @@ export async function renderWithApp(
     fetch: createFetch(options, apiRoot),
     createRenderConfig: (): AppClientRenderConfig =>
       defineAppClientRenderConfig({
-        basename: '/',
+        basename: runtime.basename,
         reactProviders: [
           AppI18nProvider,
           ...runtime.reactProviders.map((provider) => provider.component),
@@ -165,6 +179,13 @@ export async function renderWithApp(
       }),
   });
   runtime.app = app;
+  // Registered before the page renders, so a page that throws while rendering still takes the application with it.
+  // Testing Library's own cleanup unmounts the page first; a start that fails shuts the application down itself.
+  onTestFinished(async () => {
+    toaster.dispose();
+    removeConfigBlock();
+    await app.shutdown();
+  });
   await app.start();
 
   const view = render(
@@ -178,15 +199,30 @@ export async function renderWithApp(
       </AppClientProviders>
     </MemoryRouter>,
   );
-  // Testing Library's own cleanup unmounts the page; the application behind it goes with the test.
-  onTestFinished(async () => {
-    toaster.dispose();
-    await app.shutdown();
-  });
   return Object.assign(view, {
     app,
     toasts: (): readonly TestToast[] => toaster.list(),
   });
+}
+
+/** The id and shape of the block the server renders into the page, as `@nocobase/app-client` reads them. */
+const RUNTIME_CONFIG_ELEMENT_ID = 'nocobase-runtime-config';
+
+/**
+ * Writes the client configuration into the document the way the server renders it, so `resolveAppUrl()` and
+ * `resolveAppBase()` find the mount path. Returns what removes it again. A block already in the document — one the
+ * test wrote itself — is left alone.
+ */
+function writeRuntimeConfigBlock(config: Record<string, unknown>): () => void {
+  if (document.getElementById(RUNTIME_CONFIG_ELEMENT_ID)) return () => {};
+  const element = document.createElement('script');
+  element.id = RUNTIME_CONFIG_ELEMENT_ID;
+  element.type = 'application/json';
+  element.textContent = JSON.stringify({ version: 1, config });
+  document.head.append(element);
+  return (): void => {
+    element.remove();
+  };
 }
 
 /**
