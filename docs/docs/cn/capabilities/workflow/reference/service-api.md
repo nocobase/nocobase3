@@ -1,10 +1,10 @@
 ---
-title: '触发与扩展 API'
-description: '从业务代码或定时任务触发工作流，使用 eventKey 去重，并注册自定义节点。'
+title: '触发工作流'
+description: '从业务代码或定时任务触发工作流，使用 eventKey 去重，处理触发结果。'
 keywords: 'NocoBase,Service API,trigger,eventKey,定时任务,Instruction'
 ---
 
-# 触发与扩展 API
+# 触发工作流
 
 编写工作流不会让它自动响应任何业务事件。工作流有三种触发方式：
 
@@ -14,9 +14,11 @@ keywords: 'NocoBase,Service API,trigger,eventKey,定时任务,Instruction'
 | 定时触发     | 按固定时间执行，例如每日报表、夜间检查         | 定时任务的内置 `workflow` 执行目标 |
 | 手动运行     | 验证新版本、管理员发起的一次性处理             | 业务管理员在管理界面操作           |
 
-手动运行见[手动运行工作流](../management/manual-runs.md)。本页介绍前两种，以及如何注册自定义节点。
+手动运行见[手动运行工作流](../management/manual-runs.md)。本页介绍前两种。需要扩展节点能力时，参见[自定义节点](./custom-instructions.md)。
 
 ## 从业务代码触发
+
+业务操作成功后，由拥有该事件的代码完成输入构造和调用。交给 Agent 实现的步骤和验收要求见[开发流程](../development/process.md#业务事件触发)。
 
 ### 获取工作流服务
 
@@ -51,17 +53,17 @@ if (receipt.status === 'skipped') {
   // receipt.reason 为 'not-found'（没有当前定义）或 'disabled'（已停用）
   return;
 }
-// accepted：运行已被接受，receipt.eventKey 是本次事件的身份
+// accepted：事件已被接受，receipt.runId 指向新建或已有的运行
 ```
 
-- `accepted`：运行已创建，在后台异步执行。它不代表业务成功，最终状态以运行记录为准；
+- `accepted`：事件已被接受，`runId` 指向新建或已有的运行。重复 eventKey 会返回已有运行，不会重新执行它，也不代表业务成功，最终状态以运行记录为准；
 - `skipped`：没有创建运行，也就没有可以查询的运行记录。应根据 `reason` 修正部署或按业务约定处理。
 
 即使工作流存在且已启用，输入无效、输入过大或嵌套调用超限时仍会抛出错误。
 
 ### 使用 eventKey 避免重复运行
 
-eventKey 表示一次业务事件的身份：
+eventKey 表示一次业务事件的身份，在应用内全局去重，不仅限于某个工作流。建议包含业务事件类型或工作流标识，避免不同业务误用同一个 key：
 
 - 同一事件因网络或队列重试再次触发时，使用同一个 key，只会产生一次运行；
 - 真正的新事件使用新 key，例如新的库存变更版本、新一版报价；
@@ -69,7 +71,9 @@ eventKey 表示一次业务事件的身份：
 
 不要用每次调用都会变化的时间戳作为同一业务事件的 key。
 
-eventKey 只能回答“这是不是同一次流程调用”，不能回答“这个副作用是不是已经完成”。Run 节点可能因恢复或人工操作再次执行，所以创建记录、发起支付或发送通知时，仍要使用业务唯一键、数据库唯一约束或外部系统的幂等键。
+eventKey 只能回答“这是不是同一次流程调用”，不能回答“这个副作用是不是已经完成”。管理员创建新运行或应用执行恢复操作时，业务动作可能再次执行，所以创建记录、发起支付或发送通知时，仍要使用业务唯一键、数据库唯一约束或外部系统的幂等键。
+
+相同 eventKey 对应的运行即使已经失败，也不会因再次触发而重跑。当前公开 Service 不提供失败运行的重放接口。需要恢复时，先确认已经发生的副作用，再决定是否创建新运行或显式补偿；新运行使用新的调用身份，业务写入仍使用原业务唯一键保证幂等。
 
 ### 在哪里触发
 
@@ -79,45 +83,9 @@ eventKey 只能回答“这是不是同一次流程调用”，不能回答“�
 
 ## 定时触发
 
-需要按时间执行时，不必自己写定时逻辑。工作流插件为[定时任务](../../scheduler.md)注册了内置的 `workflow` 执行目标：定时任务负责“什么时候执行”，工作流负责“执行哪些步骤”，定时任务的配置中只需引用工作流目录名和输入。直接告诉 Agent，例如：
-
-```text
-请让<工作流的业务名称>每天 1 点（Asia/Shanghai）自动执行一次，使用定时任务的内置 workflow 执行目标，完成后告诉我如何在界面中确认执行记录。
-```
+需要按时间执行时，不必自己写定时逻辑。工作流插件为[定时任务](../../scheduler.md)注册了内置的 `workflow` 执行目标：定时任务负责“什么时候执行”，工作流负责“执行哪些步骤”，定时任务的配置中只需引用工作流目录名和输入。交给 Agent 配置的步骤和验收要求见[开发流程](../development/process.md#定时触发)。
 
 每次定时执行会以该次调度作为事件身份，不会重复运行。工作流不存在、已停用或输入不符合要求时，定时任务的执行记录中会显示失败或跳过原因。
-
-## 自定义节点
-
-优先使用已安装的节点。应用自己的计算、增删改查、发送通知或调用外部接口，用 Run 加类型化 Service 即可，一次邮件调用本身不需要新的节点类型。只有下面两种情况才考虑自定义节点（Instruction）：
-
-- 多个工作流需要同一种可复用操作，并且它有自己需要校验的配置和结果；
-- 需要 Run 无法表达的流程控制语义。注意，持久等待、审批、循环和子流程需要专门的生命周期支持，仅实现一个同步完成的节点并不能提供这些能力。
-
-一个自定义节点由三部分组成，Agent 会按 Skill 中的完整示例实现，你只需确认这三部分都已到位：
-
-1. **服务端 Instruction 类**：继承 `@nocobase/app-plugin-workflow/server` 导出的 `WorkflowInstruction`，提供唯一的 `type`、`branches`（顺序节点为 `null`）、同步的 `validateConfig()` 和异步的 `run()`；
-2. **定义端工厂函数**：用 `@nocobase/app-plugin-workflow/dsl` 导出的 `createNode()` 包装一个工厂，让 `workflow.ts` 可以像内置节点一样通过 `addNode()` 添加它，同时不会在定义中加载服务端代码；
-3. **注册**：在应用 Provider 的 `boot()` 中调用 `workflow.registerInstruction(CustomInstruction)`。重复的 type 会被拒绝。
-
-```ts
-// server/providers/workflow-instructions.ts
-export default class WorkflowInstructionsProvider extends ServiceProvider<Application> {
-  readonly name: string = 'workflow-instructions';
-
-  async boot(): Promise<void> {
-    const { LabelInstruction } =
-      await import('../workflow-instructions/label.js');
-    this.app.container
-      .resolve(workflowServiceToken)
-      .registerInstruction(LabelInstruction);
-  }
-}
-```
-
-只在运行时注册还不够：源码检查和 Artifact 构建也必须使用同一组节点类型。默认的 `pnpm nocobase workflow check` 只认识 Run、Condition 和 Terminate，它拒绝一个自定义节点并不说明该节点无效；使用自定义节点的工作流需要通过 `@nocobase/app-plugin-workflow/build` 的 `checkWorkflowPackage()` 和 `buildApplicationWorkflows()`，传入包含内置节点和所有扩展节点的同一组合同。开发环境（`pnpm dev`）按运行时实际注册的节点校验，不需要额外配置。
-
-完整的可运行示例（节点类、工厂、Provider、检查与构建脚本）在工作流 Skill 的 `references/custom-instructions.md` 中。
 
 ## 常见问题
 

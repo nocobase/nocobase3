@@ -2,17 +2,12 @@
   {
     "type": "file",
     "name": "index",
-    "label": "与 Agent 协作开发"
+    "label": "概览与准备"
   },
   {
     "type": "file",
-    "name": "using-skill",
-    "label": "提示词手册"
-  },
-  {
-    "type": "file",
-    "name": "design",
-    "label": "从业务需求到工作流"
+    "name": "process",
+    "label": "开发流程"
   },
   {
     "type": "file",

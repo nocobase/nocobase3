@@ -6,7 +6,7 @@ keywords: 'NocoBase,Workflow DSL,workflow,defineHandler,TypeBox,parameters'
 
 # 工作流定义 DSL
 
-本页是审阅 Agent 生成代码时的参考。工作流通常由应用 Agent 编写，你不需要记住这里的细节；精确的编写规则以工作流插件随包发布的 Skill 为准。
+本页说明工作流定义的公开写法、约束和最小示例，供开发者和 Agent 编写或审阅代码时查阅。工作流插件随包发布的 Skill 提供应用内的开发步骤和检查指导。
 
 NocoBase 3 用 TypeScript 的类型化 builder 描述工作流。定义只表达可版本化的流程结构：输入、参数、节点顺序和分支；计算、查询、写入和外部调用都放在处理函数中，由处理函数调用应用的 Service。
 
@@ -29,7 +29,7 @@ workflows/quotation-routing/
 
 ## 完整示例
 
-下面的报价路由工作流包含输入、管理员参数、Run 节点、带两个分支的 Condition 节点，以及分支后的共同后继。`examples` 模板中的 `workflows/example-quotation-routing/` 是一个可以直接运行的同类示例。
+下面的报价路由工作流包含输入、管理员参数、Run 节点、带两个分支的 Condition 节点，；本例在所选分支执行完后结束。`examples` 模板中的 `workflows/example-quotation-routing/` 是一个可以直接运行的同类示例。
 
 ```ts
 // workflows/quotation-routing/workflow.ts
@@ -135,12 +135,36 @@ import type { FlowContext } from '../workflow';
 
 export function run({ nodeResults, parameters }: FlowContext): boolean {
   const calculated = nodeResults.calculate;
-  return (
-    calculated !== undefined &&
-    calculated.totalCents >= parameters.reviewThresholdCents
-  );
+  if (calculated === undefined) throw new Error('缺少报价计算结果');
+  const threshold = parameters.reviewThresholdCents;
+  if (typeof threshold !== 'number') throw new Error('缺少人工跟进阈值');
+  return calculated.totalCents >= threshold;
 }
 ```
+
+```ts
+// workflows/quotation-routing/server/record-route.ts
+import type { WorkflowRunOptions } from '@nocobase/app-plugin-workflow';
+import type { FlowContext } from '../workflow';
+
+export function run(
+  { input, nodeResults }: FlowContext,
+  options: WorkflowRunOptions,
+): { quotationId: string; route: string } {
+  options.signal.throwIfAborted();
+  if (typeof nodeResults.needsFollowUp !== 'boolean') {
+    throw new Error('缺少报价判断结果');
+  }
+  const result = {
+    quotationId: input.quotationId,
+    route: nodeResults.needsFollowUp ? 'manual-follow-up' : 'standard',
+  };
+  options.logger.info('报价路径已选择', result);
+  return result;
+}
+```
+
+本例只返回分类结果并记录日志，不写入业务表，也不等待人工审批。使用默认阈值时，输入 `{ "quotationId": "Q-100", "amountCents": 150000 }` 应进入“人工跟进”分支，返回 `route: 'manual-follow-up'`；将金额改为 `50000` 应进入“标准处理”分支。
 
 要点：
 
@@ -162,7 +186,7 @@ export function run({ nodeResults, parameters }: FlowContext): boolean {
 | `inputSchema` | 否       | 没有自定义表单时 `input: { schema }` 的简写              |
 | `options`     | 否       | 版本级的执行设置，见下文                                 |
 
-没有 `trigger`、`start`、节点 Map 或连线列表：触发方式在定义之外决定，见[触发与扩展 API](./service-api.md)。
+没有 `trigger`、`start`、节点 Map 或连线列表：触发方式在定义之外决定，见[触发工作流](./service-api.md)。
 
 `options` 目前支持：
 
@@ -216,7 +240,7 @@ parameters: {
 
 ## 自定义输入和参数表单
 
-默认表单只适合顶层的字符串和数字字段。需要布尔开关、复杂输入或更友好的说明时，在 `input` 或 `parameters` 中指定 `form`：
+默认输入表单支持顶层字符串、数字、整数和布尔字段；默认参数表单适合字符串和数字字段，布尔参数需要自定义控件。需要复杂输入或更友好的说明时，在 `input` 或 `parameters` 中指定 `form`：
 
 ```ts
 parameters: {
@@ -263,10 +287,6 @@ parameters: {
 - 不要使用 `Date.now()`、随机数、当前时区、机器绝对路径、环境变量分支或网络调用；
 - 会变化的业务数据放进处理函数、输入或管理员参数。
 
-## 旧写法
-
-早期版本使用 `defineWorkflow()` 加 `RunInstruction.create({ config: { module, args }, result })`，通过 `{{$input.x}}` 这样的模板给节点传参。这套底层 API 仍然可用，但新代码应使用 builder。原来的 JSON Logic 条件表达式已经移除，必须改写为返回布尔值的处理函数。迁移提示词见[提示词手册](../development/using-skill.md#迁移旧写法)。
-
 ## 常见问题
 
 ### 为什么处理函数里读到的节点结果可能是 undefined
@@ -275,7 +295,7 @@ parameters: {
 
 ### 为什么不能在定义里值导入处理函数
 
-值导入会在检查和加载定义时执行处理函数及其依赖，例如数据库客户端。定义只需要函数签名，所以用 `import type`，运行时再按模块路径加载。
+值导入会在检查和加载定义时加载处理模块及其依赖，并执行它们的顶层代码，例如数据库客户端的初始化。定义只需要函数签名，所以用 `import type`，运行时再按模块路径加载。
 
 ### 为什么某些 JSON Schema 关键字不可用
 

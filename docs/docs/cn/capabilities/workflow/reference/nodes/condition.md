@@ -39,11 +39,12 @@ import type { FlowContext } from '../workflow';
 
 export function run({ nodeResults }: FlowContext): boolean {
   const shortage = nodeResults.calculateShortage;
-  return shortage !== undefined && shortage.quantity > 0;
+  if (shortage === undefined) throw new Error('缺少补货缺口计算结果');
+  return shortage.quantity > 0;
 }
 ```
 
-上游结果可能尚未产生，必须处理 `undefined`；结果类型由上游处理函数的返回类型推导，不需要手写。
+读取上游结果时必须处理 `undefined`。本例依赖必经的缺口计算节点，结果缺失时应抛出错误；只有业务明确允许缺失时，才使用默认值或默认分支。结果类型由上游处理函数的返回类型推导，不需要手写。
 
 判断逻辑是普通 TypeScript，和工作流包的其余代码一起做类型检查，可以单独写单元测试，没有表达式语言的限制。代价是阅读判断规则需要打开对应模块，所以应在节点 `description` 中写清规则。
 

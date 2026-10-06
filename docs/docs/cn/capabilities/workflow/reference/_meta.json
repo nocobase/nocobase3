@@ -13,6 +13,11 @@
   {
     "type": "file",
     "name": "service-api",
-    "label": "触发与扩展 API"
+    "label": "触发工作流"
+  },
+  {
+    "type": "file",
+    "name": "custom-instructions",
+    "label": "自定义节点"
   }
 ]
