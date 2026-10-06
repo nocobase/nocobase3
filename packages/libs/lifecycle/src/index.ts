@@ -80,6 +80,7 @@ export type {
   NewEffectRun,
   NewTransitionEntry,
   RecordCondition,
+  TransactionOptions,
   TransitionEntry,
 } from './store.js';
 export { toMermaid, type MermaidOptions } from './mermaid.js';

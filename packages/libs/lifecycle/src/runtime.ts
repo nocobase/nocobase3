@@ -29,6 +29,7 @@ import type {
   EffectRunQuery,
   IdleRecordCursor,
   LifecycleStore,
+  TransactionOptions,
   TransitionEntry,
 } from './store.js';
 import {
@@ -113,6 +114,16 @@ export interface FireOptions {
    * retries of one action, and take a new one for each new decision.
    */
   readonly requestId?: string;
+  /**
+   * A transaction to join instead of opening one: the `transactionHandle`
+   * an `onTransition` or a services factory receives, or the
+   * `@nocobase/db` connection the caller's own transaction received, on the
+   * connection the store writes to. The transition is nested in it, so a
+   * refusal undoes only the transition's own writes, and its effects and
+   * listeners wait for the outermost commit — a rollback drops them. When
+   * `fire()` returns, its effect runs are still queued.
+   */
+  readonly transaction?: unknown;
 }
 
 export interface FireResult {
@@ -193,6 +204,8 @@ export interface CreateOptions {
   readonly state?: string;
   /** Kept on the creation's log entry, as a transition's input is. */
   readonly input?: JsonObject;
+  /** A transaction to join instead of opening one; see {@link FireOptions.transaction}. */
+  readonly transaction?: unknown;
 }
 
 /** What happened, told after it committed. */
@@ -311,6 +324,10 @@ function isRefusal(
   return error instanceof LifecycleError && codes.has(error.code);
 }
 
+function joining(transaction: unknown): TransactionOptions | undefined {
+  return transaction === undefined ? undefined : { within: transaction };
+}
+
 /** The delay before retrying after `attempt`: grows by `factor`, capped at `maxMs`. */
 function backoffMs(retry: EffectRetry | undefined, attempt: number): number {
   const base = retry?.backoffMs ?? 0;
@@ -427,7 +444,9 @@ export class LifecycleRuntime {
   /**
    * Fires one transition. The state check, the record update, the log entry
    * and the effect runs it owes are one transaction; effects are dispatched
-   * only after it commits.
+   * and listeners told only after it commits. With `transaction`, that is
+   * the caller's: the transition is nested in it and its effects wait for
+   * its outermost commit.
    */
   public async fire(
     name: string,
@@ -437,13 +456,26 @@ export class LifecycleRuntime {
   ): Promise<FireResult> {
     const registered = this.get(name);
     const now = this.clock();
-    const committed = await this.store.transaction((store) =>
-      this.decide(store, registered, id, transition, options, now),
-    );
-    if (committed.replayed) return committed;
-    await this.emit(registered, committed, options.actor);
-    for (const run of committed.effectRuns) await this.handOver(run.id, null);
-    return committed;
+    return this.store.transaction(async (store) => {
+      const outcome: { decided?: FireResult } = {};
+      // Registered before deciding, so after the commit this transition is
+      // told about before anything its onTransition started.
+      store.afterCommit(() => {
+        const { decided } = outcome;
+        return decided && !decided.replayed
+          ? this.settle(registered, decided, options.actor)
+          : undefined;
+      });
+      outcome.decided = await this.decide(
+        store,
+        registered,
+        id,
+        transition,
+        options,
+        now,
+      );
+      return outcome.decided;
+    }, joining(options.transaction));
   }
 
   /**
@@ -573,6 +605,8 @@ export class LifecycleRuntime {
    * record in an initial state, a log entry from nothing, and the effect runs
    * the state's `onEnter` owes, so a record's history starts where it does.
    * A refusal writes nothing and is a `LifecycleError` as a transition's is.
+   * With `transaction`, the creation joins the caller's transaction as
+   * `fire()` does, so a parent can create its children in its own.
    */
   public async create(
     name: string,
@@ -599,7 +633,7 @@ export class LifecycleRuntime {
         );
     const now = this.clock();
     const at = now.toISOString();
-    const committed = await this.store.transaction(async (store) => {
+    return this.store.transaction(async (store) => {
       await checkCreation(lifecycle, {
         values,
         state,
@@ -635,11 +669,10 @@ export class LifecycleRuntime {
         entry,
         lifecycle.onEnter.get(state) ?? [],
       );
-      return { record, entry, effectRuns };
-    });
-    await this.emit(registered, committed, options.actor);
-    for (const run of committed.effectRuns) await this.handOver(run.id, null);
-    return committed;
+      const created: FireResult = { record, entry, effectRuns };
+      store.afterCommit(() => this.settle(registered, created, options.actor));
+      return created;
+    }, joining(options.transaction));
   }
 
   /** The names of the registered lifecycles. */
@@ -922,11 +955,7 @@ export class LifecycleRuntime {
     if (finished === undefined) this.discarded(effect.name, runId, attempt);
     // A forced retry that failed again: its continuation already ran.
     else if (finished?.replayed) return this.store.findEffectRun(runId);
-    else if (finished) {
-      await this.emit(registered, finished, SYSTEM_ACTOR);
-      for (const owed of finished.effectRuns)
-        await this.handOver(owed.id, null);
-    }
+    else if (finished) await this.settle(registered, finished, SYSTEM_ACTOR);
     if (!outcome.ok)
       this.logger.warn(
         `Effect "${effect.name}" failed after ${attempt} attempt(s)`,
@@ -1363,6 +1392,16 @@ export class LifecycleRuntime {
       );
     const effectRuns = await this.owe(store, lifecycle, entry, plan.effects);
     return { record, entry, effectRuns };
+  }
+
+  /** What follows a commit: listeners hear of it, and its effects are handed over. */
+  private async settle(
+    registered: Registered,
+    committed: FireResult,
+    actor: LifecycleActor,
+  ): Promise<void> {
+    await this.emit(registered, committed, actor);
+    for (const run of committed.effectRuns) await this.handOver(run.id, null);
   }
 
   /** Tells the listeners about a committed transition; a failing listener is logged, never thrown. */

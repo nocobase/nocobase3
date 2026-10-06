@@ -19,6 +19,7 @@ import type {
   NewEffectRun,
   NewTransitionEntry,
   RecordCondition,
+  TransactionOptions,
   TransitionEntry,
 } from './store.js';
 import type {
@@ -77,6 +78,20 @@ function asRow(input: Readonly<Record<string, unknown>>): RepositoryRecord {
   return input as RepositoryRecord;
 }
 
+/** What `within` must be here: a `@nocobase/db` connection, usually one a transaction received. */
+function connectionOf(handle: unknown): DatabaseConnection {
+  const candidate = handle as Partial<DatabaseConnection> | null;
+  if (
+    typeof candidate?.transaction !== 'function' ||
+    typeof candidate.afterCommit !== 'function' ||
+    typeof candidate.repository !== 'function'
+  )
+    throw new Error(
+      'A Repository lifecycle store nests a transaction only within a @nocobase/db connection, such as the one a transaction received.',
+    );
+  return handle as DatabaseConnection;
+}
+
 function toTransition(row: Row): TransitionEntry {
   return {
     id: String(row.id),
@@ -126,13 +141,28 @@ class RepositoryLifecycleStore implements LifecycleStore {
     private readonly begin: <R>(
       work: (store: LifecycleStore) => Promise<R>,
     ) => Promise<R>,
+    private readonly nest: <R>(
+      connection: DatabaseConnection,
+      work: (store: LifecycleStore) => Promise<R>,
+    ) => Promise<R>,
     public readonly transactionHandle?: DatabaseConnection,
   ) {}
 
   public transaction<R>(
     work: (store: LifecycleStore) => Promise<R>,
+    options: TransactionOptions = {},
   ): Promise<R> {
-    return this.begin(work);
+    return options.within === undefined
+      ? this.begin(work)
+      : this.nest(connectionOf(options.within), work);
+  }
+
+  public afterCommit(callback: () => void | Promise<void>): void {
+    if (!this.transactionHandle)
+      throw new Error(
+        'afterCommit is only available inside a transaction, on the store its work receives.',
+      );
+    this.transactionHandle.afterCommit(callback);
   }
 
   public async findRecord(
@@ -343,7 +373,9 @@ class RepositoryLifecycleStore implements LifecycleStore {
  * A store over `@nocobase/db` Repositories. Inside a transaction its
  * `transactionHandle` is the transaction's `DatabaseConnection`: a service
  * that reads from a guard must use it, because on SQLite the transaction
- * holds the only connection and a read elsewhere would wait for it forever. Records are read and written
+ * holds the only connection and a read elsewhere would wait for it forever.
+ * A transaction `within` a caller's connection is a savepoint on it, so a
+ * lifecycle call can join the caller's transaction. Records are read and written
  * through the lifecycle's own collection, so its field types are encoded per
  * dialect the way every other write to that collection is.
  */
@@ -353,7 +385,23 @@ export function createRepositoryLifecycleStore(
 ): LifecycleStore {
   const name = options.connection;
   const names: CollectionNames = options.collections ?? LIFECYCLE_COLLECTIONS;
-  const outer: LifecycleStore = new RepositoryLifecycleStore(
+  // A transaction opened on a transaction connection is a savepoint of it,
+  // whose afterCommit callbacks wait for the outermost commit.
+  const nest = <R>(
+    connection: DatabaseConnection,
+    work: (store: LifecycleStore) => Promise<R>,
+  ): Promise<R> =>
+    connection.transaction((transaction) => {
+      const inner: LifecycleStore = new RepositoryLifecycleStore(
+        names,
+        (collection) => transaction.repository(collection),
+        (nested) => nested(inner),
+        nest,
+        transaction,
+      );
+      return work(inner);
+    });
+  return new RepositoryLifecycleStore(
     names,
     (collection) => database.repository(collection, name),
     (work) =>
@@ -362,10 +410,11 @@ export function createRepositoryLifecycleStore(
           names,
           (collection) => connection.repository(collection),
           (nested) => nested(inner),
+          nest,
           connection,
         );
         return work(inner);
       }, name),
+    nest,
   );
-  return outer;
 }

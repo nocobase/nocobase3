@@ -147,4 +147,95 @@ describe('memory store transactions', () => {
     );
     expect(store.record('orders', created.id)).toEqual(created);
   });
+
+  it('nests a transaction within a running one, as a savepoint', async () => {
+    const store = new MemoryLifecycleStore();
+    const committed: string[] = [];
+    await store.transaction(async (outer) => {
+      await outer.createRecord('orders', { id: 'kept', status: 'waiting' });
+      outer.afterCommit(() => void committed.push('outer'));
+      await expect(
+        store.transaction(
+          async (inner) => {
+            await inner.createRecord('orders', {
+              id: 'undone',
+              status: 'waiting',
+            });
+            inner.afterCommit(() => void committed.push('refused'));
+            throw new Error('Refused.');
+          },
+          { within: outer.transactionHandle },
+        ),
+      ).rejects.toThrow('Refused.');
+      await store.transaction(
+        async (inner) => {
+          await inner.createRecord('orders', {
+            id: 'nested',
+            status: 'waiting',
+          });
+          inner.afterCommit(() => void committed.push('nested'));
+        },
+        { within: outer.transactionHandle },
+      );
+      // Nothing runs before the outermost transaction commits.
+      expect(committed).toEqual([]);
+    });
+    expect(committed).toEqual(['outer', 'nested']);
+    expect(store.record('orders', 'kept')).toBeDefined();
+    expect(store.record('orders', 'nested')).toBeDefined();
+    expect(store.record('orders', 'undone')).toBeUndefined();
+  });
+
+  it('undoes a nested transaction that succeeded when the outer one fails', async () => {
+    const store = new MemoryLifecycleStore();
+    const committed: string[] = [];
+    await expect(
+      store.transaction(async (outer) => {
+        await store.transaction(
+          async (inner) => {
+            await inner.createRecord('orders', {
+              id: 'nested',
+              status: 'waiting',
+            });
+            inner.afterCommit(() => void committed.push('nested'));
+          },
+          { within: outer.transactionHandle },
+        );
+        throw new Error('The outer transaction fails.');
+      }),
+    ).rejects.toThrow('outer transaction fails');
+    expect(store.record('orders', 'nested')).toBeUndefined();
+    expect(committed).toEqual([]);
+  });
+
+  it('runs commit callbacks once the next transaction may start', async () => {
+    const store = new MemoryLifecycleStore();
+    let inside: unknown;
+    await store.transaction((tx) => {
+      tx.afterCommit(async () => {
+        // A callback that opens a transaction of its own does not wait forever.
+        inside = await store.transaction((next) =>
+          next.createRecord('orders', { status: 'waiting' }),
+        );
+      });
+      return Promise.resolve();
+    });
+    expect(inside).toMatchObject({ status: 'waiting' });
+  });
+
+  it('refuses afterCommit outside a transaction, and a handle that is not its own', async () => {
+    const store = new MemoryLifecycleStore();
+    expect(store.transactionHandle).toBeUndefined();
+    expect(() => store.afterCommit(() => undefined)).toThrow(
+      /inside a transaction/,
+    );
+    const other = new MemoryLifecycleStore();
+    await other.transaction(async (tx) => {
+      await expect(
+        store.transaction(() => Promise.resolve(), {
+          within: tx.transactionHandle,
+        }),
+      ).rejects.toThrow(/one of its own running transactions/);
+    });
+  });
 });

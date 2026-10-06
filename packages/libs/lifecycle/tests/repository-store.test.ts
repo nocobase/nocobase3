@@ -351,6 +351,113 @@ describe('Repository lifecycle store', () => {
     ).toMatchObject({ status: 'awaitingCustomer' });
   });
 
+  it('joins a caller’s transaction, and dispatches the effects once it commits', async () => {
+    const lifecycle = runtime();
+    const id = await database.transaction(async (tx) => {
+      const { record } = await lifecycle.create(
+        'tickets',
+        { customerEmail: 'a@example.com' },
+        { actor: { id: 'agent' }, transaction: tx },
+      );
+      const result = await lifecycle.fire(
+        'tickets',
+        record.id,
+        'replyToCustomer',
+        {
+          actor: { id: 'agent' },
+          input: { message: 'Please confirm' },
+          transaction: tx,
+        },
+      );
+      expect(result.effectRuns).toMatchObject([{ status: 'queued' }]);
+      expect(sent).toEqual([]);
+      return String(record.id);
+    });
+    expect(sent).toEqual(['a@example.com']);
+    expect(
+      (await lifecycle.history('tickets', id)).transitions.map(
+        (entry) => entry.transition,
+      ),
+    ).toEqual([CREATE_TRANSITION, 'replyToCustomer']);
+  });
+
+  it('rolls back with the caller’s transaction, and dispatches nothing', async () => {
+    const lifecycle = runtime();
+    const id = await createTicket();
+    await expect(
+      database.transaction(async (tx) => {
+        await lifecycle.fire('tickets', id, 'replyToCustomer', {
+          actor: { id: 'agent' },
+          input: { message: 'Please confirm' },
+          transaction: tx,
+        });
+        throw new Error('The caller changes its mind.');
+      }),
+    ).rejects.toThrow('changes its mind');
+    expect(
+      await database
+        .repository('tickets')
+        .findOne({ filter: { id: Number(id) } }),
+    ).toMatchObject({ status: 'open', lifecycleVersion: 0 });
+    expect(await lifecycle.history('tickets', id)).toEqual({
+      transitions: [],
+      effectRuns: [],
+    });
+    expect(sent).toEqual([]);
+  });
+
+  it('undoes only a refused transition in a savepoint, when the caller catches it', async () => {
+    interface NotedTypes {
+      record: TicketTypes['record'];
+      state: TicketTypes['state'];
+    }
+    const noted = new LifecycleRuntime({ store, clock: () => now });
+    noted.register(
+      defineLifecycle<NotedTypes>({
+        name: 'notedTickets',
+        collection: 'tickets',
+        initial: 'open',
+        states: ['open', { name: 'closed', final: true }],
+        transitions: {
+          close: {
+            from: 'open',
+            to: 'closed',
+            // Writes, then refuses: the savepoint has something to undo.
+            onTransition: async ({ record, transactionHandle }) => {
+              await (transactionHandle as DatabaseConnection)
+                .repository('notes')
+                .createOne({
+                  values: { ticketId: String(record.id), text: 'closing' },
+                });
+              throw new Error('Closing is not allowed today.');
+            },
+          },
+        },
+      }),
+    );
+    const id = await createTicket();
+    await database.transaction(async (tx) => {
+      await tx.repository('notes').createOne({
+        values: { ticketId: id, text: 'asked to close' },
+      });
+      await expect(
+        noted.fire('notedTickets', id, 'close', {
+          actor: { id: 'agent' },
+          transaction: tx,
+        }),
+      ).rejects.toThrow('Closing is not allowed today.');
+    });
+    expect(
+      (await database.repository('notes').findMany({})).map((row) => row.text),
+    ).toEqual(['asked to close']);
+    expect(
+      await database
+        .repository('tickets')
+        .findOne({ filter: { id: Number(id) } }),
+    ).toMatchObject({ status: 'open' });
+    expect((await noted.history('notedTickets', id)).transitions).toEqual([]);
+  });
+
   it('writes a record only at the version it was read at', async () => {
     const id = await createTicket();
     const condition = {

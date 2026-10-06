@@ -612,7 +612,7 @@ const nudgeParent = defineEffect({
 });
 ```
 
-The guard alone is not enough when another transaction can create a child while the completion is being decided. Create children in a transaction that first touches the parent while it is still in the right state, bumping its version, so a `complete` decided on a stale count meets a conflict:
+The guard alone is not enough when another transaction can create a child while the completion is being decided. Create children in a transaction that first touches the parent while it is still in the right state, bumping its version, so a `complete` decided on a stale count meets a conflict, and create the child through its own lifecycle inside that transaction:
 
 ```ts
 async createTask(parentId, values) {
@@ -622,21 +622,17 @@ async createTask(parentId, values) {
       values: { lifecycleVersion: { increment: 1 } },
     });
     if (open.updatedCount === 0) return undefined; // the parent moved on
-    const created = await connection.repository('tasks').createOne({
-      values: {
-        ...values,
-        parentId,
-        status: 'pending',
-        statusChangedAt: this.now(),
-        lifecycleVersion: 0,
-      },
-    });
-    return created.record;
+    const { record } = await this.runtime.create(
+      'tasks',
+      { ...values, parentId },
+      { actor: SYSTEM_ACTOR, transaction: connection },
+    );
+    return record;
   });
 }
 ```
 
-This insert writes the child's lifecycle fields itself, which is a deliberate exception to creating records through `runtime.create()`: that method always opens a transaction of its own and cannot join this one, so the child gets no `$create` log entry and its initial state's `onEnter` does not run. Keep `onEnter` of the child's initial state empty, or fire its first step after the transaction commits. Decide as explicitly how reopening a task relates to a parent that is already `done`. `OfficeStore.createExtraction()` in the office flows example is the complete version.
+`transaction: connection` nests the creation in the caller's transaction as a savepoint: the child gets its `$create` log entry and owes its initial state's `onEnter` effects, which are dispatched once the outer transaction commits and dropped if it rolls back. A refused creation undoes only its own writes, so the caller may catch it and go on. The same option on `fire()` lets a child's last transition move its parent on in the same commit, from `onTransition` with its `transactionHandle`, instead of through `nudgeParent`: a parent that refuses then refuses the child's transition too, rather than leaving it finished with a parent that never heard. Keep the effect where the parent may legitimately say no, or be busy, without the child having to wait for it. Decide as explicitly how reopening a task relates to a parent that is already `done`. `OfficeStore.createExtraction()` in the office flows example touches the parent the same way, and inserts the task directly.
 
 ### 16. Dispatch sub-records repeatedly
 

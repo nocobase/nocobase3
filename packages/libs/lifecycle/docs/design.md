@@ -42,6 +42,10 @@ sequenceDiagram
   end
 ```
 
+### Joining the caller's transaction
+
+With `transaction`, `fire()` and `create()` do not open a transaction of their own: the store nests the work in the caller's, as a savepoint on `@nocobase/db` and as a nested undo log in the memory store. What follows a commit — the listeners and the dispatch — is registered with the store's `afterCommit` before the transition is decided, so it runs once the outermost transaction commits, a transition before what its `onTransition` started, and never after a rollback. A refusal rolls back only the savepoint, which is what lets a parent's refusal undo a child's transition without the child's caller losing its own writes, and lets a caller that catches the refusal commit the rest. A call without `transaction` goes through the same path in a transaction of its own, so `fire()` still returns after its in-process effects have run.
+
 ### Why the condition compares the version as well as the state
 
 Comparing the state alone breaks on self-transitions. The expense report's `escalate` goes from `awaitingManager` to `awaitingManager`; two concurrent escalations would both see the state unchanged and both commit. Every transition increments `lifecycleVersion`, the condition includes it, and the second one fails.

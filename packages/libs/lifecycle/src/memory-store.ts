@@ -9,6 +9,7 @@ import type {
   LifecycleStore,
   NewEffectRun,
   NewTransitionEntry,
+  TransactionOptions,
   TransitionEntry,
 } from './store.js';
 import type { LifecycleRecord, RecordId } from './types.js';
@@ -41,6 +42,12 @@ interface MemoryState {
 
 /** Puts back what one write replaced; see {@link MemoryLifecycleStore.transaction}. */
 type Undo = () => void;
+
+/** What one transaction, or one transaction nested in it, has to undo or run after commit. */
+interface Scope {
+  readonly journal: Undo[];
+  readonly commits: (() => void | Promise<void>)[];
+}
 
 /**
  * Sets or removes `key`, and returns how to put back what was there — unless
@@ -77,7 +84,18 @@ export class MemoryLifecycleStore implements LifecycleStore {
   };
   private queue: Promise<unknown> = Promise.resolve();
   /** Set on the view a transaction's work receives, and only there. */
-  private readonly journal: Undo[] | undefined = undefined;
+  private readonly scope: Scope | undefined = undefined;
+  /** The store every view was made from. */
+  private readonly root: MemoryLifecycleStore = this;
+
+  /**
+   * Inside a transaction, the view its work received: pass it as `within`
+   * to nest another transaction in this one, or as a lifecycle call's
+   * `transaction`. Undefined outside a transaction.
+   */
+  public get transactionHandle(): unknown {
+    return this.scope ? this : undefined;
+  }
 
   /** Adds a record directly, the way a create form or a seed would. */
   public insertRecord(
@@ -114,25 +132,69 @@ export class MemoryLifecycleStore implements LifecycleStore {
    * what each of its writes replaced; a failure undoes those writes, newest
    * first, and leaves every other write alone. A write made outside the
    * transaction to a row the transaction also wrote wins, as it would once
-   * the database released the row's lock. One may not open another.
+   * the database released the row's lock.
+   *
+   * With `within` — the `transactionHandle` of a transaction still running
+   * — the work runs inside that one instead, as a savepoint would: a failure
+   * undoes only the nested writes and drops its `afterCommit` callbacks, and
+   * success hands both to the enclosing transaction. Only the outermost
+   * transaction runs the callbacks, once it has committed and released the
+   * next transaction to start, so a callback may open one of its own;
+   * `transaction()` resolves once they have finished. Opening a transaction
+   * without `within` from inside another waits for it forever.
    */
-  public transaction<R>(
+  public async transaction<R>(
     work: (store: LifecycleStore) => Promise<R>,
+    options: TransactionOptions = {},
   ): Promise<R> {
-    const run = this.queue.then(async () => {
-      const journal: Undo[] = [];
-      const view = Object.create(this, {
-        journal: { value: journal },
-      }) as MemoryLifecycleStore;
+    const { root } = this;
+    if (options.within !== undefined) {
+      const parent = root.scopeOf(options.within);
+      const scope: Scope = { journal: [], commits: [] };
       try {
-        return await work(view);
+        const result = await work(root.view(scope));
+        parent.journal.push(...scope.journal);
+        parent.commits.push(...scope.commits);
+        return result;
       } catch (error) {
-        for (const undo of journal.reverse()) undo();
+        for (const undo of scope.journal.reverse()) undo();
+        throw error;
+      }
+    }
+    const scope: Scope = { journal: [], commits: [] };
+    const run = root.queue.then(async () => {
+      try {
+        return await work(root.view(scope));
+      } catch (error) {
+        for (const undo of scope.journal.reverse()) undo();
         throw error;
       }
     });
-    this.queue = run.catch(() => undefined);
-    return run;
+    root.queue = run.catch(() => undefined);
+    const result = await run;
+    for (const callback of scope.commits)
+      try {
+        await callback();
+      } catch (error) {
+        // The transaction has committed, so the caller is not told it
+        // failed; the error surfaces where a test sees it.
+        queueMicrotask(() => {
+          throw error;
+        });
+      }
+    return result;
+  }
+
+  /**
+   * Inside a transaction, runs `callback` once the outermost transaction has
+   * committed; a rollback drops it.
+   */
+  public afterCommit(callback: () => void | Promise<void>): void {
+    if (!this.scope)
+      throw new Error(
+        'afterCommit is only available inside a transaction, on the store its work receives.',
+      );
+    this.scope.commits.push(callback);
   }
 
   public findRecord(
@@ -327,7 +389,26 @@ export class MemoryLifecycleStore implements LifecycleStore {
 
   /** Keeps how to undo a write, when it was made inside a transaction. */
   private log(undo: Undo): void {
-    this.journal?.push(undo);
+    this.scope?.journal.push(undo);
+  }
+
+  private view(scope: Scope): MemoryLifecycleStore {
+    return Object.create(this, {
+      scope: { value: scope },
+    }) as MemoryLifecycleStore;
+  }
+
+  /** The scope of a running transaction of this store, which `within` names. */
+  private scopeOf(handle: unknown): Scope {
+    if (
+      handle instanceof MemoryLifecycleStore &&
+      handle.root === this &&
+      handle.scope
+    )
+      return handle.scope;
+    throw new Error(
+      'A memory store nests a transaction only within the transactionHandle of one of its own running transactions.',
+    );
   }
 
   /** Ids are never handed out twice, rollback or not, as a database sequence. */

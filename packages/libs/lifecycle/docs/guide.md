@@ -334,6 +334,10 @@ Calling the runtime directly, pass `requestId` and `expect: { version }`; the Re
 
 Use `runtime.create(name, values, { actor, state? })` rather than an insert. It writes the `$create` log entry, starts the version at 1 and runs the initial state's `onEnter` effects. When `initial` lists several states, `state` picks one. Who may create a record, and what it must hold, belongs in the definition's `create: { validate, guard }` rather than in a route: `runtime.create()` checks the values, then the guard, inside its transaction and refuses with the same `INVALID_INPUT` and `GUARD_REJECTED` a transition does, so an import or a script meets the rule the form does. Being allowed to create a draft is not being allowed to submit it; that stays the submitting transition's guard.
 
+### Join a transaction the caller holds
+
+`fire()` and `create()` take `transaction`: the `transactionHandle` an `onTransition` or a services factory receives, or the `@nocobase/db` connection of the caller's own `database.transaction()`, on the connection the store writes to. The call is nested in it as a savepoint, so a parent can create its children in its own transition, a child's last transition can move its parent on in the same commit, and an application can group several calls with its own writes. A refusal undoes only the nested call's writes and is thrown to the caller, which decides whether the whole transaction fails. Effects and listeners wait for the outermost commit and are dropped on rollback, so the effect runs a joined call returns are still queued. On SQLite, read inside the transaction through the same connection; `view()`, `available()` and `can()` do not take one and would wait for it.
+
 ### Let another plugin veto an action
 
 `runtime.addGuard('expenses', ['approve'] | '*', guard)` adds a guard without touching the definition; its refusals join the other blockers, and the returned function removes it.

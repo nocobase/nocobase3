@@ -129,6 +129,16 @@ export interface IdleRecordCursor {
   readonly id: RecordId;
 }
 
+export interface TransactionOptions {
+  /**
+   * The `transactionHandle` of a transaction still running, such as the
+   * `@nocobase/db` connection a caller's own transaction received, to nest
+   * this one in. It must belong to the same store, or to the same database
+   * connection the store writes to.
+   */
+  readonly within?: unknown;
+}
+
 /**
  * Everything the runtime persists. Two implementations ship: one over
  * `@nocobase/db` Repositories and one in memory for tests. Each method is a
@@ -138,12 +148,28 @@ export interface IdleRecordCursor {
 export interface LifecycleStore {
   /**
    * What a transaction runs on, such as a `@nocobase/db` connection, for
-   * services that read other collections from a guard. Absent outside a
-   * transaction and in stores that have none.
+   * services that read other collections from a guard, and for a lifecycle
+   * call that joins this transaction. Absent outside a transaction.
    */
   readonly transactionHandle?: unknown;
-  /** Runs `work` in one transaction; inside it, `store` is that transaction. */
-  transaction<R>(work: (store: LifecycleStore) => Promise<R>): Promise<R>;
+  /**
+   * Runs `work` in one transaction; inside it, `store` is that transaction.
+   * With `within`, the work is nested in a transaction the caller already
+   * holds, as a savepoint: a failure undoes only what the work wrote, and
+   * nothing it registered with `afterCommit` runs before the outermost
+   * transaction commits.
+   */
+  transaction<R>(
+    work: (store: LifecycleStore) => Promise<R>,
+    options?: TransactionOptions,
+  ): Promise<R>;
+  /**
+   * Only on the store a transaction's work receives: runs `callback` once
+   * the outermost transaction has committed, and never if it rolls back.
+   * The transaction `transaction()` was called for resolves once its
+   * callbacks have finished.
+   */
+  afterCommit(callback: () => void | Promise<void>): void;
 
   findRecord(
     collection: string,
