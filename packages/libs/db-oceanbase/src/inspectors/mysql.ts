@@ -429,6 +429,10 @@ export class MysqlSchemaInspector extends BaseSchemaInspector {
    * The columns of a table whose default is an expression. `information_schema` cannot tell: OceanBase reports
    * `default (uuid())` and `default 'uuid()'` alike, as `uuid()`, with nothing in `extra`. Only the table's DDL keeps
    * the difference, so it is read when a character column has a default the two could be confused for.
+   *
+   * A view reports the defaults of the columns it selects in the same form, but its DDL declares none, so there is
+   * nothing to settle them with. A character default on a view that reads like a function call is taken for an
+   * expression: reading a literal `'uuid()'` as no default is safer than handing the Repository `uuid()` to write.
    */
   private async readExpressionDefaults(
     knex: Knex,
@@ -436,14 +440,21 @@ export class MysqlSchemaInspector extends BaseSchemaInspector {
     collection: MysqlCollectionRow,
     columns: readonly MysqlColumnRow[],
   ): Promise<ReadonlySet<string>> {
-    if (
-      collection.table_type !== 'BASE TABLE' ||
-      !columns.some(
-        (column) =>
-          typeof column.column_default === 'string' &&
-          OCEANBASE_CHARACTER_DEFAULT_TYPES.has(column.data_type.toLowerCase()),
-      )
-    ) {
+    const characterDefaults = columns.filter(
+      (column) =>
+        typeof column.column_default === 'string' &&
+        OCEANBASE_CHARACTER_DEFAULT_TYPES.has(column.data_type.toLowerCase()),
+    );
+    if (collection.table_type !== 'BASE TABLE') {
+      return new Set(
+        characterDefaults
+          .filter((column) =>
+            /^[a-z_][\w$]*\s*\(.*\)$/isu.test(String(column.column_default)),
+          )
+          .map((column) => column.column_name),
+      );
+    }
+    if (characterDefaults.length === 0) {
       return new Set();
     }
     const row = mysqlRows<{ readonly 'create table'?: unknown }>(

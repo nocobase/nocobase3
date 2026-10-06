@@ -35,6 +35,6 @@ A text field's `defaultValue` is written into the table in the expression form `
 
 ## MariaDB
 
-This dialect also serves MariaDB, through the same `mysql` connection. MariaDB 10.11 is the oldest version it is tested against, and 10.9 the oldest it works with: the JSON field filters use `JSON_OVERLAPS`, which MariaDB added in 10.9. The schema inspector reads a column default the way the server reports it, which differs between the two — MySQL reports the bare value and MariaDB the literal as it was declared — and recognizes MariaDB from `version()`.
+This dialect also serves MariaDB, through the same `mysql` connection. MariaDB 10.11 is the oldest version it is tested against, and 10.9 the oldest it works with: the JSON field filters use `JSON_OVERLAPS`, which MariaDB added in 10.9 and MySQL in 8.0.17, so on MySQL too they need 8.0.17 or later. The schema inspector reads a column default the way the server reports it, which differs between the two — MySQL reports the bare value and MariaDB the literal as it was declared — and recognizes MariaDB from `version()`.
 
-`pnpm --filter @nocobase/db-mysql test:integration` runs the integration suite against MySQL and then against MariaDB, one after the other, from the services in `docker-compose.yml`.
+`pnpm --filter @nocobase/db-mysql test:integration` runs the integration suite against MySQL and then against MariaDB, one after the other, from the services in `docker-compose.yml`. It does not start MariaDB after an interrupted MySQL run, or while the MySQL database is kept by `KEEP_TEST_DB=1` or `--pause-on-failure`.

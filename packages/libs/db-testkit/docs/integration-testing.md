@@ -39,7 +39,7 @@ pnpm --filter @nocobase/db-mysql test:integration -- \
   --test-file tests/integration/query/where.test.ts
 ```
 
-`@nocobase/db-mysql` serves MySQL and MariaDB, so its `test:integration` runs the suite twice, against the `mysql` and then the `mariadb` service in its `docker-compose.yml`, passing the same arguments to both.
+`@nocobase/db-mysql` serves MySQL and MariaDB, so its `test:integration` runs the suite twice, against the `mysql` and then the `mariadb` service in its `docker-compose.yml`, passing the same arguments to both. It stops after MySQL when that run is interrupted or its database is kept, so two servers never run at once.
 
 The wrapper always runs `core-suite.test.ts` first so the dialect adapter is installed before a selected file loads. When a run fails, `--pause-on-failure` keeps the containers alive until you press Enter; it is for an interactive terminal and exits normally in CI. `KEEP_TEST_DB=1` keeps the database without pausing.
 
