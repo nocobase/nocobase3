@@ -1,5 +1,6 @@
-// The real Provider against SQLite and the memory jobs service: effects run
-// as jobs, and a restart picks up what the previous start left queued.
+// The real Provider against the test database and the memory jobs service:
+// effects run as jobs, and a restart picks up what the previous start left
+// queued.
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -8,52 +9,30 @@ import { createAppPaths } from '@nocobase/app-server/config';
 import { jobExecutorServiceToken } from '@nocobase/app-server/jobs';
 import { loggingToken } from '@nocobase/app-server/logging';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
-import {
-  createDatabaseManager,
-  databaseManagerToken,
-  type DatabaseManager,
-} from '@nocobase/db';
-import sqlite from '@nocobase/db-sqlite';
+import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
 import { createJobExecutorService } from '@nocobase/jobs';
 import { CREATE_TRANSITION } from '@nocobase/lifecycle';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect } from 'vitest';
 
 import { LifecycleExampleProvider } from '../server/providers/lifecycle-example.js';
 import { lifecycleExampleServiceToken } from '../server/tokens.js';
+import { test } from './fixtures.js';
 
-const root = path.resolve(import.meta.dirname, '..');
 let directory: string;
-let database: DatabaseManager;
 
 const logger = { info: () => {}, warn: () => {}, error: () => {} };
 
 beforeEach(async () => {
   directory = await mkdtemp(path.join(os.tmpdir(), 'lifecycle-example-'));
-  database = createDatabaseManager({
-    drivers: { sqlite },
-    connections: {
-      main: {
-        dialect: 'sqlite',
-        filename: path.join(directory, 'main.sqlite'),
-      },
-    },
-  });
-  await database
-    .createMigrator({
-      directory: path.join(root, 'database/migrations'),
-      packageName: '@nocobase/app-plugin-lifecycle-example',
-    })
-    .latest();
 });
 
 afterEach(async () => {
-  await database.destroy();
   await rm(directory, { recursive: true, force: true });
 });
 
-async function start(): Promise<{
+async function start(database: DatabaseManager): Promise<{
   provider: LifecycleExampleProvider;
   stop: () => Promise<void>;
   container: ServiceContainer;
@@ -100,8 +79,10 @@ async function eventually<T>(
 }
 
 describe('lifecycle example provider', () => {
-  it('runs an approval end to end, paying the expense on the jobs service', async () => {
-    const { container, stop } = await start();
+  test('runs an approval end to end, paying the expense on the jobs service', async ({
+    database,
+  }) => {
+    const { container, stop } = await start(database);
     try {
       const service = container.resolve(lifecycleExampleServiceToken);
       const expense = await service.createExpense(
@@ -174,8 +155,10 @@ describe('lifecycle example provider', () => {
     }
   });
 
-  it('closes an idle ticket when the triggers are swept', async () => {
-    const { container, stop } = await start();
+  test('closes an idle ticket when the triggers are swept', async ({
+    database,
+  }) => {
+    const { container, stop } = await start(database);
     try {
       const service = container.resolve(lifecycleExampleServiceToken);
       const ticket = await service.createTicket(

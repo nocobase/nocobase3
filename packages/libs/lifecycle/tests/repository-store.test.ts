@@ -1,13 +1,5 @@
-import { mkdtemp, rm } from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
-
-import sqlite from '@nocobase/db-sqlite';
-import {
-  createDatabaseManager,
-  type DatabaseConnection,
-  type DatabaseManager,
-} from '@nocobase/db';
+import type { DatabaseConnection, DatabaseManager } from '@nocobase/db';
+import { createTestDatabase, type TestDatabase } from '@nocobase/db-testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
@@ -21,8 +13,8 @@ import {
 } from '../src/index.js';
 import { ticketLifecycle, type TicketTypes } from './fixtures/ticket.js';
 
+let testDatabase: TestDatabase;
 let database: DatabaseManager;
-let directory: string;
 let store: LifecycleStore;
 let now: Date;
 let sent: string[];
@@ -55,7 +47,12 @@ async function createTables(): Promise<void> {
     table.integer('version').notNull();
     table.string('requestId');
     table.unique(['lifecycle', 'recordId', 'version']);
-    table.unique(['lifecycle', 'recordId', 'requestId']);
+    // Only entries that carry a request key, where the dialect can say so.
+    table.unique(['lifecycle', 'recordId', 'requestId'], {
+      ...(testDatabase.capabilities.partialIndexes
+        ? { predicate: { requestId: { $notNull: true } } }
+        : {}),
+    });
   });
   await builder.createCollection(LIFECYCLE_COLLECTIONS.effectRuns, (table) => {
     table.bigInt('id').primary().autoIncrement().notNull();
@@ -99,17 +96,9 @@ async function createTicket(): Promise<string> {
 }
 
 beforeEach(async () => {
-  // A file, not :memory:, so the pool behaves as it does in an application.
-  directory = await mkdtemp(path.join(os.tmpdir(), 'lifecycle-store-'));
-  database = createDatabaseManager({
-    drivers: { sqlite },
-    connections: {
-      main: {
-        dialect: 'sqlite',
-        filename: path.join(directory, 'main.sqlite'),
-      },
-    },
-  });
+  // Whichever dialect the environment selects, SQLite by default.
+  testDatabase = await createTestDatabase();
+  database = testDatabase.database;
   await createTables();
   store = createRepositoryLifecycleStore(database);
   now = new Date('2026-10-01T09:00:00.000Z');
@@ -117,8 +106,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await database.destroy();
-  await rm(directory, { recursive: true, force: true });
+  await testDatabase.destroy();
 });
 
 describe('Repository lifecycle store', () => {

@@ -1,12 +1,11 @@
-// Both processes end to end on SQLite, with the plugin's migration and seed
-// applied. Effects run in process, so every assertion follows the action
-// that caused it.
-import { mkdtemp, rm } from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
-
-import { createDatabaseManager, type DatabaseManager } from '@nocobase/db';
-import sqlite from '@nocobase/db-sqlite';
+// Both processes end to end on a test database, with the plugin's migration
+// and seed applied. Effects run in process, so every assertion follows the
+// action that caused it.
+import {
+  createTestDatabase,
+  type TestDatabase,
+} from '@nocobase/app-testing/server';
+import type { DatabaseManager } from '@nocobase/db';
 import {
   createRepositoryLifecycleStore,
   LifecycleRuntime,
@@ -21,35 +20,17 @@ import { registerLifecycles } from '../server/lifecycles/index.js';
 import { COLLECTIONS } from '../server/scope.js';
 import { OfficeFlowsService } from '../server/services/office-flows.js';
 import { OfficeStore, people, type Plain } from '../server/services/store.js';
+import { migrations, seeds } from './fixtures.js';
 
-const root = path.resolve(import.meta.dirname, '..');
-let directory: string;
+let testDatabase: TestDatabase;
 let database: DatabaseManager;
 let service: OfficeFlowsService;
 let store: OfficeStore;
 let runtime: LifecycleRuntime;
 
 beforeEach(async () => {
-  directory = await mkdtemp(path.join(os.tmpdir(), 'office-flows-'));
-  database = createDatabaseManager({
-    drivers: { sqlite },
-    connections: {
-      main: {
-        dialect: 'sqlite',
-        filename: path.join(directory, 'main.sqlite'),
-      },
-    },
-  });
-  const packageName = '@nocobase/app-plugin-office-flows-example';
-  await database
-    .createMigrator({
-      directory: path.join(root, 'database/migrations'),
-      packageName,
-    })
-    .latest();
-  await database
-    .createSeeder({ directory: path.join(root, 'database/seeds'), packageName })
-    .run();
+  testDatabase = await createTestDatabase({ migrations, seeds });
+  database = testDatabase.database;
   runtime = new LifecycleRuntime({
     store: createRepositoryLifecycleStore(database, {
       collections: {
@@ -64,8 +45,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await database.destroy();
-  await rm(directory, { recursive: true, force: true });
+  await testDatabase.destroy();
 });
 
 function today(offset = 0): string {
