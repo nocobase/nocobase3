@@ -18,6 +18,7 @@ import { validator } from 'hono/validator';
 import {
   CreateTaskInput,
   ListTasksQuery,
+  TaskId,
   TaskParams,
   UpdateTaskInput,
   type TaskStatus,
@@ -313,24 +314,22 @@ async function listUsers(database: DatabaseManager): Promise<UserRow[]> {
   return rows as unknown as UserRow[];
 }
 
-/** A task id as the `uuid` column holds it, in any case. */
-const TASK_ID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
-
 /**
- * The task with this id, or `undefined`. An id that is not a UUID names no task: PostgreSQL rejects comparing it with
- * the `uuid` column instead of matching nothing, which would answer 500 where every other dialect answers 403.
+ * The task with this id, or `undefined`. An id that is not a UUID names no task, and is answered here rather than by
+ * the database: PostgreSQL, Kingbase and MSSQL reject comparing it with a `uuid` column instead of matching nothing,
+ * which would answer 500 where SQLite and MySQL answer 403. Ids are written lowercase by `crypto.randomUUID()`, so an
+ * uppercase one is lowercased to name the same task on every dialect, not only on those that compare `uuid` natively.
  */
 async function findTask(
   database: DatabaseManager,
   id: string,
 ): Promise<TaskRow | undefined> {
-  if (!TASK_ID_PATTERN.test(id)) return undefined;
+  if (!TaskId.safeParse(id).success) return undefined;
   const row = await database
     .connection()
     .query.selectFrom(TASKS)
     .selectAll()
-    .where('id', '=', id)
+    .where('id', '=', id.toLowerCase())
     .executeTakeFirst();
   return row as TaskRow | undefined;
 }
