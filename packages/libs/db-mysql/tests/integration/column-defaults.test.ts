@@ -35,6 +35,7 @@ describe('MySQL column defaults', () => {
             today date default (curdate()),
             token varchar(36) default (uuid()),
             status varchar(20) not null default 'draft',
+            quoted varchar(20) not null default 'it''s \\\\ x',
             word varchar(20) default 'NULL',
             optional varchar(20)
           )
@@ -54,6 +55,7 @@ describe('MySQL column defaults', () => {
       expect(defaults.day).toMatchObject({ value: '2026-01-02' });
       expect(defaults.span).toMatchObject({ value: '-01:30:00' });
       expect(defaults.status).toMatchObject({ value: 'draft' });
+      expect(defaults.quoted).toMatchObject({ value: String.raw`it's \ x` });
       expect(defaults.word).toMatchObject({ value: 'NULL' });
       expect(
         Object.fromEntries(

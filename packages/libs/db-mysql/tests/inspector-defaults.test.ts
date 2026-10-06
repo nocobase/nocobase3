@@ -167,6 +167,8 @@ describe('mysqlDefaultLiteral', () => {
     for (const [dataType, raw, expected] of [
       ['varchar', "'draft'", { value: 'draft' }],
       ['varchar', "'it''s'", { value: "it's" }],
+      ['varchar', String.raw`'back\\slash'`, { value: String.raw`back\slash` }],
+      ['text', String.raw`'it\'s here'`, { value: "it's here" }],
       ['varchar', "'NULL'", { value: 'NULL' }],
       ['varchar', "'42'", { value: '42' }],
       ['enum', "'b'", { value: 'b' }],
@@ -184,7 +186,7 @@ describe('mysqlDefaultLiteral', () => {
           }),
         ),
         `${dataType} ${raw}`,
-      ).toEqual({ expression: raw, ...expected });
+      ).toMatchObject(expected);
     }
     for (const [dataType, raw] of [
       ['varchar', 'uuid()'],

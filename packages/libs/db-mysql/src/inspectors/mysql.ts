@@ -611,8 +611,9 @@ export function mysqlReportsDeclaredDefaults(serverVersion: string): boolean {
 /**
  * The column default as the SQL form the shared literal parser reads: a string literal quoted, an expression as it is.
  *
- * MariaDB 10.2.7 and later report it in that form already, so their default passes through untouched, except the bare
- * `NULL` it reports for a column without one.
+ * MariaDB 10.2.7 and later report it in that form already, except for two things: a string literal is escaped as MySQL
+ * writes one, `'back\\slash'` or `'it\'s here'`, where the shared parser reads only doubled quotes, and a column
+ * without a default reports the bare word `NULL`.
  *
  * MySQL reports an expression default — `EXTRA = 'DEFAULT_GENERATED'`, which a defaulted `json` column and a defaulted
  * text column have because MySQL takes no literal default on either — as the expression it will evaluate rather than as
@@ -640,7 +641,7 @@ export function mysqlDefaultLiteral(column: {
   }
   if (mysqlReportsDeclaredDefaults(column.server_version)) {
     // MariaDB's bare NULL is what MySQL reports as SQL NULL: no default.
-    return raw === 'NULL' ? null : raw;
+    return raw === 'NULL' ? null : standardMysqlLiteral(raw);
   }
   if (/\bDEFAULT_GENERATED\b/i.test(column.extra)) {
     return mysqlExpressionLiteral(raw);
@@ -660,18 +661,20 @@ function quoteMysqlBareDefault(raw: string): string {
 
 /** The SQL literal an expression default stands for, when it is a string literal; otherwise the expression itself. */
 function mysqlExpressionLiteral(raw: string): string {
-  const expression = raw
-    .trim()
-    .replace(/^_[A-Za-z0-9]+\s*/u, '')
-    .replace(/\\(['"\\])/gu, '$1');
-  if (
-    expression.length < 2 ||
-    !expression.startsWith("'") ||
-    !expression.endsWith("'")
-  ) {
-    return expression;
+  return standardMysqlLiteral(
+    raw
+      .trim()
+      .replace(/^_[A-Za-z0-9]+\s*/u, '')
+      .replace(/\\(['"\\])/gu, '$1'),
+  );
+}
+
+/** A MySQL string literal, backslash escapes and all, in the standard form `'it''s'`; anything else as it is. */
+function standardMysqlLiteral(sql: string): string {
+  if (sql.length < 2 || !sql.startsWith("'") || !sql.endsWith("'")) {
+    return sql;
   }
-  return `'${unescapeMysqlString(expression.slice(1, -1)).replaceAll("'", "''")}'`;
+  return `'${unescapeMysqlString(sql.slice(1, -1)).replaceAll("'", "''")}'`;
 }
 
 /** The characters a MySQL string literal's backslash escapes stand for; any other escaped character stands for itself. */
