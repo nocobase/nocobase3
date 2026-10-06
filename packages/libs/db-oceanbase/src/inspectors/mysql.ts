@@ -261,7 +261,7 @@ export class MysqlSchemaInspector extends BaseSchemaInspector {
           nullable: column.is_nullable === 'YES',
           default: generated
             ? undefined
-            : parseColumnDefault(column.column_default),
+            : parseColumnDefault(oceanbaseDefaultLiteral(column)),
           autoIncrement: column.extra.toLowerCase().includes('auto_increment'),
           unsigned: /\bunsigned\b/i.test(column.column_type),
           length: numberValue(column.character_maximum_length),
@@ -558,6 +558,52 @@ export class MysqlSchemaInspector extends BaseSchemaInspector {
       };
     }
   }
+}
+
+const OCEANBASE_TEMPORAL_TYPES: ReadonlySet<string> = new Set([
+  'date',
+  'datetime',
+  'timestamp',
+  'time',
+]);
+
+/** The data types whose literal default `information_schema` reports as the bare string value. */
+const OCEANBASE_QUOTED_DEFAULT_TYPES: ReadonlySet<string> = new Set([
+  'char',
+  'varchar',
+  'tinytext',
+  'text',
+  'mediumtext',
+  'longtext',
+  'enum',
+  'set',
+  ...OCEANBASE_TEMPORAL_TYPES,
+]);
+
+/**
+ * OceanBase, like MySQL, reports a literal default as the bare value, neither quoted nor escaped: `draft` for
+ * `default 'draft'`, `it's` for `default 'it''s'`, `0` for `default 0`. A number reads correctly as it is, but the
+ * shared parser takes an unquoted word for an expression, so the default of a character, enum or temporal column had no
+ * value at all — and `'42'` or `'NULL'` read as a number and as null. Those types are quoted here, which makes every
+ * bare value of theirs a string. A temporal column's `CURRENT_TIMESTAMP` is the one bare word that is an expression:
+ * OceanBase reports it without MySQL's `DEFAULT_GENERATED`, even for `current_timestamp(3)`.
+ */
+export function oceanbaseDefaultLiteral(column: {
+  readonly column_default: unknown;
+  readonly data_type: string;
+}): unknown {
+  const raw = column.column_default;
+  if (typeof raw !== 'string') {
+    return raw;
+  }
+  const type = column.data_type.toLowerCase();
+  return OCEANBASE_QUOTED_DEFAULT_TYPES.has(type) &&
+    !(
+      OCEANBASE_TEMPORAL_TYPES.has(type) &&
+      /^current_timestamp(?:\(\d*\))?$/iu.test(raw.trim())
+    )
+    ? `'${raw.replaceAll("'", "''")}'`
+    : raw;
 }
 
 interface GroupedMysqlConstraint {

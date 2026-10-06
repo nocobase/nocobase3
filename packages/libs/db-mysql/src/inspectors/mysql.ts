@@ -578,21 +578,59 @@ interface GroupedMysqlConstraint {
   readonly onDelete?: string;
 }
 
+const MYSQL_TEMPORAL_TYPES: ReadonlySet<string> = new Set([
+  'date',
+  'datetime',
+  'timestamp',
+  'time',
+]);
+
+/** The data types whose literal default `information_schema` reports as the bare string value. */
+const MYSQL_QUOTED_DEFAULT_TYPES: ReadonlySet<string> = new Set([
+  'char',
+  'varchar',
+  'tinytext',
+  'text',
+  'mediumtext',
+  'longtext',
+  'enum',
+  'set',
+  ...MYSQL_TEMPORAL_TYPES,
+]);
+
 /**
  * MySQL reports an expression default — `EXTRA = 'DEFAULT_GENERATED'`, which a defaulted `json` column and a defaulted
  * text column have because MySQL takes no literal default on either — as the expression it will evaluate rather than as
  * a value, escaped twice. The expression is a string literal with a character-set introducer, whose own quotes and
  * backslashes are backslash-escaped as MySQL writes literals: `_utf8mb4'it\'s here'`. `information_schema` then
  * escapes that text again: `_utf8mb4\'it\\\'s here\'`. Undo both and give the shared literal parser the standard
- * form it reads, `'it''s here'`. A literal default arrives as the bare value and passes through untouched.
+ * form it reads, `'it''s here'`.
+ *
+ * A literal default arrives as the bare value, neither quoted nor escaped: `draft` for `default 'draft'`, `it's` for
+ * `default 'it''s'`, `0` for `default 0`. A number reads correctly as it is, but the shared parser takes an unquoted
+ * word for an expression, so the default of a character, enum or temporal column had no value at all — and `'42'` or
+ * `'NULL'` read as a number and as null. Those types are quoted here, which makes every bare value of theirs a string.
+ * A temporal column's `CURRENT_TIMESTAMP` is the one bare word that is an expression, should a server report it
+ * without `DEFAULT_GENERATED`.
  */
 export function mysqlDefaultLiteral(column: {
   readonly column_default: unknown;
   readonly extra: string;
+  readonly data_type: string;
 }): unknown {
   const raw = column.column_default;
-  if (typeof raw !== 'string' || !/\bDEFAULT_GENERATED\b/i.test(column.extra)) {
+  if (typeof raw !== 'string') {
     return raw;
+  }
+  if (!/\bDEFAULT_GENERATED\b/i.test(column.extra)) {
+    const type = column.data_type.toLowerCase();
+    return MYSQL_QUOTED_DEFAULT_TYPES.has(type) &&
+      !(
+        MYSQL_TEMPORAL_TYPES.has(type) &&
+        /^current_timestamp(?:\(\d*\))?$/iu.test(raw.trim())
+      )
+      ? `'${raw.replaceAll("'", "''")}'`
+      : raw;
   }
   const expression = raw
     .trim()
