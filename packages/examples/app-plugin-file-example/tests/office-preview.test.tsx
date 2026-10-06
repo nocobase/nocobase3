@@ -195,7 +195,7 @@ it('reports a failure when the Viewer never finishes rendering', async () => {
   );
   await waitFor(() => expect(viewerMocks.docx.load).toHaveBeenCalledOnce());
 
-  await act(() => vi.advanceTimersByTimeAsync(30_000));
+  await act(() => vi.advanceTimersByTimeAsync(180_000));
 
   expect(screen.getByRole('alert')).toHaveTextContent('Preview failed');
   expect(viewerMocks.docx.destroy).toHaveBeenCalledOnce();

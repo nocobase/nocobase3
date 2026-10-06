@@ -9,7 +9,7 @@ import { FileThumbnail } from '../file-thumbnail.js';
 
 // Covers the file request, the Viewer import and the first render together, so a request or renderer that never
 // settles ends in the download fallback instead of an indefinite loading state.
-const OFFICE_OPEN_XML_PREVIEW_TIMEOUT_MS = 30_000;
+const OFFICE_OPEN_XML_PREVIEW_TIMEOUT_MS = 180_000;
 
 interface OfficeOpenXmlViewer {
   load(source: string | ArrayBuffer): Promise<void>;
@@ -45,7 +45,8 @@ export function OfficeOpenXmlPreview({
     const controller = new AbortController();
     const reportViewerError = (cause: unknown): void => {
       if (!active || isAbortError(cause)) return;
-      window.clearTimeout(timeout);
+      // The first failure settles the preview; later ones, including the timeout, are ignored.
+      active = false;
       const failedViewer = viewer;
       viewer = undefined;
       failedViewer?.destroy();
@@ -61,12 +62,11 @@ export function OfficeOpenXmlPreview({
       reportViewerError(
         new OfficeOpenXmlPreviewError(
           t('files.ooxmlLoadTimedOut', {
-            defaultValue: `The preview did not finish loading within ${OFFICE_OPEN_XML_PREVIEW_TIMEOUT_MS / 1000} seconds.`,
-            seconds: OFFICE_OPEN_XML_PREVIEW_TIMEOUT_MS / 1000,
+            defaultValue: `The preview did not finish loading within ${OFFICE_OPEN_XML_PREVIEW_TIMEOUT_MS / 60_000} minutes.`,
+            minutes: OFFICE_OPEN_XML_PREVIEW_TIMEOUT_MS / 60_000,
           }),
         ),
       );
-      active = false;
       controller.abort();
     }, OFFICE_OPEN_XML_PREVIEW_TIMEOUT_MS);
 

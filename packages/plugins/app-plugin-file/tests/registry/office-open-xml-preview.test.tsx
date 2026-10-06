@@ -259,10 +259,10 @@ describe('Office Open XML preview', () => {
     await waitFor(() => expect(viewerMocks.docx.load).toHaveBeenCalledOnce());
     expect(screen.getByRole('status')).toHaveTextContent('Loading preview...');
 
-    await act(() => vi.advanceTimersByTimeAsync(30_000));
+    await act(() => vi.advanceTimersByTimeAsync(180_000));
 
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'The preview did not finish loading within 30 seconds.',
+      'The preview did not finish loading within 3 minutes.',
     );
     expect(viewerMocks.docx.destroy).toHaveBeenCalledOnce();
     expect(screen.getByRole('button', { name: 'Download file' })).toBeVisible();
@@ -283,11 +283,11 @@ describe('Office Open XML preview', () => {
     );
     await waitFor(() => expect(signal).toBeDefined());
 
-    await act(() => vi.advanceTimersByTimeAsync(30_000));
+    await act(() => vi.advanceTimersByTimeAsync(180_000));
 
     expect(signal?.aborted).toBe(true);
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'The preview did not finish loading within 30 seconds.',
+      'The preview did not finish loading within 3 minutes.',
     );
     expect(viewerMocks.docx.construct).not.toHaveBeenCalled();
   });
@@ -307,7 +307,7 @@ describe('Office Open XML preview', () => {
       expect(screen.queryByText('Loading preview...')).toBeNull(),
     );
 
-    await act(() => vi.advanceTimersByTimeAsync(30_000));
+    await act(() => vi.advanceTimersByTimeAsync(180_000));
 
     expect(screen.queryByRole('alert')).toBeNull();
     expect(viewerMocks.docx.destroy).not.toHaveBeenCalled();
