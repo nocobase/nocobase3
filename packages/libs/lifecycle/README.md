@@ -34,11 +34,11 @@ export const ticketLifecycle: Lifecycle<TicketTypes> =
   });
 ```
 
-| Concept    | What it is                                                                                                                                                                                                                |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Transition | `from`, `to`, and optionally `guard` (may this actor fire it, and if not, why), `validate` (input problems), `accept` (input fields written onto the record), `route` (pick one of several `to`) and `set` (other fields) |
-| Effect     | A function run after commit, with `retry`, a stable `idempotencyKey`, and `onSuccess`/`onFailure` transitions, fired with the effect's result or its error as input; `onEnter` runs effects per state                     |
-| Trigger    | Fires a transition on records idle in a state for longer than `after`, found by a query rather than a timer per record                                                                                                    |
+| Concept    | What it is                                                                                                                                                                                                                                                     |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Transition | `from`, `to`, and optionally `guard` (may this actor fire it, and if not, why), `validate` (input problems), `accept` (input fields written onto the record), `route` (pick one of several `to`) and `set` (other fields)                                      |
+| Effect     | A function run after commit, with `retry`, a stable `idempotencyKey`, and `onSuccess`/`onFailure` transitions, fired with the effect's result or its error — a code and details when it throws an `EffectFailure` — as input; `onEnter` runs effects per state |
+| Trigger    | Fires a transition on records idle in a state for longer than `after`, found by a query rather than a timer per record                                                                                                                                         |
 
 `LifecycleRuntime.fire()` checks the state, writes the record, a transition log entry and the effect runs in one transaction, guarded by a conditional update on the state and on a version every transition increments, so two concurrent transitions of one record cannot both commit. Effects are handed to a dispatcher after commit, retried by policy, and fenced so a reclaimed attempt cannot record a result over its replacement. `runTriggers()` sweeps the triggers, `reclaim()` hands over again what no process is working on — attempts whose lease expired and queued runs whose dispatch was lost, and `recover()` picks up what an earlier process left queued.
 

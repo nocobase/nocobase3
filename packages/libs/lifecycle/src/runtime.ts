@@ -7,6 +7,7 @@ import {
   type TransitionContext,
 } from './definition.js';
 import {
+  EffectFailure,
   LifecycleError,
   type Blocker,
   type InputProblem,
@@ -131,6 +132,18 @@ export interface EffectRunView extends EffectRun {
    * run stays queued rather than being given up on.
    */
   readonly registered: boolean;
+}
+
+export interface RetryRunOptions {
+  /**
+   * Retry even though the run's `onFailure` has already moved the record on.
+   * Only when it is known that the failed attempts had no effect: a payment
+   * the provider confirms was never made. A success then still continues
+   * only if the record's state allows `onSuccess`.
+   */
+  readonly force?: boolean;
+  /** Why the retry was forced, for the log. */
+  readonly reason?: string;
 }
 
 export interface PruneOptions {
@@ -271,6 +284,19 @@ const MOVED_ON: ReadonlySet<LifecycleErrorCode> = new Set<LifecycleErrorCode>([
   'INVALID_STATE',
   'GUARD_REJECTED',
 ]);
+
+/**
+ * The request id an effect's continuation is logged under. It ties the log
+ * entry to the run and the outcome that caused it, so `retryRun()` can tell
+ * a run that already moved its record on, and a run continues its record at
+ * most once per outcome.
+ */
+function continuationKey(
+  runId: string,
+  outcome: 'succeeded' | 'failed',
+): string {
+  return `$run:${runId}:${outcome}`;
+}
 
 /** What a sweep expects when another sweep or a person got there first. */
 const RACED: ReadonlySet<LifecycleErrorCode> = new Set<LifecycleErrorCode>([
@@ -765,9 +791,15 @@ export class LifecycleRuntime {
     }
 
     const finishedAt = this.clock().toISOString();
+    // An EffectFailure is an answer, not an outage, unless it says otherwise.
+    const failure =
+      !outcome.ok && outcome.cause instanceof EffectFailure
+        ? outcome.cause
+        : undefined;
     if (
       !outcome.ok &&
       attempt < run.maxAttempts &&
+      (failure ? failure.retry : true) &&
       (effect.retry?.shouldRetry?.(outcome.cause, attempt) ?? true)
     ) {
       const runAfter = new Date(
@@ -810,7 +842,13 @@ export class LifecycleRuntime {
       ? isJsonObject(outcome.result)
         ? outcome.result
         : {}
-      : { error: outcome.error };
+      : failure
+        ? {
+            error: outcome.error,
+            errorCode: failure.code,
+            details: storable(failure.details),
+          }
+        : { error: outcome.error };
     // Recording the outcome and firing what follows it commit together: a
     // stop between the two would otherwise leave a succeeded run whose
     // record never moves on.
@@ -830,7 +868,14 @@ export class LifecycleRuntime {
             registered,
             run.recordId,
             next,
-            { actor: SYSTEM_ACTOR, input },
+            {
+              actor: SYSTEM_ACTOR,
+              input,
+              requestId: continuationKey(
+                runId,
+                outcome.ok ? 'succeeded' : 'failed',
+              ),
+            },
             this.clock(),
           );
         } catch (error) {
@@ -875,6 +920,8 @@ export class LifecycleRuntime {
       return this.store.findEffectRun(runId);
     }
     if (finished === undefined) this.discarded(effect.name, runId, attempt);
+    // A forced retry that failed again: its continuation already ran.
+    else if (finished?.replayed) return this.store.findEffectRun(runId);
     else if (finished) {
       await this.emit(registered, finished, SYSTEM_ACTOR);
       for (const owed of finished.effectRuns)
@@ -901,12 +948,19 @@ export class LifecycleRuntime {
 
   /**
    * Runs a failed, dead or cancelled run again, with a fresh budget of
-   * attempts — once whatever made it fail is fixed. Its earlier `onFailure`
-   * stays fired; if it now succeeds, its `onSuccess` is refused should the
-   * record have moved on. The attempt count goes on from where it was: an
-   * earlier attempt still finishing somewhere cannot pass for a new one.
+   * attempts — once whatever made it fail is fixed. A run whose `onFailure`
+   * already moved the record on is refused with `RUN_SETTLED`: the record
+   * has left the state the effect served, and a success now would do its
+   * work without the record following, as a payment made while the report
+   * waits for reconciliation. Recover through the record's own transitions,
+   * or pass `force` when the failed attempts are known to have had no
+   * effect. The attempt count goes on from where it was: an earlier attempt
+   * still finishing somewhere cannot pass for a new one.
    */
-  public async retryRun(runId: string): Promise<EffectRun | undefined> {
+  public async retryRun(
+    runId: string,
+    options: RetryRunOptions = {},
+  ): Promise<EffectRun | undefined> {
     const run = await this.store.findEffectRun(runId);
     if (!run) return undefined;
     if (
@@ -925,6 +979,21 @@ export class LifecycleRuntime {
       throw new LifecycleError(
         'UNKNOWN_EFFECT',
         `Effect run "${runId}" names "${run.lifecycle}/${run.effect}", which is not registered here.`,
+      );
+    const continued = await this.store.findTransitionByRequest(
+      run.lifecycle,
+      run.recordId,
+      continuationKey(runId, 'failed'),
+    );
+    if (continued && options.force !== true)
+      throw new LifecycleError(
+        'RUN_SETTLED',
+        `Effect run "${runId}" already moved the record on with "${continued.transition}" to "${continued.to}"; recover through the record's own transitions, or retry with force once its attempts are known to have had no effect.`,
+      );
+    if (continued)
+      this.logger.warn(
+        `Effect run "${runId}" is retried by force although "${continued.transition}" already moved the record on.`,
+        { runId, reason: options.reason ?? null },
       );
     const reset = await this.store.updateEffectRun(
       runId,

@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   defineEffect,
+  EffectFailure,
   defineLifecycle,
   LifecycleRuntime,
   MemoryLifecycleStore,
@@ -190,6 +191,24 @@ describe('retry policy', () => {
     expect(run).toMatchObject({ status: 'failed', attempts: 1 });
   });
 
+  it('retries an EffectFailure only when it asks to be retried', async () => {
+    const { runtime, id, controls, record } = setup();
+    let calls = 0;
+    controls.send = (attempt) => {
+      calls += 1;
+      return attempt === 1
+        ? Promise.reject(
+            new EffectFailure('busy', 'The mail server is busy.', {
+              retry: true,
+            }),
+          )
+        : Promise.resolve({ ok: true });
+    };
+    await runtime.fire('invoices', id, 'send', { actor: { id: 'clerk' } });
+    expect(calls).toBe(2);
+    expect(record().status).toBe('done');
+  });
+
   it('fails an attempt that runs past its timeout, and aborts its signal', async () => {
     const { runtime, id, controls, dispatcher } = setup({ held: true });
     let aborted = false;
@@ -218,7 +237,11 @@ describe('operating runs', () => {
     const [failed] = (await runtime.history('invoices', id)).effectRuns;
     expect(failed).toMatchObject({ status: 'failed', attempts: 1 });
     controls.send = () => Promise.resolve({ ok: true });
-    const retried = await runtime.retryRun(failed!.id);
+    // fail already moved the invoice on, so a plain retry is refused.
+    await expect(runtime.retryRun(failed!.id)).rejects.toMatchObject({
+      code: 'RUN_SETTLED',
+    });
+    const retried = await runtime.retryRun(failed!.id, { force: true });
     // Four more tries from where it stopped: attempt 2 of at most 5.
     expect(retried).toMatchObject({
       status: 'succeeded',
@@ -228,9 +251,9 @@ describe('operating runs', () => {
     });
     // The record had already failed over, so the late success leads nowhere.
     expect(store.record('invoices', id)).toMatchObject({ status: 'failed' });
-    await expect(runtime.retryRun(failed!.id)).rejects.toMatchObject({
-      code: 'INVALID_STATE',
-    });
+    await expect(
+      runtime.retryRun(failed!.id, { force: true }),
+    ).rejects.toMatchObject({ code: 'INVALID_STATE' });
   });
 
   it('refuses to retry a run whose effect this process does not know', async () => {

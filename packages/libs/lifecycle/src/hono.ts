@@ -52,6 +52,7 @@ export const LIFECYCLE_ERROR_STATUS: Readonly<
   INVALID_STATE: 409,
   CONFLICT: 409,
   REQUEST_REUSED: 409,
+  RUN_SETTLED: 409,
   INVALID_INPUT: 400,
   INVALID_ROUTE: 400,
   INVALID_SET: 400,
@@ -84,7 +85,8 @@ async function body(context: Context): Promise<Record<string, unknown>> {
  * - `GET /:lifecycle/:id` — the record, its state and version, what the actor
  *   may do and why not, and its history
  * - `POST /:lifecycle/:id/fire` — `{ transition, input?, requestId?, expectVersion? }`
- * - `POST /:lifecycle/:id/runs/:runId/retry` and `/cancel` — for operators
+ * - `POST /:lifecycle/:id/runs/:runId/retry` — `{ force?, reason? }` — and
+ *   `/cancel`, for operators
  *
  * A refusal answers `{ code, message, blockers, problems }` with a status
  * that follows its code. Records are created and listed by the plugin's own
@@ -205,8 +207,15 @@ export function createLifecycleRoutes(
           'RUN_NOT_FOUND',
           `No effect run "${runId}" on this record.`,
         );
-      if (action === 'retry') await runtime.retryRun(runId);
-      else await runtime.cancelRun(runId);
+      if (action === 'retry') {
+        const values = await body(context);
+        await runtime.retryRun(runId, {
+          force: values.force === true,
+          ...(typeof values.reason === 'string'
+            ? { reason: values.reason }
+            : {}),
+        });
+      } else await runtime.cancelRun(runId);
       return context.json(await runtime.view(lifecycle, id, actor));
     });
 

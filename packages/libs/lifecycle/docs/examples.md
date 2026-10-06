@@ -317,7 +317,7 @@ const reserveStock = defineEffect({
   name: 'orders.reserveStock',
   retry: { attempts: 3, backoffMs: 5_000, factor: 2 },
   onSuccess: 'reserved', // fired as the system with the result as input
-  onFailure: 'backordered', // fired as the system with { error } as input
+  onFailure: 'backordered', // fired as the system with { error } as input, plus errorCode and details for an EffectFailure
   run: ({ record, idempotencyKey, services }) =>
     services.inventory.reserve(record.items, { idempotencyKey }),
 });
@@ -358,14 +358,23 @@ const requestPayment = defineEffect({
   onSuccess: 'paid',
   onFailure: 'paymentFailed',
   run: async ({ record, services, signal }) => {
-    const payment = await services.payments.pay({
-      amountCents: record.amountCents,
-      recipientId: record.applicantId,
-      // One key per report, not per run: see below.
-      idempotencyKey: `expense-payment:${record.id}`,
-      signal,
-    });
-    return { paymentRef: payment.reference };
+    try {
+      const payment = await services.payments.pay({
+        amountCents: record.amountCents,
+        recipientId: record.applicantId,
+        // One key per report, not per run: see below.
+        idempotencyKey: `expense-payment:${record.id}`,
+        signal,
+      });
+      return { paymentRef: payment.reference };
+    } catch (error) {
+      // A frozen account is an answer: fail at once, with a code to branch on.
+      if (error instanceof PayeeFrozen)
+        throw new EffectFailure('payeeFrozen', 'The payee account is frozen.', {
+          details: { payeeId: record.applicantId },
+        });
+      throw error;
+    }
   },
 });
 
@@ -381,8 +390,11 @@ paid: {
 },
 paymentFailed: {
   from: 'approved',
-  to: 'paymentNeedsAttention',
+  to: ['paymentNeedsAttention', 'needsNewAccount'],
   guard: systemOnly,
+  // input is { error, errorCode, details } for an EffectFailure, { error } otherwise.
+  route: ({ input }) =>
+    input.errorCode === 'payeeFrozen' ? 'needsNewAccount' : 'paymentNeedsAttention',
   accept: ['error'],
 },
 retryPayment: {
@@ -394,7 +406,9 @@ retryPayment: {
 
 The effect's own `idempotencyKey` is the same on every attempt of one run, but `retryPayment` re-enters `approved` and so creates a new run with a new key. If an earlier attempt did pay and only its response was lost — a timeout, say — a key per run would let the second run pay again. The business key above, one per report, makes the payment service refuse the duplicate; where the service has no idempotency, look the payment up by that key before paying.
 
-`retryRun()` on the failed run does not undo `onFailure`: a late success would try `paid` from `paymentNeedsAttention` and be refused with `INVALID_STATE`. Decide the recovery path explicitly, as `retryPayment` does here. Pass `signal` to services that can cancel.
+An effect that knows why it failed throws an `EffectFailure`: it is not retried unless it passes `retry: true`, and `onFailure` receives its `code` as `errorCode` and its `details` as they are, so the route branches on a code rather than on the wording of a message.
+
+`retryRun()` on the failed run is refused with `RUN_SETTLED` once `paymentFailed` has moved the report on: a payment made now would leave the report waiting for attention with the money gone, because `paid` cannot start from `paymentNeedsAttention`. Recover through the record's own transitions, as `retryPayment` does here. When the provider confirms the failed attempts paid nothing, `retryRun(id, { force: true, reason })` runs it anyway, and a success still continues only if the state allows `onSuccess`. A continuation's log entry carries `$run:<runId>:failed` or `:succeeded` as its `requestId`, which is how the runtime knows, and why a run continues its record at most once per outcome. Pass `signal` to services that can cancel.
 
 ### 11. Confirm by webhook
 
@@ -908,7 +922,7 @@ function FailedRuns() {
 }
 ```
 
-Retry and cancel go through the standard routes, which refuse `operate` unless `authorize` allows it ([section 26](#26-permissions-on-the-standard-routes)). A run marked `registered: false` names an effect this process does not know — usually a renamed effect — and `retryRun()` refuses it with `UNKNOWN_EFFECT`; register the old name again or cancel it. A `dead` run ended without recording an outcome on every attempt, typically because the process crashed in it: find out why before retrying. A retry grants a fresh budget of attempts and counts on from the ones before.
+Retry and cancel go through the standard routes, which refuse `operate` unless `authorize` allows it ([section 26](#26-permissions-on-the-standard-routes)). A run marked `registered: false` names an effect this process does not know — usually a renamed effect — and `retryRun()` refuses it with `UNKNOWN_EFFECT`; register the old name again or cancel it. A `dead` run ended without recording an outcome on every attempt, typically because the process crashed in it: find out why before retrying. A retry grants a fresh budget of attempts and counts on from the ones before. A run whose `onFailure` already moved the record on is refused with `RUN_SETTLED`; recover through the record's transitions, or pass `{ force: true, reason }` to `client.retryRun()` when the failed attempts are known to have done nothing.
 
 ### 24. Duplicate requests and stale pages
 

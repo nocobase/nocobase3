@@ -58,7 +58,12 @@ export interface EffectContext<T extends LifecycleTypes> {
   readonly to: T['state'];
   /** 1 on the first try; an operator's retry counts on from the attempts before it. */
   readonly attempt: number;
-  /** The same on every attempt of this effect run: key external calls by it. */
+  /**
+   * The same on every attempt of this effect run, and only of this run: a
+   * record that enters the state again owes a new run with a new key. Key a
+   * call that must happen once per business fact — a payment — by that fact,
+   * such as a payment instruction's id, rather than by this.
+   */
   readonly idempotencyKey: string;
   readonly parameters: ParametersOf<T>;
   readonly services: ServicesOf<T>;
@@ -88,14 +93,23 @@ export interface EffectDefinition<T extends LifecycleTypes> {
   readonly retry?: EffectRetry;
   /** Transition fired as the system once the effect succeeds; its input is the effect's result when that is an object. */
   readonly onSuccess?: string;
-  /** Transition fired as the system once the last attempt fails; its input is `{ error }`. */
+  /**
+   * Transition fired as the system once the last attempt fails. Its input is
+   * `{ error }`, plus `errorCode` and `details` when the effect threw an
+   * `EffectFailure`. Once it has moved the record on, `retryRun()` refuses
+   * the run unless forced.
+   */
   readonly onFailure?: string;
   /**
    * How long one attempt may take. The attempt's signal is aborted and the
    * attempt fails then, whether or not `run` notices.
    */
   readonly timeoutMs?: number;
-  /** Returns a JSON value to keep with the run, or nothing. Throw to fail. */
+  /**
+   * Returns a JSON value to keep with the run, or nothing. Throw to fail;
+   * throw an `EffectFailure` to fail with a code and details the `onFailure`
+   * transition can branch on.
+   */
   run(context: EffectContext<T>): unknown;
 }
 

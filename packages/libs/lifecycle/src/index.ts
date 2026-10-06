@@ -23,8 +23,10 @@ export {
   type TriggerDefinition,
 } from './definition.js';
 export {
+  EffectFailure,
   LifecycleError,
   type Blocker,
+  type EffectFailureOptions,
   type InputProblem,
   type LifecycleErrorCode,
   type LifecycleErrorDetails,
@@ -59,6 +61,7 @@ export {
   type LifecycleLogger,
   type LifecycleRuntimeOptions,
   type PruneOptions,
+  type RetryRunOptions,
   type RecordHistory,
   type RecordView,
   type RegisterOptions,

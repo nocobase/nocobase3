@@ -48,6 +48,13 @@ export interface FireRequest {
   readonly expectVersion?: number | null;
 }
 
+export interface RetryRequest {
+  /** Retry a run whose `onFailure` already moved the record on; see `runtime.retryRun()`. */
+  readonly force?: boolean;
+  /** Why it is forced, for the server's log. */
+  readonly reason?: string;
+}
+
 /** Talks to the routes `createLifecycleRoutes()` mounts. */
 export interface LifecycleClient {
   describe(lifecycle: string): Promise<LifecycleDescriptionView>;
@@ -58,7 +65,12 @@ export interface LifecycleClient {
     transition: string,
     request?: FireRequest,
   ): Promise<FireView>;
-  retryRun(lifecycle: string, id: string, runId: string): Promise<RecordView>;
+  retryRun(
+    lifecycle: string,
+    id: string,
+    runId: string,
+    request?: RetryRequest,
+  ): Promise<RecordView>;
   cancelRun(lifecycle: string, id: string, runId: string): Promise<RecordView>;
 }
 
@@ -147,10 +159,11 @@ export function createLifecycleClient(
             : { expectVersion: request.expectVersion }),
         },
       }),
-    retryRun: (lifecycle, id, runId) =>
+    retryRun: (lifecycle, id, runId, request = {}) =>
       send({
         method: 'POST',
         path: `${record(lifecycle, id)}/runs/${segment(runId)}/retry`,
+        json: request,
       }),
     cancelRun: (lifecycle, id, runId) =>
       send({
@@ -180,7 +193,8 @@ export interface UseLifecycleResult {
    * carrying the blockers or problems.
    */
   readonly fire: (transition: string, input?: JsonObject) => Promise<FireView>;
-  readonly retryRun: (runId: string) => Promise<void>;
+  /** Rejects with `RUN_SETTLED` when the run's `onFailure` already moved the record on, unless forced. */
+  readonly retryRun: (runId: string, request?: RetryRequest) => Promise<void>;
   readonly cancelRun: (runId: string) => Promise<void>;
   readonly reload: () => Promise<void>;
 }
@@ -277,8 +291,8 @@ export function useLifecycle(
             ...(view ? { expectVersion: view.version } : {}),
           }),
         ),
-      retryRun: async (runId: string) => {
-        await act(() => client.retryRun(lifecycle, id ?? '', runId));
+      retryRun: async (runId: string, request: RetryRequest = {}) => {
+        await act(() => client.retryRun(lifecycle, id ?? '', runId, request));
       },
       cancelRun: async (runId: string) => {
         await act(() => client.cancelRun(lifecycle, id ?? '', runId));

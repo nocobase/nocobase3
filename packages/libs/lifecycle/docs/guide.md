@@ -324,7 +324,7 @@ Declare a trigger: `when` is the state, `after(parameters)` returns milliseconds
 
 ### Call an external system, retry, then move on
 
-Write an effect. `retry`, `timeoutMs` and `shouldRetry` control the retries; pass `idempotencyKey` to the external system; `onSuccess: 'paid'` fires the next transition as the system with the run's result as input, and `accept: ['paymentRef']` on that transition writes the result onto the record. `onFailure` receives `{ error }`.
+Write an effect. `retry`, `timeoutMs` and `shouldRetry` control the retries; pass `idempotencyKey` to the external system; `onSuccess: 'paid'` fires the next transition as the system with the run's result as input, and `accept: ['paymentRef']` on that transition writes the result onto the record. `onFailure` receives `{ error }`; throw an `EffectFailure(code, message, { details })` when the effect knows why it failed, and it receives `errorCode` and `details` as well, without the attempt being retried. `idempotencyKey` covers the attempts of one run only: a record entering the state again owes a new run with a new key, so a call that must happen once per business fact is keyed by that fact.
 
 ### Refuse duplicate submissions and stale pages
 
@@ -352,7 +352,7 @@ Register the services as a factory, `(handle) => services`, so the services a gu
 
 ### Operate: list, retry, cancel, prune
 
-`listEffectRuns({ status: 'failed' })` finds the failed runs; `retryRun(id)` runs a `failed`, `dead` or `cancelled` run again with a fresh budget of attempts; `cancelRun(id)` gives up on a `queued` or `running` one; `prune({ olderThan })` deletes old `succeeded` and `cancelled` runs. The retry and cancel routes are `operate` actions, refused unless `authorize` allows them.
+`listEffectRuns({ status: 'failed' })` finds the failed runs; `retryRun(id)` runs a `failed`, `dead` or `cancelled` run again with a fresh budget of attempts, and refuses with `RUN_SETTLED` a run whose `onFailure` already moved the record on unless given `{ force: true, reason }`; `cancelRun(id)` gives up on a `queued` or `running` one; `prune({ olderThan })` deletes old `succeeded` and `cancelled` runs. The retry and cancel routes are `operate` actions, refused unless `authorize` allows them.
 
 ### Draw the state diagram
 
@@ -401,6 +401,7 @@ Changing a definition that is already in production is covered in [design.md](de
 | `INVALID_STATE`                                                                    | 409  | The current state does not allow the transition, or a run is not in a state the operation allows        |
 | `CONFLICT`                                                                         | 409  | A concurrent change, or `expect` not met (a stale page)                                                 |
 | `REQUEST_REUSED`                                                                   | 409  | The `requestId` already fired another transition on this record; nothing was changed                    |
+| `RUN_SETTLED`                                                                      | 409  | `retryRun()` on a run whose `onFailure` already moved the record on, without `force`                    |
 | `INVALID_INPUT`                                                                    | 400  | `validate` refused; `problems` lists the fields                                                         |
 | `INVALID_ROUTE` / `INVALID_SET`                                                    | 400  | `route` returned a state not in `to` / `set` or `create` wrote a field the lifecycle manages            |
 | `UNKNOWN_LIFECYCLE` / `UNKNOWN_TRANSITION` / `UNKNOWN_EFFECT` / `RECORD_NOT_FOUND` | 404  | Nothing by that name here; `UNKNOWN_EFFECT` is a retry of a run whose effect this process does not know |
