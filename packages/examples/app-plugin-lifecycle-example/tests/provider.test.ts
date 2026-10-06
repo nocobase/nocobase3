@@ -125,14 +125,23 @@ describe('lifecycle example provider', () => {
         actor: { id: 'lin' },
         input: {},
       });
-      const waiting = await service.listExpenses('chen', 'approvals');
-      expect(waiting.map((record) => record.id)).toEqual([expense.id]);
+      const waiting = await service.listExpenses('chen', 'approvals', {
+        page: 1,
+        pageSize: 20,
+      });
+      expect(waiting.records.map((record) => record.id)).toEqual([expense.id]);
+      expect(waiting.total).toBe(1);
       await service.runtime.fire('expenses', id, 'requestInfo', {
         actor: { id: 'chen' },
         input: { reason: '请补充行程单' },
       });
       // Sent back, it is with the applicant and leaves the approver's queue.
-      expect(await service.listExpenses('chen', 'approvals')).toEqual([]);
+      expect(
+        await service.listExpenses('chen', 'approvals', {
+          page: 1,
+          pageSize: 20,
+        }),
+      ).toEqual({ records: [], total: 0 });
       await service.runtime.fire('expenses', id, 'resubmit', {
         actor: { id: 'lin' },
         input: {},

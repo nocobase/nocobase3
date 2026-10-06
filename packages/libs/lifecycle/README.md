@@ -44,21 +44,20 @@ export const ticketLifecycle: Lifecycle<TicketTypes> =
 
 ## Entries
 
-| Entry                         | Provides                                                                                                                                               |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `@nocobase/lifecycle`         | `defineLifecycle`, `defineEffect`, `LifecycleRuntime`, `createRepositoryLifecycleStore`, `MemoryLifecycleStore`, `toMermaid`                           |
-| `@nocobase/lifecycle/jobs`    | `createLifecycleJobs()`, the dispatcher that runs effects on `@nocobase/jobs` and sweeps triggers on a schedule                                        |
-| `@nocobase/lifecycle/hono`    | `createLifecycleRoutes()`, the routes a record page needs, and `LIFECYCLE_ERROR_STATUS`                                                                |
-| `@nocobase/lifecycle/react`   | `createLifecycleHook()`, configured once per plugin so a page calls one hook; `createLifecycleClient()` and `useLifecycle()` beneath it                |
-| `@nocobase/lifecycle/testing` | `createLifecycleTestKit()`: a memory store, a fake clock and in-process effects whose retries wait for that clock, so waits and retries are unit tests |
+| Entry                         | Provides                                                                                                                                                                                                              |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@nocobase/lifecycle`         | `defineLifecycle`, `defineEffect`, `LifecycleRuntime`, `createRepositoryLifecycleStore`, `MemoryLifecycleStore`, `toMermaid`, and `lifecycleErrorFields()` and `lifecycleDescriptionView()` for a plugin's own routes |
+| `@nocobase/lifecycle/jobs`    | `createLifecycleJobs()`, the dispatcher that runs effects on `@nocobase/jobs` and sweeps triggers on a schedule                                                                                                       |
+| `@nocobase/lifecycle/react`   | `createLifecycleHook()`, configured once per plugin so a page calls one hook; `createLifecycleClient()` and `useLifecycle()` beneath it                                                                               |
+| `@nocobase/lifecycle/testing` | `createLifecycleTestKit()`: a memory store, a fake clock and in-process effects whose retries wait for that clock, so waits and retries are unit tests                                                                |
 
-`@nocobase/db` is a peer; `@nocobase/jobs`, `hono` and `react` are optional peers, each needed only by the entry that imports it.
+`@nocobase/db` is a peer; `@nocobase/jobs` and `react` are optional peers, each needed only by the entry that imports it. The library ships no HTTP routes: they belong to the plugin, under its namespace and declared for the application's API document, and the guide shows how to write the ones the React hook calls.
 
 ## Documentation
 
 - [docs/concepts.md](docs/concepts.md) — why the record is the process, the seven concepts, what a click does, when to use it and when not.
 - [docs/design.md](docs/design.md) — the invariants, the transaction, effect execution, trigger sweeps, storage requirements, where an extension goes, and how to change a definition that is in production.
-- [docs/guide.md](docs/guide.md) — a leave request from definition to page, recipes by scenario, the checklist before going live, troubleshooting, error codes and the standard routes.
+- [docs/guide.md](docs/guide.md) — a leave request from definition to page, recipes by scenario, the checklist before going live, troubleshooting, error codes and the record routes a plugin writes for the React hook.
 - [docs/examples.md](docs/examples.md) — one capability or combination per section, grouped by modelling transitions, time, effects and the outside, several records, extending and adopting, operating, and pages and tests, each with what the library does and does not take care of.
 
 `packages/examples/app-plugin-lifecycle-example` shows every capability on a help desk and expense reports; `packages/examples/app-plugin-office-flows-example` builds two office processes from six lifecycles.

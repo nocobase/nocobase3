@@ -19,10 +19,6 @@
       "types": "./src/testing.ts",
       "import": "./src/testing.ts"
     },
-    "./hono": {
-      "types": "./src/hono.ts",
-      "import": "./src/hono.ts"
-    },
     "./react": {
       "types": "./src/react.ts",
       "import": "./src/react.ts"
@@ -44,10 +40,6 @@
       "./testing": {
         "types": "./dist/testing.d.ts",
         "import": "./dist/testing.js"
-      },
-      "./hono": {
-        "types": "./dist/hono.d.ts",
-        "import": "./dist/hono.js"
       },
       "./react": {
         "types": "./dist/react.d.ts",
@@ -74,7 +66,6 @@
   "peerDependencies": {
     "@nocobase/db": "workspace:^",
     "@nocobase/jobs": "workspace:^",
-    "hono": "catalog:",
     "react": "catalog:"
   },
   "devDependencies": {
@@ -87,7 +78,6 @@
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "eslint": "catalog:",
-    "hono": "catalog:",
     "jsdom": "catalog:",
     "prettier": "catalog:",
     "react": "catalog:",
@@ -96,9 +86,6 @@
     "vitest": "catalog:"
   },
   "peerDependenciesMeta": {
-    "hono": {
-      "optional": true
-    },
     "react": {
       "optional": true
     },

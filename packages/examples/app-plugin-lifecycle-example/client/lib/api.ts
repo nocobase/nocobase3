@@ -1,4 +1,6 @@
 import type { ApiClient } from '@nocobase/app-client';
+
+import { LIFECYCLE_ROUTES } from '../../shared/routes.js';
 import type {
   Blocker,
   LifecycleDescriptionView,
@@ -26,7 +28,10 @@ export interface RecordList {
   readonly parameters: Readonly<Record<string, unknown>>;
 }
 
-const base = 'lifecycle-example';
+const base = LIFECYCLE_ROUTES;
+
+/** Lists show at most this many records; the routes page by it. */
+const PAGE_SIZE = 100;
 
 /** The plugin's own routes: lists and forms. A record's view and its transitions go through `useExampleLifecycle`. */
 export function exampleApi(client: ApiClient): {
@@ -37,35 +42,51 @@ export function exampleApi(client: ApiClient): {
     id: string,
     actAs: string,
     values: Plain,
-  ): Promise<void>;
+  ): Promise<Plain>;
   runTriggers(): Promise<number>;
 } {
   return {
-    list: (name, actAs, view) =>
-      client.request<RecordList>({
+    list: async (name, actAs, view) => {
+      const { data, meta } = await client.request<{
+        readonly data: readonly Plain[];
+        readonly meta: {
+          readonly parameters: Readonly<Record<string, unknown>>;
+        };
+      }>({
         path: `${base}/${name}`,
-        query: { actAs, ...(view ? { view } : {}) },
-      }),
-    create: (name, actAs, values) =>
-      client.request<Plain>({
-        method: 'POST',
-        path: `${base}/${name}`,
-        json: { ...values, actAs },
-      }),
-    update: async (name, id, actAs, values) => {
-      await client.request({
-        method: 'PUT',
-        path: `${base}/${name}/${encodeURIComponent(id)}`,
-        json: { ...values, actAs },
+        query: {
+          actAs,
+          pageSize: String(PAGE_SIZE),
+          ...(view ? { view } : {}),
+        },
       });
+      return { records: data, parameters: meta.parameters };
     },
+    create: async (name, actAs, values) =>
+      (
+        await client.request<{ readonly data: Plain }>({
+          method: 'POST',
+          path: `${base}/${name}`,
+          query: { actAs },
+          json: values,
+        })
+      ).data,
+    update: async (name, id, actAs, values) =>
+      (
+        await client.request<{ readonly data: Plain }>({
+          method: 'PATCH',
+          path: `${base}/${name}/${encodeURIComponent(id)}`,
+          query: { actAs },
+          json: values,
+        })
+      ).data,
     runTriggers: async () =>
       (
-        await client.request<{ fired: number }>({
+        await client.request<{ readonly data: { readonly fired: number } }>({
           method: 'POST',
-          path: `${base}/triggers/run`,
+          path: `${base}/runTriggers`,
         })
-      ).fired,
+      ).data.fired,
   };
 }
 
@@ -74,18 +95,21 @@ export type Translate = (key: string, fallback: string) => string;
 
 const asIs: Translate = (_key, fallback) => fallback;
 
-interface RefusalPayload {
-  readonly code?: unknown;
+/** The standard error body's `error`, with the lifecycle's reasons in `metadata`. */
+interface RefusalBody {
   readonly reason?: unknown;
   readonly message?: unknown;
-  readonly blockers?: unknown;
-  readonly problems?: unknown;
+  readonly metadata?: {
+    readonly blockers?: unknown;
+    readonly problems?: unknown;
+  };
 }
 
-function payloadOf(cause: unknown): RefusalPayload | undefined {
+function payloadOf(cause: unknown): RefusalBody | undefined {
   if (typeof cause !== 'object' || cause === null) return undefined;
-  const payload = (cause as { payload?: unknown }).payload;
-  return typeof payload === 'object' && payload !== null ? payload : undefined;
+  const payload = (cause as { payload?: { error?: unknown } }).payload;
+  const body = payload?.error;
+  return typeof body === 'object' && body !== null ? body : undefined;
 }
 
 /** A guard's refusal in the page's language, by its code; its English message otherwise. */
@@ -108,7 +132,7 @@ function problemMessage(
 /**
  * What to tell the person about a failed request. The server answers in
  * English with stable codes — a guard's `code`, a problem's `field`, the
- * service's `reason` — and the page's locale translates what it knows.
+ * error's `reason` — and the page's locale translates what it knows.
  */
 export function errorMessage(
   cause: unknown,
@@ -116,15 +140,15 @@ export function errorMessage(
 ): string {
   const payload = payloadOf(cause);
   if (payload) {
-    const blockers = Array.isArray(payload.blockers)
-      ? (payload.blockers as Blocker[])
+    const blockers = Array.isArray(payload.metadata?.blockers)
+      ? (payload.metadata.blockers as Blocker[])
       : [];
     if (blockers.length)
       return blockers
         .map((blocker) => blockerMessage(blocker, translate))
         .join(' ');
-    const problems = Array.isArray(payload.problems)
-      ? (payload.problems as { field?: string; message: string }[])
+    const problems = Array.isArray(payload.metadata?.problems)
+      ? (payload.metadata.problems as { field?: string; message: string }[])
       : [];
     if (problems.length)
       return problems

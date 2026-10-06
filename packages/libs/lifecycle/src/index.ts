@@ -84,6 +84,18 @@ export type {
   TransitionEntry,
 } from './store.js';
 export { toMermaid, type MermaidOptions } from './mermaid.js';
+export {
+  lifecycleDescriptionView,
+  type FireView,
+  type LifecycleDescriptionView,
+} from './views.js';
+export {
+  lifecycleErrorFields,
+  type LifecycleApiErrorFields,
+  type LifecycleApiErrorOptions,
+  type LifecycleApiFieldViolation,
+  type LifecycleApiStatus,
+} from './api-errors.js';
 export { MemoryLifecycleStore } from './memory-store.js';
 export { LIFECYCLE_COLLECTIONS } from './collections.js';
 export {

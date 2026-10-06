@@ -1,6 +1,6 @@
 # Guide
 
-A leave request taken from definition to page, then recipes by scenario, a checklist before going live, and troubleshooting. The package is `@nocobase/lifecycle`, with `/jobs`, `/hono`, `/react` and `/testing` entries.
+A leave request taken from definition to page, then recipes by scenario, a checklist before going live, and troubleshooting. The package is `@nocobase/lifecycle`, with `/jobs`, `/react` and `/testing` entries.
 
 ## Quick start: a leave request
 
@@ -200,29 +200,68 @@ await jobs.shutdown();
 
 Without a dispatcher, effects run in process before `fire()` returns, which is fine while developing. `createLifecycleJobs()` is what to use once the jobs service is there; see the checklist below for what it takes care of.
 
-### 5. Mount the standard routes
+### 5. Write the record routes
 
-Keep the path in `shared/`, so the server's router and the client's hook read the same constant:
+The library ships no routes: they are the plugin's, under its namespace, declared for the API document and refusing in the standard error body, as `packages/app/app-skills/skills/nocobase-app-development/references/http-api.md` requires of every `/api` route. Write the few the page's hook calls (listed under [The record routes](#the-record-routes)) and keep their base path in `shared/`, so the server and the client read the same constant:
 
 ```ts
 // shared/routes.ts
-export const LEAVE_LIFECYCLE_ROUTES: string = 'leaves/lifecycles';
+export const LEAVE_ROUTES: string = 'leaves';
 ```
 
 ```ts
-import { createLifecycleRoutes } from '@nocobase/lifecycle/hono';
+import {
+  ApiError,
+  apiErrorHandler,
+  apiValidator,
+  dataResponse,
+  describeRoute,
+} from '@nocobase/app-server/router';
+import { LifecycleError, lifecycleErrorFields } from '@nocobase/lifecycle';
+
+/** A lifecycle refusal as the standard error body; anything else as it is. */
+function toApiError(error: unknown, inputField?: string): unknown {
+  if (!(error instanceof LifecycleError)) return error;
+  const fields = lifecycleErrorFields(error, inputField ? { inputField } : {});
+  return fields ? new ApiError({ ...fields, domain: 'leaves' }) : error;
+}
 
 router.use('/leaves/*', authentication.required());
-router.route(
-  `/${LEAVE_LIFECYCLE_ROUTES}`,
-  createLifecycleRoutes(runtime, {
-    lifecycles: ['leaves'],
-    actor: (c) => ({ id: String(c.get('auth')?.user.id) }),
-    authorize: (access) => access.action !== 'operate', // the default; plug access control in here
+router.onError((error, c) => apiErrorHandler(toApiError(error), c));
+router.post(
+  '/leaves/:leaveId/fire',
+  describeRoute({
+    tags: ['Leaves'],
+    summary: 'Fire a transition on a leave request',
+    operationId: 'leavesFireTransition',
+    responses: { 200: dataResponse(FireViewSchema) /* and the refusals */ },
   }),
+  apiValidator('param', LeaveParams),
+  apiValidator('json', FireInput), // { transition, input, requestId, expectVersion? }
+  async (c) => {
+    const { leaveId } = c.req.valid('param');
+    const body = c.req.valid('json');
+    const actor = { id: String(c.get('auth')?.user.id) };
+    try {
+      const result = await runtime.fire('leaves', leaveId, body.transition, {
+        actor,
+        input: body.input,
+        requestId: body.requestId,
+        ...(body.expectVersion === undefined
+          ? {}
+          : { expect: { version: body.expectVersion } }),
+      });
+      const view = await runtime.view('leaves', leaveId, actor);
+      return c.json({ data: { ...view, replayed: result.replayed === true } });
+    } catch (error) {
+      throw toApiError(error, 'input'); // field problems sit under `input` in this body
+    }
+  },
 );
-// Lists and creation stay with the plugin's own routes; creation calls runtime.create().
+// Lists and creation are the plugin's own routes too; creation calls runtime.create().
 ```
+
+The lifecycle example's `server/routes/lifecycle.ts` is the complete set — the description, a record's view, firing, and an operator's retry and cancel of a run — with their zod schemas in `server/routes/schemas.ts` and their tests.
 
 ### 6. Use the hook on the page
 
@@ -236,11 +275,11 @@ import {
   type UseRecordLifecycle,
 } from '@nocobase/lifecycle/react';
 
-import { LEAVE_LIFECYCLE_ROUTES } from '../../shared/routes.js';
+import { LEAVE_ROUTES } from '../../shared/routes.js';
 
 export const useLeaveLifecycle: UseRecordLifecycle = createLifecycleHook({
   useTransport: useApiClient,
-  basePath: LEAVE_LIFECYCLE_ROUTES,
+  basePath: LEAVE_ROUTES,
 });
 ```
 
@@ -360,7 +399,7 @@ Register the services as a factory, `(handle) => services`, so the services a gu
 
 ### Draw the state diagram
 
-`toMermaid(runtime.describe('leaves'))` produces a Mermaid state diagram: ⏱ marks a trigger, ✓ and ✗ mark an effect's `onSuccess` and `onFailure`. `GET /:lifecycle` on the standard routes already includes it as `diagram`.
+`toMermaid(runtime.describe('leaves'))` produces a Mermaid state diagram: ⏱ marks a trigger, ✓ and ✗ mark an effect's `onSuccess` and `onFailure`. `lifecycleDescriptionView(runtime, name)` includes it as `diagram`, for the `GET <lifecycle>/lifecycle` route.
 
 ## Before going live
 
@@ -397,30 +436,33 @@ Changing a definition that is already in production is covered in [design.md](de
 
 ## Error codes
 
-`LifecycleError` carries `code`, `message`, `blockers` and `problems`. The standard routes map codes to HTTP statuses as below, and `LIFECYCLE_ERROR_STATUS` from `@nocobase/lifecycle/hono` is the same table for a plugin's own routes.
+`LifecycleError` carries `code`, `message`, `blockers` and `problems`. `lifecycleErrorFields(error, { inputField? })` turns a refusal into the fields of the application's standard error body — `status`, `reason` (the code), `message`, `fieldViolations` and `metadata: { blockers, problems }` — for `new ApiError({ ...fields, domain })`, and returns `undefined` for the server's own faults, which a route rethrows so the application answers an opaque `500`. `inputField` names where a transition's input sits in the body, such as `input`, so a problem with `line` is reported on `input.line`.
 
-| Code                                                                               | HTTP | When                                                                                                    |
-| ---------------------------------------------------------------------------------- | ---- | ------------------------------------------------------------------------------------------------------- |
-| `GUARD_REJECTED`                                                                   | 403  | A guard refused; `blockers` says why                                                                    |
-| `INVALID_STATE`                                                                    | 409  | The current state does not allow the transition, or a run is not in a state the operation allows        |
-| `CONFLICT`                                                                         | 409  | A concurrent change, or `expect` not met (a stale page)                                                 |
-| `REQUEST_REUSED`                                                                   | 409  | The `requestId` already fired another transition on this record; nothing was changed                    |
-| `RUN_SETTLED`                                                                      | 409  | `retryRun()` on a run whose `onFailure` already moved the record on, without `force`                    |
-| `INVALID_INPUT`                                                                    | 400  | `validate` refused; `problems` lists the fields                                                         |
-| `INVALID_ROUTE` / `INVALID_SET`                                                    | 400  | `route` returned a state not in `to` / `set` or `create` wrote a field the lifecycle manages            |
-| `UNKNOWN_LIFECYCLE` / `UNKNOWN_TRANSITION` / `UNKNOWN_EFFECT` / `RECORD_NOT_FOUND` | 404  | Nothing by that name here; `UNKNOWN_EFFECT` is a retry of a run whose effect this process does not know |
-| `INVALID_DEFINITION`                                                               | 500  | A broken definition, thrown when the module loads                                                       |
+| Code                                                   | Status                      | When                                                                                             |
+| ------------------------------------------------------ | --------------------------- | ------------------------------------------------------------------------------------------------ |
+| `GUARD_REJECTED`                                       | `PERMISSION_DENIED` (403)   | A guard refused; `blockers` says why                                                             |
+| `INVALID_STATE`                                        | `FAILED_PRECONDITION` (400) | The current state does not allow the transition, or a run is not in a state the operation allows |
+| `RUN_SETTLED`                                          | `FAILED_PRECONDITION` (400) | `retryRun()` on a run whose `onFailure` already moved the record on, without `force`             |
+| `UNKNOWN_EFFECT`                                       | `FAILED_PRECONDITION` (400) | A retry of a run whose effect this process does not know                                         |
+| `CONFLICT`                                             | `ABORTED` (409)             | A concurrent change, or `expect` not met (a stale page)                                          |
+| `INVALID_INPUT`                                        | `INVALID_ARGUMENT` (400)    | `validate` refused; `problems` lists the fields                                                  |
+| `REQUEST_REUSED`                                       | `INVALID_ARGUMENT` (400)    | The `requestId` already fired another transition on this record; nothing was changed             |
+| `UNKNOWN_TRANSITION`                                   | `INVALID_ARGUMENT` (400)    | The body names a transition the lifecycle does not have                                          |
+| `UNKNOWN_LIFECYCLE` / `RECORD_NOT_FOUND`               | `NOT_FOUND` (404)           | Nothing by that name here                                                                        |
+| `INVALID_ROUTE` / `INVALID_SET` / `INVALID_DEFINITION` | — (500)                     | A `route` or `set` that wrote what it may not, or a broken definition: the server's fault        |
 
-## The standard routes
+## The record routes
 
-`createLifecycleRoutes(runtime, { actor(c), authorize?(access, actor, c), lifecycles? })` returns a Hono app. A refusal answers `{ code, message, blockers, problems }`. Without `authorize`, only `operate` is refused; the routes do not authenticate, and an `actor` that throws refuses the request.
+`@nocobase/lifecycle/react` calls these below the `basePath` it is given; each answers `{ data }` and refuses in the standard error body, whose `reason` and `metadata.blockers` / `metadata.problems` the client reads:
 
-| Request                                                                               | `access.action` | Answer                                 |
-| ------------------------------------------------------------------------------------- | --------------- | -------------------------------------- |
-| `GET /:lifecycle`                                                                     | `describe`      | `{ description, parameters, diagram }` |
-| `GET /:lifecycle/:id`                                                                 | `read`          | `RecordView`                           |
-| `POST /:lifecycle/:id/fire` with `{ transition, input?, requestId?, expectVersion? }` | `fire`          | `RecordView & { replayed }`            |
-| `POST /:lifecycle/:id/runs/:runId/retry`                                              | `operate`       | `RecordView`                           |
-| `POST /:lifecycle/:id/runs/:runId/cancel`                                             | `operate`       | `RecordView`                           |
+| Request                                                                              | `data`                       |
+| ------------------------------------------------------------------------------------ | ---------------------------- |
+| `GET <lifecycle>/lifecycle`                                                          | `lifecycleDescriptionView()` |
+| `GET <lifecycle>/{id}`                                                               | `runtime.view()`             |
+| `POST <lifecycle>/{id}/fire` with `{ transition, input, requestId, expectVersion? }` | `RecordView & { replayed }`  |
+| `POST <lifecycle>/{id}/effectRuns/{runId}/retry` with `{ force?, reason? }`          | `RecordView`                 |
+| `POST <lifecycle>/{id}/effectRuns/{runId}/cancel`                                    | `RecordView`                 |
 
-`@nocobase/lifecycle/react` wraps them. `createLifecycleHook({ useTransport, basePath, refreshMs })` returns a hook, `(lifecycle, id, query?) => …`, that a page calls once; it is built on two lower-level pieces kept for tests and for code outside a component: `createLifecycleClient({ transport, basePath, query })`, which needs only a `request({ method, path, query, json })` function such as the application's API client, and `useLifecycle(client, lifecycle, id, { refreshMs })`. The hook returns `{ client, description, view, error, busy, fire, retryRun, cancelRun, reload }`. A refusal rejects with a `LifecycleRequestError` carrying `code`, `blockers` and `problems`.
+They authenticate and authorize like every other route of the plugin; who may read a record or operate its runs is the plugin's check, ahead of the validators, while the lifecycle's guards decide who may fire what.
+
+`@nocobase/lifecycle/react` wraps them. `createLifecycleHook({ useTransport, basePath, refreshMs })` returns a hook, `(lifecycle, id, query?) => …`, that a page calls once; it is built on two lower-level pieces kept for tests and for code outside a component: `createLifecycleClient({ transport, basePath, query })`, which needs only a `request({ method, path, query, json })` function such as the application's API client, and `useLifecycle(client, lifecycle, id, { refreshMs })`. The hook returns `{ client, description, view, error, busy, fire, retryRun, cancelRun, reload }`. A refusal rejects with a `LifecycleRequestError` carrying `reason`, `blockers` and `problems`.

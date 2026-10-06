@@ -214,11 +214,10 @@ const zhCN: LifecycleExampleResource = {
     priority: '请选择优先级',
   },
   errors: {
-    actor: '请选择当前身份',
-    failures: '模拟失败次数必须是非负整数',
-    expenseMissing: '报销单不存在',
-    ownExpenseOnly: '只能修改自己的报销单',
-    expenseLocked: '审批中的报销单不能修改，请先撤回',
+    EXPENSE_NOT_FOUND: '报销单不存在',
+    OWN_EXPENSE_ONLY: '只能修改自己的报销单',
+    EXPENSE_LOCKED: '审批中的报销单不能修改，请先撤回',
+    EXPENSE_CHANGED: '报销单在编辑期间被改动，请刷新后重试',
   },
   lifecycle: {
     title: '生命周期详情',

@@ -219,12 +219,12 @@ const enUS = {
     priority: 'Choose a priority.',
   },
   errors: {
-    actor: 'Choose who to act as.',
-    failures:
-      'The number of simulated failures must be a whole number, zero or more.',
-    expenseMissing: 'The expense report does not exist.',
-    ownExpenseOnly: 'Only the applicant can edit this report.',
-    expenseLocked: 'A report under review cannot be edited; withdraw it first.',
+    EXPENSE_NOT_FOUND: 'The expense report does not exist.',
+    OWN_EXPENSE_ONLY: 'Only the applicant can edit this report.',
+    EXPENSE_LOCKED:
+      'A report under review cannot be edited; withdraw it first.',
+    EXPENSE_CHANGED:
+      'The report changed while you were editing it; reload it and try again.',
   },
   lifecycle: {
     title: 'Under the hood',

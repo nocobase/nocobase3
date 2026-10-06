@@ -159,7 +159,7 @@ The definition lives in source, but some of its names are written to the databas
 - **Hierarchical states and parallel regions.** They would stop "what state is this record in" from being one field value. Where work runs in parallel, split it into child records with their own lifecycles.
 - **Reliable event delivery.** Listeners are best effort; reliability is what effects are for, and there is one reliable mechanism, not two.
 - **Migrations or a schema helper.** Migrations must be self-contained and immutable, so the owning plugin spells out its tables.
-- **Permissions.** The routes take `actor` and `authorize` callbacks; which access control they use is the application's decision.
+- **Permissions.** The library has no routes; the plugin's own routes authenticate and authorize ahead of the lifecycle's guards, with whatever access control the application uses.
 
 Definitions are checked when the module loads: every state is reachable from an initial state, a final state has no way out, every other state has one, and `accept` names none of the fields the lifecycle manages.
 

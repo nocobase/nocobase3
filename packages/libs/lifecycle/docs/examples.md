@@ -13,7 +13,7 @@ Sections 1–7, 9–12, 14, 15, 17–19, 21 and 25 are run by `tests/recipes.tes
 | Effects and the outside | [9. A background process in steps](#9-a-background-process-in-steps) · [10. Pay and continue](#10-pay-and-continue-after-the-external-call) · [11. Confirm by webhook](#11-confirm-by-webhook) · [12. Refuse while an effect is in flight](#12-refuse-while-an-effect-is-in-flight) · [13. Write related data with the transition](#13-write-related-data-with-the-transition) |
 | Several records         | [14. Wait for every signer](#14-wait-for-every-signer) · [15. Wait for child tasks](#15-wait-for-child-tasks) · [16. Dispatch sub-records repeatedly](#16-dispatch-sub-records-repeatedly) · [17. Two lifecycles on one record](#17-two-lifecycles-on-one-record) · [18. Act on many records at once](#18-act-on-many-records-at-once)                                         |
 | Extending and adopting  | [19. Add a rule from another plugin](#19-add-a-rule-from-another-plugin) · [20. A to-do list from announce](#20-a-to-do-list-from-announce) · [21. Configuration](#21-configuration-fields-initial-states-and-administrator-parameters) · [22. Adopt an existing table](#22-adopt-an-existing-table)                                                                           |
-| Operating               | [23. An operations page](#23-an-operations-page) · [24. Duplicate requests and stale pages](#24-duplicate-requests-and-stale-pages) · [25. A data fix as a transition](#25-a-data-fix-as-a-transition) · [26. Permissions on the standard routes](#26-permissions-on-the-standard-routes)                                                                                      |
+| Operating               | [23. An operations page](#23-an-operations-page) · [24. Duplicate requests and stale pages](#24-duplicate-requests-and-stale-pages) · [25. A data fix as a transition](#25-a-data-fix-as-a-transition) · [26. Permissions on the record routes](#26-permissions-on-the-record-routes)                                                                                          |
 | Pages and tests         | [27. A record page](#27-a-record-page-reasons-field-problems-conflicts-and-meta) · [28. Testing waits, retries and refusals](#28-testing-waits-retries-and-refusals)                                                                                                                                                                                                           |
 
 ## Modelling transitions
@@ -878,15 +878,17 @@ Before deploying, check that every value already in `status` is a state of the d
 An operator sees the failed and dead runs across all records, retries or cancels them, and old finished runs are pruned.
 
 ```ts
-// The plugin's own route: the standard routes only list runs per record.
-router.get('/expenses/ops/runs', requireOperator, async (c) =>
-  c.json(
-    await runtime.listEffectRuns({
-      lifecycle: 'expenses',
-      status: c.req.query('status') ?? 'failed', // or 'dead', 'queued'
-      limit: 100,
-    }),
-  ),
+// The plugin's own route: the record routes only operate the runs of one record.
+router.get(
+  '/expenses/effectRuns',
+  requireOperator, // the permission first, then the declaration and the validators
+  describeRoute({ tags, summary: 'List effect runs', operationId: 'expensesListEffectRuns', responses }),
+  apiValidator('query', ListRunsQuery), // { status: 'failed' | 'dead' | 'queued', pageSize }
+  async (c) => {
+    const { status, pageSize } = c.req.valid('query');
+    const runs = await runtime.listEffectRuns({ lifecycle: 'expenses', status, limit: pageSize });
+    return c.json({ data: runs, meta: { total: runs.length } });
+  },
 );
 
 // createLifecycleJobs({ onSweep })
@@ -898,7 +900,7 @@ onSweep: async () => {
 ```tsx
 function FailedRuns() {
   const { client } = useExpenseLifecycle('expenses', undefined); // no record selected: just the client
-  const runs = useLoader(() => api.get('/expenses/ops/runs?status=failed')); // the plugin's own loader
+  const runs = useLoader(() => api.get('/expenses/effectRuns?status=failed')); // the plugin's own loader
   return runs.map((run) => (
     <Row key={run.id}>
       {run.effect} · {run.error} · {run.attempts}/{run.maxAttempts}
@@ -918,7 +920,7 @@ function FailedRuns() {
 }
 ```
 
-Retry and cancel go through the standard routes, which refuse `operate` unless `authorize` allows it ([section 26](#26-permissions-on-the-standard-routes)). A run marked `registered: false` names an effect this process does not know — usually a renamed effect — and `retryRun()` refuses it with `UNKNOWN_EFFECT`; register the old name again or cancel it. A `dead` run ended without recording an outcome on every attempt, typically because the process crashed in it: find out why before retrying. A retry grants a fresh budget of attempts and counts on from the ones before. A run whose `onFailure` already moved the record on is refused with `RUN_SETTLED`; recover through the record's transitions, or pass `{ force: true, reason }` to `client.retryRun()` when the failed attempts are known to have done nothing.
+Retry and cancel go through the record routes, behind the plugin's operator permission ([section 26](#26-permissions-on-the-record-routes)). A run marked `registered: false` names an effect this process does not know — usually a renamed effect — and `retryRun()` refuses it with `UNKNOWN_EFFECT`; register the old name again or cancel it. A `dead` run ended without recording an outcome on every attempt, typically because the process crashed in it: find out why before retrying. A retry grants a fresh budget of attempts and counts on from the ones before. A run whose `onFailure` already moved the record on is refused with `RUN_SETTLED`; recover through the record's transitions, or pass `{ force: true, reason }` to `client.retryRun()` when the failed attempts are known to have done nothing.
 
 ### 24. Duplicate requests and stale pages
 
@@ -961,30 +963,30 @@ for (const id of stuckIds)
 
 Never update the state field directly: it bypasses the guards, the log, the effects and the version check, and leaves no record of who did it.
 
-### 26. Permissions on the standard routes
+### 26. Permissions on the record routes
 
-Guards express business rules; `authorize` on the routes is where access control goes. Map each transition to a permission and keep `operate` for operators.
+Guards express business rules; the routes' middleware is where access control goes. Check the permission ahead of `describeRoute()` and the validators, as every route does, so a caller without it is answered `403` whatever it sent, and map each transition to a permission when transitions need their own.
 
 ```ts
-createLifecycleRoutes(runtime, {
-  lifecycles: ['expenses'],
-  actor: (c) => ({ id: String(c.get('auth').user.id) }),
-  authorize: async (access, actor, c) => {
-    const acl = c.get('acl');
-    switch (access.action) {
-      case 'describe':
-      case 'read':
-        return acl.can(actor.id, `${access.lifecycle}:read`);
-      case 'fire':
-        return acl.can(actor.id, `${access.lifecycle}:${access.transition}`);
-      case 'operate':
-        return acl.can(actor.id, 'lifecycle:operate');
-    }
-  },
+// Reading a record and its lifecycle.
+router.use('/expenses/:expenseId', requirePermission('expenses', 'read'));
+// Firing: which transition is in the body, so the check reads it.
+router.post('/expenses/:expenseId/fire', async (c, next) => {
+  const { transition } = await c.req.json<{ transition?: string }>();
+  await c.var.authz.require({
+    resource: { type: 'expenses' },
+    action: `fire:${String(transition)}`,
+  });
+  await next();
 });
+// Operating runs is for operators only.
+router.use(
+  '/expenses/:expenseId/effectRuns/*',
+  requirePermission('lifecycle', 'operate'),
+);
 ```
 
-`authorize` runs before the lifecycle's own guards, so a person without the permission never learns the business reason, and a person with it still meets the guard's blockers on the page.
+The permission is checked before the lifecycle's own guards, so a person without it never learns the business reason, and a person with it still meets the guard's blockers on the page.
 
 ## Pages and tests
 

@@ -7,8 +7,11 @@ import {
   defineApiRoutes,
   type AppApiRouteContribution,
 } from '@nocobase/app-server/router';
-import { LifecycleError, type JsonObject } from '@nocobase/lifecycle';
-import { LIFECYCLE_ERROR_STATUS } from '@nocobase/lifecycle/hono';
+import {
+  LifecycleError,
+  type JsonObject,
+  type LifecycleErrorCode,
+} from '@nocobase/lifecycle';
 import { Hono, type Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
@@ -21,6 +24,22 @@ import { OfficeFlowsError, type RowInput } from '../services/office-flows.js';
 import type { TaskKind } from '../services/store.js';
 import { officeFlowsServiceToken } from '../tokens.js';
 import { text } from '../../shared/text.js';
+
+const LIFECYCLE_STATUS: Record<LifecycleErrorCode, ContentfulStatusCode> = {
+  INVALID_DEFINITION: 500,
+  UNKNOWN_LIFECYCLE: 404,
+  UNKNOWN_TRANSITION: 404,
+  UNKNOWN_EFFECT: 404,
+  RECORD_NOT_FOUND: 404,
+  GUARD_REJECTED: 403,
+  INVALID_STATE: 409,
+  CONFLICT: 409,
+  REQUEST_REUSED: 409,
+  RUN_SETTLED: 409,
+  INVALID_INPUT: 400,
+  INVALID_ROUTE: 400,
+  INVALID_SET: 400,
+};
 
 const SERVICE_STATUS: Record<OfficeFlowsError['code'], ContentfulStatusCode> = {
   NOT_FOUND: 404,
@@ -148,7 +167,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
             blockers: error.blockers,
             problems: error.problems,
           },
-          LIFECYCLE_ERROR_STATUS[error.code],
+          LIFECYCLE_STATUS[error.code],
         );
       if (error instanceof OfficeFlowsError)
         return context.json(
