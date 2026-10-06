@@ -427,10 +427,13 @@ router.post('/payments/callback', async (c) => {
       },
     );
   } catch (error) {
-    // The record has moved on or is gone: acknowledge, so the provider stops retrying.
+    // The record has moved on or is gone, or the event's id already carried
+    // the other outcome: acknowledge, so the provider stops retrying.
     if (
       error instanceof LifecycleError &&
-      (error.code === 'INVALID_STATE' || error.code === 'RECORD_NOT_FOUND')
+      (error.code === 'INVALID_STATE' ||
+        error.code === 'RECORD_NOT_FOUND' ||
+        error.code === 'REQUEST_REUSED')
     )
       return c.body(null, 204);
     // A conflict or a database failure answers 500, and the provider retries.
@@ -440,7 +443,7 @@ router.post('/payments/callback', async (c) => {
 });
 ```
 
-A replay returns the first log entry with `replayed: true` and the record as it is now. Acknowledge only what can never succeed; a `CONFLICT` may succeed on the provider's next delivery, and a store failure certainly should be retried.
+A replay returns the first log entry with `replayed: true` and the record as it is now. The same `requestId` sent for another transition is not a replay but `REQUEST_REUSED`, and changes nothing. Acknowledge only what can never succeed; a `CONFLICT` may succeed on the provider's next delivery, and a store failure certainly should be retried.
 
 ### 12. Refuse while an effect is in flight
 
@@ -921,7 +924,7 @@ await runtime.fire('expenses', expenseId, 'approve', {
 });
 ```
 
-A `CONFLICT` means the record changed since the page was loaded: reload and let the person decide again; do not retry with the newer version. A repeated `requestId` replays the earlier log entry, marked `replayed`, and returns the record as it is now. The React hook sends a fresh key and the displayed version per `fire()` call, so calling it again is a new decision. For a webhook, derive the key from the sender's delivery id, namespaced by source, as in [section 11](#11-confirm-by-webhook).
+A `CONFLICT` means the record changed since the page was loaded: reload and let the person decide again; do not retry with the newer version. A repeated `requestId` replays the earlier log entry, marked `replayed`, and returns the record as it is now; the same key sent for another transition is refused with `REQUEST_REUSED`, so a key spent on one decision cannot swallow another. The React hook sends a fresh key and the displayed version per `fire()` call, so calling it again is a new decision. For a webhook, derive the key from the sender's delivery id, namespaced by source, as in [section 11](#11-confirm-by-webhook).
 
 ### 25. A data fix as a transition
 

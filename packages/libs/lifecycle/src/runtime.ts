@@ -104,8 +104,10 @@ export interface FireOptions {
   readonly expect?: FireExpectation;
   /**
    * The caller's key for this request — a form submission, a webhook
-   * delivery. Sent again for the same record, it finds the first request's
-   * log entry and changes nothing.
+   * delivery. Sent again for the same record and transition, it finds the
+   * first request's log entry and changes nothing; sent for another
+   * transition, it is refused with `REQUEST_REUSED`. Reuse it for the
+   * retries of one action, and take a new one for each new decision.
    */
   readonly requestId?: string;
 }
@@ -115,7 +117,7 @@ export interface FireResult {
   readonly record: LifecycleRecord;
   readonly entry: TransitionEntry;
   readonly effectRuns: readonly EffectRun[];
-  /** True when a request with this `requestId` had already fired. */
+  /** True when a request with this `requestId` had already fired this transition. */
   readonly replayed?: boolean;
 }
 
@@ -1161,6 +1163,14 @@ export class LifecycleRuntime {
         String(current.id),
         options.requestId,
       );
+      // The same key for another transition is not a repeat but a second
+      // decision made under a key already spent: replaying the first would
+      // report success for something that never ran.
+      if (earlier && earlier.transition !== transition)
+        throw new LifecycleError(
+          'REQUEST_REUSED',
+          `Request "${options.requestId}" was already used for "${earlier.transition}" on this ${lifecycle.collection} record; send "${transition}" under a new request id.`,
+        );
       if (earlier)
         return {
           record: current,

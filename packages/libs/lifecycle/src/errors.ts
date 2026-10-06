@@ -9,7 +9,8 @@ export type LifecycleErrorCode =
   | 'INVALID_ROUTE'
   | 'INVALID_SET'
   | 'UNKNOWN_EFFECT'
-  | 'CONFLICT';
+  | 'CONFLICT'
+  | 'REQUEST_REUSED';
 
 /**
  * Why a transition may not run for this actor now: the state it is in, or a

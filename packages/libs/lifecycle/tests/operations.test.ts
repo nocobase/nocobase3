@@ -126,6 +126,35 @@ describe('repeated requests', () => {
       }),
     ).rejects.toMatchObject({ code: 'INVALID_STATE' });
   });
+
+  it('refuses a request id already spent on another transition, instead of replaying it', async () => {
+    const { runtime, id, record } = setup({ held: true });
+    const first = await runtime.fire('invoices', id, 'send', {
+      actor: { id: 'clerk' },
+      requestId: 'form-1',
+    });
+    // A second decision sent under the first one's key: replaying "send"
+    // would tell the caller "fail" succeeded.
+    await expect(
+      runtime.fire('invoices', id, 'fail', {
+        actor: { id: 'clerk' },
+        requestId: 'form-1',
+      }),
+    ).rejects.toMatchObject({
+      code: 'REQUEST_REUSED',
+      message: expect.stringContaining('already used for "send"'),
+    });
+    expect(record()).toMatchObject({ status: 'sent', lifecycleVersion: 1 });
+    expect((await runtime.history('invoices', id)).transitions).toEqual([
+      first.entry,
+    ]);
+    // The transition itself is still open to a new request.
+    await runtime.fire('invoices', id, 'fail', {
+      actor: { id: 'clerk' },
+      requestId: 'form-2',
+    });
+    expect(record().status).toBe('failed');
+  });
 });
 
 describe('retry policy', () => {
