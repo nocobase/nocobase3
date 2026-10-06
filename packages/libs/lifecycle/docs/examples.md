@@ -1066,7 +1066,7 @@ function LeaveActions({ id }: { id: string }) {
 }
 ```
 
-`view.available` and a refusal carry the same blockers, so the greyed-out button and the click say the same thing. A refusal from `validate` is `INVALID_INPUT` with `problems`, one per field where the definition named one; a guard refusal is `GUARD_REJECTED` with `blockers`. `meta` is whatever JSON the definition puts there — the library only passes it through `describe()`. State titles and colours come the same way from `description.description.stateInfo`. The lifecycle example's `client/lib/api.ts` is the complete version of the translation.
+`view.available` and a refusal carry the same blockers, so the greyed-out button and the click say the same thing. A refusal from `validate` is `INVALID_INPUT` with `problems`, one per field where the definition named one, and comes before any guard is asked; a guard refusal is `GUARD_REJECTED` with `blockers`. A button whose answer depends on its input, one per line of a report, asks `runtime.can(name, id, 'approveLine', actor, { input: { line } })` rather than reading `available`, which asks with no input. `meta` is whatever JSON the definition puts there — the library only passes it through `describe()`. State titles and colours come the same way from `description.description.stateInfo`. The lifecycle example's `client/lib/api.ts` is the complete version of the translation.
 
 ### 28. Testing waits, retries and refusals
 

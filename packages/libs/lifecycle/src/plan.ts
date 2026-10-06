@@ -76,6 +76,14 @@ function problemsOf(
   return typeof answer === 'string' ? [{ message: answer }] : answer;
 }
 
+/** What the transition's `validate` finds wrong with `input`; empty when nothing is. */
+export function inputProblems<T extends LifecycleTypes>(
+  transition: LifecycleTransition<T>,
+  input: JsonObject,
+): readonly InputProblem[] {
+  return problemsOf(transition.definition.validate?.(input));
+}
+
 /**
  * Checks a creation against the definition's `create`: the values first,
  * then the guard, so a guard reads only values that passed. Throws the
@@ -148,7 +156,7 @@ export function transitionsFrom<T extends LifecycleTypes>(
 }
 
 /**
- * Decides one transition: state, guard, input, route and extra fields, in
+ * Decides one transition: state, input, guard, route and extra fields, in
  * that order. The function is pure apart from what `guard`, `route` and `set`
  * do, so a lifecycle can be tested by calling it directly.
  */
@@ -181,18 +189,20 @@ export async function planTransition<T extends LifecycleTypes>(
     now: context.now,
   });
   const definition = transition.definition;
-  const blockers = await guardBlockers(transition, base, context.guards);
-  if (blockers.length)
-    throw new LifecycleError('GUARD_REJECTED', blockers[0].message, {
-      blockers,
-    });
-  const problems = problemsOf(definition.validate?.(input));
+  // The input first, so a guard reads only input that passed: a guard
+  // judging "may this actor approve line 3" need not defend against no line.
+  const problems = inputProblems(transition, input);
   if (problems.length)
     throw new LifecycleError(
       'INVALID_INPUT',
       problems.map((problem) => problem.message).join('; '),
       { problems },
     );
+  const blockers = await guardBlockers(transition, base, context.guards);
+  if (blockers.length)
+    throw new LifecycleError('GUARD_REJECTED', blockers[0].message, {
+      blockers,
+    });
 
   const to = definition.route ? definition.route(base) : transition.to[0];
   if (!transition.to.includes(to))

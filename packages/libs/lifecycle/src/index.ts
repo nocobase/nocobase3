@@ -32,6 +32,7 @@ export {
 export {
   checkCreation,
   guardBlockers,
+  inputProblems,
   planTransition,
   stateOf,
   transitionsFrom,
@@ -45,6 +46,7 @@ export {
   LifecycleRuntime,
   type AnnounceEvent,
   type AvailableTransition,
+  type CanOptions,
   type CreateOptions,
   type EventFilter,
   type EffectDispatcher,

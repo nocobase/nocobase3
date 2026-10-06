@@ -288,16 +288,19 @@ export class LifecycleTestKit<T extends LifecycleTypes> {
     );
   }
 
+  /** Asks with `input` when the answer depends on it, as `runtime.can()` does. */
   public can(
     record: RecordRef,
     transition: string,
     actor?: string | LifecycleActor,
+    input?: JsonObject,
   ): Promise<TransitionCheck> {
     return this.runtime.can(
       this.lifecycle.name,
       idOf(record),
       transition,
       actorOf(actor),
+      input === undefined ? {} : { input },
     );
   }
 

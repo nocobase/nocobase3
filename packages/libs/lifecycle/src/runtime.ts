@@ -9,11 +9,13 @@ import {
 import {
   LifecycleError,
   type Blocker,
+  type InputProblem,
   type LifecycleErrorCode,
 } from './errors.js';
 import {
   checkCreation,
   guardBlockers,
+  inputProblems,
   planTransition,
   stateOf,
   transitionsFrom,
@@ -142,16 +144,34 @@ export interface AvailableTransition {
   readonly name: string;
   readonly title: string;
   readonly to: readonly string[];
-  /** Whether every guard lets this actor fire it now. Input is checked only on fire. */
+  /**
+   * Whether every guard lets this actor fire it now, asked with no input.
+   * A transition whose answer depends on its input — approving one line of
+   * many — is asked with `can()` and that input instead.
+   */
   readonly allowed: boolean;
   /** Why not, when it is not allowed: one entry per guard that refused. */
   readonly blockers: readonly Blocker[];
 }
 
-/** The answer of `runtime.can()`: allowed, or the reasons it is not. */
+/**
+ * The answer of `runtime.can()`: allowed, or the reasons it is not — what is
+ * wrong with the input, or who or what refuses.
+ */
 export interface TransitionCheck {
   readonly allowed: boolean;
   readonly blockers: readonly Blocker[];
+  /** What `validate` found wrong with the input; empty when no input was given. */
+  readonly problems: readonly InputProblem[];
+}
+
+export interface CanOptions {
+  /**
+   * The input the click would send, such as the line an "approve this line"
+   * button names. Given, it is validated first and the guards see it; absent,
+   * nothing is validated and the guards see `{}`, as in `available()`.
+   */
+  readonly input?: JsonObject;
 }
 
 export interface CreateOptions {
@@ -472,15 +492,19 @@ export class LifecycleRuntime {
   }
 
   /**
-   * Whether `actor` may fire `transition` on the record now. A transition
-   * the record's state does not allow is refused with a `state` blocker,
-   * before any guard is asked.
+   * Whether `actor` may fire `transition` on the record now, with `input`
+   * when the answer depends on it. A transition the record's state does not
+   * allow is refused with a `state` blocker before anything else is asked;
+   * input that `validate` refuses is answered with its problems before any
+   * guard is asked, as `fire()` would. It is a preview: `fire()` decides
+   * again inside its transaction.
    */
   public async can(
     name: string,
     id: RecordId,
     transition: string,
     actor: LifecycleActor,
+    options: CanOptions = {},
   ): Promise<TransitionCheck> {
     const registered = this.get(name);
     const { lifecycle } = registered;
@@ -502,13 +526,19 @@ export class LifecycleRuntime {
             message: `"${transition}" cannot start from "${state}".`,
           },
         ],
+        problems: [],
       };
+    const { input } = options;
+    if (input !== undefined) {
+      const problems = inputProblems(declared, input);
+      if (problems.length) return { allowed: false, blockers: [], problems };
+    }
     const blockers = await guardBlockers(
       declared,
-      this.guardContext(registered, record, actor),
+      this.guardContext(registered, record, actor, input ?? {}),
       registered.guards.get(transition),
     );
-    return { allowed: blockers.length === 0, blockers };
+    return { allowed: blockers.length === 0, blockers, problems: [] };
   }
 
   /**
@@ -1364,16 +1394,17 @@ export class LifecycleRuntime {
     return record;
   }
 
-  /** What a guard sees outside a transition: no input, no transaction. */
+  /** What a guard sees outside a transition: the input asked about, if any, and no transaction. */
   private guardContext(
     registered: Registered,
     record: LifecycleRecord,
     actor: LifecycleActor,
+    input: JsonObject = {},
   ): TransitionContext<LifecycleTypes> {
     return Object.freeze({
       record,
       actor,
-      input: {},
+      input,
       parameters: this.parameters(
         registered.lifecycle.name,
       ) as ParametersOf<LifecycleTypes>,

@@ -300,7 +300,7 @@ Each recipe below is a paragraph; [examples.md](examples.md) has the code for mo
 
 ### Tell the person why a button is greyed out
 
-A guard returns `true` to allow, or `false`, a message, or `{ code, message }` to refuse. `view().available[i].blockers` and the `blockers` on the `LifecycleError` that `fire()` throws are the same list. A stable `code` lets the page translate the reason; the example plugin's client does this through its locale files. When the state is wrong, `can()` answers with a blocker whose `source` is `state`.
+A guard returns `true` to allow, or `false`, a message, or `{ code, message }` to refuse. `view().available[i].blockers` and the `blockers` on the `LifecycleError` that `fire()` throws are the same list. A stable `code` lets the page translate the reason; the example plugin's client does this through its locale files. When the state is wrong, `can()` answers with a blocker whose `source` is `state`. `fire()` runs `validate` before the guards, so a missing field is an `INVALID_INPUT` problem rather than a guard's refusal. `available()` and `can()` without input ask the guards with `{}`, so a guard that reads the input must still answer for `{}`; when the answer depends on the input — approve this line, not that one — ask `can(name, id, transition, actor, { input })`, which validates the input first and answers `{ allowed, blockers, problems }` without throwing. Either is a preview: `fire()` decides again inside its transaction.
 
 ### Validate input and write fields onto the record
 

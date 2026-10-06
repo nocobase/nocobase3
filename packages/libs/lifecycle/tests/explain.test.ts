@@ -122,10 +122,12 @@ describe('explaining refusals', () => {
           message: '"approve" cannot start from "draft".',
         },
       ],
+      problems: [],
     });
     expect(await k.can(request, 'submit', 'lin')).toEqual({
       allowed: true,
       blockers: [],
+      problems: [],
     });
   });
 
@@ -287,5 +289,105 @@ describe('creating through the lifecycle', () => {
     const request = await k.start({ ownerId: 'lin' }, { actor: 'lin' });
     expect(request).toMatchObject({ ownerId: 'lin', status: 'draft' });
     expect(services.welcomed).toEqual(['lin']);
+  });
+});
+
+interface Report extends LifecycleRecord {
+  readonly status: 'review' | 'done';
+  readonly lines: readonly {
+    readonly approverId: string;
+    readonly approved: boolean;
+  }[];
+}
+
+interface ReportTypes {
+  record: Report;
+  state: 'review' | 'done';
+}
+
+/** Each line of a report has its own approver, so whether one may approve depends on the line. */
+const reports = defineLifecycle<ReportTypes>({
+  name: 'reports',
+  initial: 'review',
+  states: ['review', { name: 'done', final: true }],
+  transitions: {
+    approveLine: {
+      from: 'review',
+      to: 'review',
+      validate: (input) =>
+        Number.isInteger(input.line)
+          ? null
+          : [{ field: 'line', message: 'Pick a line.' }],
+      // available() asks with no input, so the guard answers for {} too.
+      guard: ({ record, actor, input }) =>
+        record.lines[Number(input.line)]?.approverId === actor.id || {
+          code: 'notYourLine',
+          message: 'Someone else approves this line.',
+        },
+      set: ({ record, input }) => ({
+        lines: record.lines.map((line, index) =>
+          index === input.line ? { ...line, approved: true } : line,
+        ),
+      }),
+    },
+    finish: { from: 'review', to: 'done' },
+  },
+});
+
+describe('input and guards', () => {
+  const lines = [
+    { approverId: 'admin', approved: false },
+    { approverId: 'it', approved: false },
+  ];
+
+  it('validates the input before any guard reads it', async () => {
+    const k = createLifecycleTestKit(reports);
+    const report = await k.start({ lines });
+    // A missing line is a field problem, not the guard's "not your line".
+    await expect(
+      k.fire(report, 'approveLine', {}, { actor: 'it' }),
+    ).rejects.toMatchObject({
+      code: 'INVALID_INPUT',
+      problems: [{ field: 'line', message: 'Pick a line.' }],
+    });
+    await k.fire(report, 'approveLine', { line: 1 }, { actor: 'it' });
+    expect(k.get(report).lines[1]).toMatchObject({ approved: true });
+  });
+
+  it('answers can() for the input a button would send', async () => {
+    const k = createLifecycleTestKit(reports);
+    const report = await k.start({ lines });
+    expect(await k.can(report, 'approveLine', 'it', { line: 1 })).toEqual({
+      allowed: true,
+      blockers: [],
+      problems: [],
+    });
+    expect(await k.can(report, 'approveLine', 'it', { line: 0 })).toMatchObject(
+      {
+        allowed: false,
+        blockers: [{ code: 'notYourLine' }],
+        problems: [],
+      },
+    );
+    // Input validate refuses is answered with its problems, not thrown.
+    expect(await k.can(report, 'approveLine', 'it', { line: 'x' })).toEqual({
+      allowed: false,
+      blockers: [],
+      problems: [{ field: 'line', message: 'Pick a line.' }],
+    });
+    // Without input the guards see {}: which line is not known, so no line is yours.
+    expect(
+      (await k.available(report, 'it')).find(
+        (transition) => transition.name === 'approveLine',
+      ),
+    ).toMatchObject({ allowed: false, blockers: [{ code: 'notYourLine' }] });
+    // The state still comes first.
+    await k.fire(report, 'finish');
+    expect(await k.can(report, 'approveLine', 'it', { line: 1 })).toMatchObject(
+      {
+        allowed: false,
+        blockers: [{ source: 'state' }],
+      },
+    );
   });
 });

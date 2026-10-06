@@ -82,7 +82,7 @@ defineLifecycle<ExpenseTypes>({
 
 1. **The page already knows the buttons.** `view()` returned the transitions the current state allows, each with `allowed` and its `blockers`, together with the record's version.
 2. **The click carries a request key and the version.** The request key makes a repeated submission a replay instead of a second transition; the version says "I decided on version N", so a decision made on a page that has gone stale is refused.
-3. **The decision and the writes are one transaction.** The state is checked, the guards and `validate` run, the destination and the fields to write are computed, the record is updated on the condition that its state and version are unchanged, a log row is written, and the effects owed are recorded as queued runs.
+3. **The decision and the writes are one transaction.** The state is checked, `validate` and then the guards run, the destination and the fields to write are computed, the record is updated on the condition that its state and version are unchanged, a log row is written, and the effects owed are recorded as queued runs.
 4. **After commit, the effects run.** They go to the dispatcher — the application's jobs service, in the examples. A failure is retried by policy; a success may fire the next transition as the system, which is how a payment marks the report `paid`.
 5. **Listeners are told.** Other code can subscribe to "this record completed that transition" to refresh a page or feed a to-do list. Delivery is best effort; work that must happen is an effect.
 

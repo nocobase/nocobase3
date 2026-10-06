@@ -9,7 +9,7 @@ How the runtime keeps one copy of the state, makes every change atomic, and runs
 | The state is stored once                             | The state is a field of the record; there is no process instance table                                                                                                                                                                             |
 | A change is written completely or not at all         | The record, the log entry and the effect runs are written in one transaction                                                                                                                                                                       |
 | Of two concurrent changes to one record, one commits | A conditional update: the write applies only while the state and the version are unchanged, otherwise `CONFLICT`. The log holds `(lifecycle, recordId, version)` under a unique index                                                              |
-| What a button shows is what a click does             | `available()`, `can()` and `fire()` ask the same guards and return the same blockers                                                                                                                                                               |
+| What a button shows is what a click does             | `available()`, `can()` and `fire()` ask the same guards and return the same blockers; `can()` with the click's input also validates it first, as `fire()` does                                                                                     |
 | A committed transition never loses its effects       | Effect runs are written in the transition's transaction (a transactional outbox); `reclaim()` on every sweep hands over again a queued run whose dispatch was lost and an attempt whose process stopped, each once it has waited a lease           |
 | One request takes effect once                        | `requestId` is kept on the log entry under a unique index on `(lifecycle, recordId, requestId)`; a repeat of the same transition returns the first result, marked `replayed`; the key sent for another transition is refused with `REQUEST_REUSED` |
 
@@ -30,7 +30,7 @@ sequenceDiagram
     R-->>P: replayed: true, nothing written
   else new request
     R->>DB: read the record, check expect.version / changedBefore
-    R->>R: state check, guards and addGuard, validate, route, accept, set
+    R->>R: state check, validate, guards and addGuard, route, accept, set
     R->>DB: conditional update (state and version unchanged)
     R->>DB: log entry (version + 1, requestId)
     R->>R: onTransition hook (same transaction)
