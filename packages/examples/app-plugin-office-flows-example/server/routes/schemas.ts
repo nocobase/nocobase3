@@ -317,11 +317,9 @@ export const ManagementRowInput: z.ZodObject<
   },
   z.core.$strict
 > = z.strictObject({
-  groupId: id
-    .optional()
-    .meta({
-      description: 'A configured group; its name and members are used.',
-    }),
+  groupId: id.optional().meta({
+    description: 'A configured group; its name and members are used.',
+  }),
   groupName: z.string().optional(),
   members: z.array(z.string()).optional(),
 });
