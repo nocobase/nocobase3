@@ -1056,7 +1056,7 @@ function LeaveActions({ id }: { id: string }) {
 
 ### 28. Testing waits, retries and refusals
 
-The test kit runs a lifecycle on a memory store with a clock to advance; `fire()` returns once every effect it caused, and every transition those fired, has finished.
+The test kit runs a lifecycle on a memory store with a clock to advance; `fire()` returns once every effect it caused, and every transition those fired, has finished. A retry with a backoff is the exception: it waits for the fake clock as it would wait for the real one, and runs on the `runDue()` after `advance()` has passed its `runAfter`. `retries: 'immediate'` runs every retry at once instead, for a test about what the attempts do rather than when.
 
 ```ts
 const kit = createLifecycleTestKit(expenseLifecycle, {
@@ -1080,13 +1080,19 @@ it('escalates to the next manager after three idle days', async () => {
   expect(await kit.history(report)).toEqual(['$create', 'submit', 'escalate']);
 });
 
-it('pays after one failed attempt', async () => {
+it('pays after one failed attempt, once its backoff has passed', async () => {
   const report = await kit.start(
     { applicantId: 'alice', amountCents: 300_000 },
     { actor: 'alice' },
   );
   kit.failEffect('expenses.requestPayment', { times: 1 });
   await kit.fire(report, 'submit', {}, { actor: 'alice' });
+  // requestPayment backs off 2 seconds before its second attempt.
+  expect(kit.get(report).status).toBe('approved');
+  kit.advance({ seconds: 1 });
+  expect(await kit.runDue()).toBe(0);
+  kit.advance({ seconds: 1 });
+  expect(await kit.runDue()).toBe(1);
   expect(kit.get(report).status).toBe('paid');
   expect(await kit.effectRuns(report)).toMatchObject([
     { effect: 'expenses.notifyApplicant', status: 'succeeded' },

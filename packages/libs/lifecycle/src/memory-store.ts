@@ -39,24 +39,34 @@ interface MemoryState {
   sequence: number;
 }
 
-function clone(state: MemoryState): MemoryState {
-  return {
-    records: new Map(
-      [...state.records].map(([collection, rows]) => [
-        collection,
-        new Map(rows),
-      ]),
-    ),
-    transitions: [...state.transitions],
-    effectRuns: new Map(state.effectRuns),
-    sequence: state.sequence,
+/** Puts back what one write replaced; see {@link MemoryLifecycleStore.transaction}. */
+type Undo = () => void;
+
+/**
+ * Sets or removes `key`, and returns how to put back what was there — unless
+ * something else has written the key since, which a rollback must not undo.
+ */
+function write<V>(
+  map: Map<string, V>,
+  key: string,
+  value: V | undefined,
+): Undo {
+  const previous = map.get(key);
+  if (value === undefined) map.delete(key);
+  else map.set(key, value);
+  return (): void => {
+    if (map.get(key) !== value) return;
+    if (previous === undefined) map.delete(key);
+    else map.set(key, previous);
   };
 }
 
 /**
- * A store in process memory, for tests and examples. A transaction works on a
- * copy and keeps it only when the work succeeds, so a refused transition
- * leaves nothing behind here either.
+ * A store in process memory, for tests and examples. A transaction keeps a
+ * log of what its own writes replaced and puts it back when the work fails,
+ * so a refused transition leaves nothing behind here either, while a write
+ * made outside the transaction meanwhile — a worker claiming an effect run —
+ * survives the rollback, as it would on a database.
  */
 export class MemoryLifecycleStore implements LifecycleStore {
   private state: MemoryState = {
@@ -66,6 +76,8 @@ export class MemoryLifecycleStore implements LifecycleStore {
     sequence: 0,
   };
   private queue: Promise<unknown> = Promise.resolve();
+  /** Set on the view a transaction's work receives, and only there. */
+  private readonly journal: Undo[] | undefined = undefined;
 
   /** Adds a record directly, the way a create form or a seed would. */
   public insertRecord(
@@ -74,7 +86,7 @@ export class MemoryLifecycleStore implements LifecycleStore {
   ): LifecycleRecord {
     const id = (values.id as RecordId | undefined) ?? this.next();
     const record = Object.freeze({ ...values, id }) as LifecycleRecord;
-    this.rows(collection).set(String(id), record);
+    this.log(write(this.rows(collection), String(id), record));
     return record;
   }
 
@@ -87,7 +99,7 @@ export class MemoryLifecycleStore implements LifecycleStore {
     const current = this.rows(collection).get(String(id));
     if (!current) throw new Error(`No ${collection} record "${String(id)}".`);
     const record = Object.freeze({ ...current, ...values, id: current.id });
-    this.rows(collection).set(String(id), record);
+    this.log(write(this.rows(collection), String(id), record));
     return record;
   }
 
@@ -98,18 +110,24 @@ export class MemoryLifecycleStore implements LifecycleStore {
 
   /**
    * Transactions run one after another, the way a database serializes
-   * writers of one row; a rollback would otherwise restore a copy taken
-   * before another transaction committed. One may not open another.
+   * writers of one row. The work receives a view of this store that logs
+   * what each of its writes replaced; a failure undoes those writes, newest
+   * first, and leaves every other write alone. A write made outside the
+   * transaction to a row the transaction also wrote wins, as it would once
+   * the database released the row's lock. One may not open another.
    */
   public transaction<R>(
     work: (store: LifecycleStore) => Promise<R>,
   ): Promise<R> {
     const run = this.queue.then(async () => {
-      const before = clone(this.state);
+      const journal: Undo[] = [];
+      const view = Object.create(this, {
+        journal: { value: journal },
+      }) as MemoryLifecycleStore;
       try {
-        return await work(this);
+        return await work(view);
       } catch (error) {
-        this.state = before;
+        for (const undo of journal.reverse()) undo();
         throw error;
       }
     });
@@ -145,9 +163,12 @@ export class MemoryLifecycleStore implements LifecycleStore {
       (version === null ? null : Number(version)) !== condition.version
     )
       return Promise.resolve(false);
-    this.rows(collection).set(
-      String(id),
-      Object.freeze({ ...current, ...values, id: current.id }),
+    this.log(
+      write(
+        this.rows(collection),
+        String(id),
+        Object.freeze({ ...current, ...values, id: current.id }),
+      ),
     );
     return Promise.resolve(true);
   }
@@ -191,7 +212,12 @@ export class MemoryLifecycleStore implements LifecycleStore {
         ),
       );
     const saved = Object.freeze({ ...entry, id: String(this.next()) });
-    this.state.transitions.push(saved);
+    const { transitions } = this.state;
+    transitions.push(saved);
+    this.log(() => {
+      const index = transitions.indexOf(saved);
+      if (index >= 0) transitions.splice(index, 1);
+    });
     return Promise.resolve(saved);
   }
 
@@ -229,7 +255,7 @@ export class MemoryLifecycleStore implements LifecycleStore {
 
   public createEffectRun(run: NewEffectRun): Promise<EffectRun> {
     const saved = Object.freeze({ ...run, id: String(this.next()) });
-    this.state.effectRuns.set(saved.id, saved);
+    this.log(write(this.state.effectRuns, saved.id, saved));
     return Promise.resolve(saved);
   }
 
@@ -250,7 +276,13 @@ export class MemoryLifecycleStore implements LifecycleStore {
         current.attempts !== condition.attempts)
     )
       return Promise.resolve(false);
-    this.state.effectRuns.set(id, Object.freeze({ ...current, ...changes }));
+    this.log(
+      write(
+        this.state.effectRuns,
+        id,
+        Object.freeze({ ...current, ...changes }),
+      ),
+    );
     return Promise.resolve(true);
   }
 
@@ -278,7 +310,7 @@ export class MemoryLifecycleStore implements LifecycleStore {
         query.statuses.includes(run.status) &&
         run.updatedAt < query.updatedBefore
       ) {
-        this.state.effectRuns.delete(id);
+        this.log(write(this.state.effectRuns, id, undefined));
         deleted += 1;
       }
     return Promise.resolve(deleted);
@@ -293,6 +325,12 @@ export class MemoryLifecycleStore implements LifecycleStore {
     return rows;
   }
 
+  /** Keeps how to undo a write, when it was made inside a transaction. */
+  private log(undo: Undo): void {
+    this.journal?.push(undo);
+  }
+
+  /** Ids are never handed out twice, rollback or not, as a database sequence. */
   private next(): number {
     this.state.sequence += 1;
     return this.state.sequence;

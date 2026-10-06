@@ -181,7 +181,7 @@ describe('support ticket', () => {
     ).rejects.toMatchObject({ code: 'GUARD_REJECTED' });
   });
 
-  it('retries a failing email and keeps the reply', async () => {
+  it('retries a failing email after its backoff and keeps the reply', async () => {
     const { tickets } = kit();
     const created = tickets.create({ ...ticket, failNotifications: 2 });
     await tickets.fire(
@@ -190,6 +190,16 @@ describe('support ticket', () => {
       { message: '请重试' },
       { actor: 'agent-zhou' },
     );
+    expect(await tickets.effectRuns(created)).toMatchObject([
+      { status: 'queued', attempts: 1, runAfter: '2026-10-01T09:00:02.000Z' },
+    ]);
+    // The second attempt waits two seconds, the third four.
+    tickets.advance({ seconds: 1 });
+    expect(await tickets.runDue()).toBe(0);
+    tickets.advance({ seconds: 1 });
+    expect(await tickets.runDue()).toBe(1);
+    tickets.advance({ seconds: 4 });
+    expect(await tickets.runDue()).toBe(1);
     expect(await tickets.effectRuns(created)).toMatchObject([
       { status: 'succeeded', attempts: 3 },
     ]);
@@ -334,6 +344,10 @@ describe('expense report', () => {
     const { expenses } = kit();
     const created = expenses.create(report(300_000, 5));
     await expenses.fire(created, 'submit', {}, { actor: 'lin' });
+    expenses.advance({ seconds: 2 });
+    await expenses.runDue();
+    expenses.advance({ seconds: 4 });
+    await expenses.runDue();
     expect(expenses.get(created).status).toBe('approved');
     const payment = (await expenses.effectRuns(created)).find(
       (run) => run.effect === 'expenses.requestPayment',
@@ -346,11 +360,18 @@ describe('expense report', () => {
     // Four failures: the three attempts, then the first retry's first try.
     const created = expenses.create(report(300_000, 4));
     await expenses.fire(created, 'submit', {}, { actor: 'lin' });
+    expenses.advance({ seconds: 2 });
+    await expenses.runDue();
+    expenses.advance({ seconds: 4 });
+    await expenses.runDue();
     const failed = (await expenses.effectRuns(created)).find(
       (run) => run.effect === 'expenses.requestPayment',
     );
     expect(failed?.status).toBe('failed');
     await expenses.runtime.retryRun(failed!.id);
+    // The retry's first try fails too, and its second waits out the capped backoff.
+    expenses.advance({ seconds: 10 });
+    await expenses.runDue();
     expect(expenses.get(created)).toMatchObject({
       status: 'paid',
       paymentRef: 'PAY-1',

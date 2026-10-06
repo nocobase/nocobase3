@@ -1,11 +1,39 @@
 import { describe, expect, it } from 'vitest';
 
-import { LifecycleError, planTransition, SYSTEM_ACTOR } from '../src/index.js';
+import {
+  defineEffect,
+  defineLifecycle,
+  LifecycleError,
+  planTransition,
+  SYSTEM_ACTOR,
+} from '../src/index.js';
 import {
   createLifecycleTestKit,
   type LifecycleTestKit,
 } from '../src/testing.js';
-import { ticketLifecycle, type TicketTypes } from './fixtures/ticket.js';
+import {
+  notifyCustomer,
+  ticketDefinition,
+  ticketLifecycle,
+  type TicketTypes,
+} from './fixtures/ticket.js';
+
+/** The ticket lifecycle with a notification that backs off a minute, then two. */
+const backedOff = defineLifecycle<TicketTypes>({
+  ...ticketDefinition,
+  transitions: {
+    ...ticketDefinition.transitions,
+    replyToCustomer: {
+      ...ticketDefinition.transitions.replyToCustomer,
+      effects: [
+        defineEffect<TicketTypes>({
+          ...notifyCustomer,
+          retry: { attempts: 3, backoffMs: 60_000, factor: 2 },
+        }),
+      ],
+    },
+  },
+});
 
 function setup(): { kit: LifecycleTestKit<TicketTypes>; sent: string[] } {
   const sent: string[] = [];
@@ -58,6 +86,53 @@ describe('ticket lifecycle', () => {
         result: { sentTo: 'a@example.com' },
       },
     ]);
+  });
+
+  it('waits out a backoff on the fake clock before the next attempt', async () => {
+    const sent: string[] = [];
+    const kit = createLifecycleTestKit(backedOff, {
+      now: '2026-10-01T09:00:00Z',
+      services: { mail: { send: (to) => void sent.push(to) } },
+    });
+    kit.failEffect('tickets.notifyCustomer', { times: 2 });
+    const ticket = kit.create({ customerEmail: 'a@example.com' });
+    await kit.fire(ticket, 'replyToCustomer', { message: 'Please confirm' });
+    expect(await kit.effectRuns(ticket)).toMatchObject([
+      { status: 'queued', attempts: 1, runAfter: '2026-10-01T09:01:00.000Z' },
+    ]);
+
+    kit.advance({ seconds: 59 });
+    expect(await kit.runDue()).toBe(0);
+    expect(sent).toEqual([]);
+    kit.advance({ seconds: 1 });
+    expect(await kit.runDue()).toBe(1);
+    // The second backoff is twice the first.
+    expect(kit.dispatcher.waiting()).toEqual([
+      {
+        runId: expect.any(String),
+        runAfter: '2026-10-01T09:03:00.000Z',
+      },
+    ]);
+    kit.advance({ minutes: 2 });
+    expect(await kit.runDue()).toBe(1);
+    expect(sent).toEqual(['a@example.com']);
+    expect(await kit.effectRuns(ticket)).toMatchObject([
+      { status: 'succeeded', attempts: 3 },
+    ]);
+  });
+
+  it('runs every retry at once when asked to, recording its backoff', async () => {
+    const kit = createLifecycleTestKit(backedOff, {
+      retries: 'immediate',
+      services: { mail: { send: () => undefined } },
+    });
+    kit.failEffect('tickets.notifyCustomer', { times: 2 });
+    const ticket = kit.create({ customerEmail: 'a@example.com' });
+    await kit.fire(ticket, 'replyToCustomer', { message: 'Please confirm' });
+    expect(await kit.effectRuns(ticket)).toMatchObject([
+      { status: 'succeeded', attempts: 3, runAfter: expect.any(String) },
+    ]);
+    expect(kit.dispatcher.waiting()).toEqual([]);
   });
 
   it('keeps the transition when every attempt of its effect fails', async () => {

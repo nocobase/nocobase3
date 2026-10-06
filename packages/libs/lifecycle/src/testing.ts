@@ -3,6 +3,7 @@ import { MemoryLifecycleStore } from './memory-store.js';
 import {
   LifecycleRuntime,
   type AvailableTransition,
+  type EffectDispatcher,
   type TransitionCheck,
 } from './runtime.js';
 import type { EffectRun, TransitionEntry } from './store.js';
@@ -15,12 +16,114 @@ import type {
   ServicesOf,
 } from './types.js';
 
+/**
+ * When an in-process retry runs. `clock` waits until the clock reaches the
+ * run's `runAfter`, as the jobs dispatcher does, so a backoff is part of what
+ * a test sees; `immediate` runs every retry at once and only records the
+ * backoff, for a test about what the attempts do rather than when.
+ */
+export type RetryTiming = 'clock' | 'immediate';
+
+export interface InProcessDispatcherOptions {
+  /** The clock `runAfter` is compared with: the runtime's own. */
+  readonly clock: () => Date;
+  /** Defaults to `clock`. */
+  readonly retries?: RetryTiming;
+}
+
+/** A run an {@link InProcessDispatcher} holds until its backoff has passed. */
+export interface WaitingRun {
+  readonly runId: string;
+  readonly runAfter: string;
+}
+
+/**
+ * Runs effects in process, as the runtime's default dispatcher does, except
+ * that a run handed over with a `runAfter` still ahead of the clock waits for
+ * it: `runDue()` runs what the clock has reached since. Attach it to the
+ * runtime it serves before the first transition.
+ *
+ * ```ts
+ * const dispatcher = new InProcessDispatcher({ clock: () => new Date(now) });
+ * const runtime = new LifecycleRuntime({ store, clock: () => new Date(now), dispatcher });
+ * dispatcher.attach(runtime);
+ * ```
+ */
+export class InProcessDispatcher implements EffectDispatcher {
+  private runtime: LifecycleRuntime | undefined;
+  private readonly clock: () => Date;
+  private readonly retries: RetryTiming;
+  private readonly held = new Map<string, string>();
+
+  public constructor(options: InProcessDispatcherOptions) {
+    this.clock = options.clock;
+    this.retries = options.retries ?? 'clock';
+  }
+
+  public attach(runtime: LifecycleRuntime): void {
+    this.runtime = runtime;
+  }
+
+  public async dispatch(
+    runId: string,
+    options: { readonly runAfter: string | null },
+  ): Promise<void> {
+    const { runAfter } = options;
+    if (
+      this.retries === 'clock' &&
+      runAfter !== null &&
+      runAfter > this.clock().toISOString()
+    ) {
+      this.held.set(runId, runAfter);
+      return;
+    }
+    this.held.delete(runId);
+    await this.attached().runEffect(runId);
+  }
+
+  /** The runs waiting out a backoff, the soonest first. */
+  public waiting(): WaitingRun[] {
+    return [...this.held]
+      .map(([runId, runAfter]) => ({ runId, runAfter }))
+      .sort((a, b) => (a.runAfter < b.runAfter ? -1 : 1));
+  }
+
+  /**
+   * Runs every waiting run the clock has reached, the soonest first, and
+   * what those runs cause in turn. Returns how many it ran.
+   */
+  public async runDue(): Promise<number> {
+    let ran = 0;
+    for (;;) {
+      const now = this.clock().toISOString();
+      const due = this.waiting().find((run) => run.runAfter <= now);
+      if (!due) return ran;
+      this.held.delete(due.runId);
+      await this.attached().runEffect(due.runId);
+      ran += 1;
+    }
+  }
+
+  private attached(): LifecycleRuntime {
+    if (!this.runtime)
+      throw new Error(
+        'Attach the runtime to the InProcessDispatcher before firing.',
+      );
+    return this.runtime;
+  }
+}
+
 export interface LifecycleTestKitOptions<T extends LifecycleTypes> {
   readonly services?: ServicesOf<T>;
   /** Overrides on top of the lifecycle's defaults. */
   readonly parameters?: Partial<ParametersOf<T>>;
   /** Where the fake clock starts. Defaults to 2026-01-01T00:00:00Z. */
   readonly now?: string | Date;
+  /**
+   * Whether a retry waits for the fake clock to pass its backoff, which
+   * `advance()` and then `runDue()` let it do. Defaults to `clock`.
+   */
+  readonly retries?: RetryTiming;
 }
 
 export interface Duration {
@@ -59,11 +162,13 @@ function millis(duration: Duration): number {
  * One lifecycle on a memory store, a fake clock and an in-process
  * dispatcher, so waiting, retrying and continuing can be tested as plain
  * function calls. `fire()` returns once every effect it caused, and every
- * transition those effects fired, has finished.
+ * transition those effects fired, has finished — except a retry waiting out
+ * its backoff, which runs on the `runDue()` after `advance()` has passed it.
  */
 export class LifecycleTestKit<T extends LifecycleTypes> {
   public readonly store: MemoryLifecycleStore = new MemoryLifecycleStore();
   public readonly runtime: LifecycleRuntime;
+  public readonly dispatcher: InProcessDispatcher;
   private clock: number;
   private readonly failures = new Map<string, number>();
 
@@ -72,9 +177,15 @@ export class LifecycleTestKit<T extends LifecycleTypes> {
     options: LifecycleTestKitOptions<T> = {},
   ) {
     this.clock = new Date(options.now ?? '2026-01-01T00:00:00Z').getTime();
+    const clock = (): Date => new Date(this.clock);
+    this.dispatcher = new InProcessDispatcher({
+      clock,
+      ...(options.retries === undefined ? {} : { retries: options.retries }),
+    });
     this.runtime = new LifecycleRuntime({
       store: this.store,
-      clock: (): Date => new Date(this.clock),
+      clock,
+      dispatcher: this.dispatcher,
       beforeEffect: (effect: string): void => {
         const remaining = this.failures.get(effect) ?? 0;
         if (remaining > 0) {
@@ -83,6 +194,7 @@ export class LifecycleTestKit<T extends LifecycleTypes> {
         }
       },
     });
+    this.dispatcher.attach(this.runtime);
     const overrides = options.parameters ?? {};
     this.runtime.register(lifecycle, {
       ...(options.services === undefined ? {} : { services: options.services }),
@@ -94,8 +206,14 @@ export class LifecycleTestKit<T extends LifecycleTypes> {
     return new Date(this.clock);
   }
 
+  /** Moves the fake clock on. Retries it passes run on the next `runDue()`. */
   public advance(duration: Duration): void {
     this.clock += millis(duration);
+  }
+
+  /** Runs every retry whose backoff the clock has passed; returns how many. */
+  public runDue(): Promise<number> {
+    return this.dispatcher.runDue();
   }
 
   /** Creates a record in the initial state, as a create form would. */

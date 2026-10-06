@@ -86,7 +86,7 @@ stateDiagram-v2
 | Dead                                     | A run none of whose attempts recorded an outcome becomes `dead` instead of being queued forever, so an effect that crashes its process every time stops after `maxAttempts`                                                                                                                                                                                                                                                                                                                                                                   |
 | Unknown effect                           | A run naming an effect this process has not registered stays queued; in a rolling deploy another process may know it. `listEffectRuns()` marks it `registered: false`, and `retryRun()` refuses it with `UNKNOWN_EFFECT`                                                                                                                                                                                                                                                                                                                      |
 
-The default dispatcher runs each effect in process before `fire()` returns, which suits tests and scripts. Production hands runs to the jobs service through `@nocobase/lifecycle/jobs`; a job carries only the run id, and the state stays in the database.
+The default dispatcher runs each effect in process before `fire()` returns, which suits scripts; it runs a retry at once and does not wait out its backoff. The test kit's `InProcessDispatcher` from `@nocobase/lifecycle/testing` waits for the fake clock instead, or runs retries at once with `retries: 'immediate'`. Production hands runs to the jobs service through `@nocobase/lifecycle/jobs`; a job carries only the run id, and the state stays in the database.
 
 ## Trigger sweeps
 
@@ -103,10 +103,10 @@ The default dispatcher runs each effect in process before `fire()` returns, whic
 
 The runtime depends on the `LifecycleStore` interface and ships two implementations:
 
-| Implementation                                | Use                                                                                                    |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `MemoryLifecycleStore`                        | Tests and the test kit. Transactions are serialized through a queue                                    |
-| `createRepositoryLifecycleStore(db, options)` | Reads and writes the record's own collection through `@nocobase/db` Repositories, plus two collections |
+| Implementation                                | Use                                                                                                                          |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `MemoryLifecycleStore`                        | Tests and the test kit. Transactions are serialized through a queue, and a rollback undoes only the transaction's own writes |
+| `createRepositoryLifecycleStore(db, options)` | Reads and writes the record's own collection through `@nocobase/db` Repositories, plus two collections                       |
 
 The library ships no migration: the plugin that owns the lifecycles declares the tables in its own migration, which must stay self-contained. What they need:
 
