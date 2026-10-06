@@ -84,6 +84,7 @@ interface MysqlColumnRow {
   readonly numeric_scale: number | null;
   readonly column_comment: string | null;
   readonly generation_expression: string | null;
+  readonly server_version: string;
 }
 
 interface MysqlConstraintRow {
@@ -178,7 +179,9 @@ export class MysqlSchemaInspector extends BaseSchemaInspector {
             numeric_precision,
             numeric_scale,
             column_comment,
-            generation_expression
+            generation_expression,
+            -- How the server reports column_default depends on which server it is: see mysqlDefaultLiteral.
+            version() as server_version
           from information_schema.columns
           where table_schema = ? and table_name = ?
           order by ordinal_position
@@ -578,15 +581,8 @@ interface GroupedMysqlConstraint {
   readonly onDelete?: string;
 }
 
-const MYSQL_TEMPORAL_TYPES: ReadonlySet<string> = new Set([
-  'date',
-  'datetime',
-  'timestamp',
-  'time',
-]);
-
-/** The data types whose literal default `information_schema` reports as the bare string value. */
-const MYSQL_QUOTED_DEFAULT_TYPES: ReadonlySet<string> = new Set([
+/** The data types whose literal default `information_schema` reports as the bare string value, besides temporal ones. */
+const MYSQL_CHARACTER_DEFAULT_TYPES: ReadonlySet<string> = new Set([
   'char',
   'varchar',
   'tinytext',
@@ -595,10 +591,29 @@ const MYSQL_QUOTED_DEFAULT_TYPES: ReadonlySet<string> = new Set([
   'longtext',
   'enum',
   'set',
-  ...MYSQL_TEMPORAL_TYPES,
 ]);
 
 /**
+ * Whether the server reports a column's default in `information_schema` as the SQL it was declared with — `'draft'`
+ * for `default 'draft'`, `uuid()` for `default (uuid())`, and the bare word `NULL` for a nullable column with no
+ * default — rather than as MySQL's bare value. MariaDB does so from 10.2.7, and names itself in `version()`:
+ * `11.8.9-MariaDB-ubu2404`, or `5.5.5-10.6.12-MariaDB` behind a replication-compatible prefix.
+ */
+export function mysqlReportsDeclaredDefaults(serverVersion: string): boolean {
+  const match = /(\d+)\.(\d+)\.(\d+)-MariaDB/iu.exec(serverVersion);
+  if (!match) {
+    return false;
+  }
+  const [major, minor, patch] = match.slice(1).map(Number);
+  return major * 1_000_000 + minor * 1_000 + patch >= 10_002_007;
+}
+
+/**
+ * The column default as the SQL form the shared literal parser reads: a string literal quoted, an expression as it is.
+ *
+ * MariaDB 10.2.7 and later report it in that form already, so their default passes through untouched, except the bare
+ * `NULL` it reports for a column without one.
+ *
  * MySQL reports an expression default — `EXTRA = 'DEFAULT_GENERATED'`, which a defaulted `json` column and a defaulted
  * text column have because MySQL takes no literal default on either — as the expression it will evaluate rather than as
  * a value, escaped twice. The expression is a string literal with a character-set introducer, whose own quotes and
@@ -606,32 +621,45 @@ const MYSQL_QUOTED_DEFAULT_TYPES: ReadonlySet<string> = new Set([
  * escapes that text again: `_utf8mb4\'it\\\'s here\'`. Undo both and give the shared literal parser the standard
  * form it reads, `'it''s here'`.
  *
- * A literal default arrives as the bare value, neither quoted nor escaped: `draft` for `default 'draft'`, `it's` for
- * `default 'it''s'`, `0` for `default 0`. A number reads correctly as it is, but the shared parser takes an unquoted
- * word for an expression, so the default of a character, enum or temporal column had no value at all — and `'42'` or
- * `'NULL'` read as a number and as null. Those types are quoted here, which makes every bare value of theirs a string.
- * A temporal column's `CURRENT_TIMESTAMP` is the one bare word that is an expression, should a server report it
- * without `DEFAULT_GENERATED`.
+ * MySQL reports a literal default as the bare value, neither quoted nor escaped: `draft` for `default 'draft'`, `it's`
+ * for `default 'it''s'`, `0` for `default 0`. A number reads correctly as it is, but the shared parser takes an
+ * unquoted word for an expression, so the default of a character, enum or temporal column had no value at all — and
+ * `'42'` or `'NULL'` read as a number and as null. Those types are quoted here, which makes every bare value of theirs a
+ * string. A temporal literal starts with a digit, or a minus sign for a negative `time`; anything else on a temporal
+ * column, such as `CURRENT_TIMESTAMP` reported without `DEFAULT_GENERATED` by MySQL 5.7, is an expression.
  */
 export function mysqlDefaultLiteral(column: {
   readonly column_default: unknown;
   readonly extra: string;
   readonly data_type: string;
+  readonly server_version: string;
 }): unknown {
   const raw = column.column_default;
   if (typeof raw !== 'string') {
     return raw;
   }
-  if (!/\bDEFAULT_GENERATED\b/i.test(column.extra)) {
-    const type = column.data_type.toLowerCase();
-    return MYSQL_QUOTED_DEFAULT_TYPES.has(type) &&
-      !(
-        MYSQL_TEMPORAL_TYPES.has(type) &&
-        /^current_timestamp(?:\(\d*\))?$/iu.test(raw.trim())
-      )
-      ? `'${raw.replaceAll("'", "''")}'`
-      : raw;
+  if (mysqlReportsDeclaredDefaults(column.server_version)) {
+    // MariaDB's bare NULL is what MySQL reports as SQL NULL: no default.
+    return raw === 'NULL' ? null : raw;
   }
+  if (/\bDEFAULT_GENERATED\b/i.test(column.extra)) {
+    return mysqlExpressionLiteral(raw);
+  }
+  const type = column.data_type.toLowerCase();
+  if (mysqlTypes.temporal?.(type) !== undefined) {
+    return /^-?\d/u.test(raw.trim()) ? quoteMysqlBareDefault(raw) : raw;
+  }
+  return MYSQL_CHARACTER_DEFAULT_TYPES.has(type)
+    ? quoteMysqlBareDefault(raw)
+    : raw;
+}
+
+function quoteMysqlBareDefault(raw: string): string {
+  return `'${raw.replaceAll("'", "''")}'`;
+}
+
+/** The SQL literal an expression default stands for, when it is a string literal; otherwise the expression itself. */
+function mysqlExpressionLiteral(raw: string): string {
   const expression = raw
     .trim()
     .replace(/^_[A-Za-z0-9]+\s*/u, '')

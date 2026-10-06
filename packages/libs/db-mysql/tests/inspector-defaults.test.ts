@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { parseColumnDefault } from '@nocobase/db';
-import { mysqlDefaultLiteral } from '../src/inspectors/mysql.js';
+import {
+  mysqlDefaultLiteral,
+  mysqlReportsDeclaredDefaults,
+} from '../src/inspectors/mysql.js';
+
+const MYSQL = '8.4.6';
+const MARIADB = '11.8.9-MariaDB-ubu2404';
 
 describe('mysqlDefaultLiteral', () => {
   it('reduces an expression default to the SQL literal the shared parser reads', () => {
@@ -8,6 +14,7 @@ describe('mysqlDefaultLiteral', () => {
       column_default: `_utf8mb4\\'{"enabled":true}\\'`,
       extra: 'DEFAULT_GENERATED',
       data_type: 'text',
+      server_version: MYSQL,
     });
     expect(literal).toBe(`'{"enabled":true}'`);
     expect(parseColumnDefault(literal)).toEqual({
@@ -22,6 +29,7 @@ describe('mysqlDefaultLiteral', () => {
       column_default: String.raw`_utf8mb4\'it\\\'s here\'`,
       extra: 'DEFAULT_GENERATED',
       data_type: 'text',
+      server_version: MYSQL,
     });
     expect(quoted).toBe(`'it''s here'`);
     expect(parseColumnDefault(quoted)).toMatchObject({ value: "it's here" });
@@ -31,6 +39,7 @@ describe('mysqlDefaultLiteral', () => {
       column_default: String.raw`_utf8mb4\'C:\\\\temp\'`,
       extra: 'DEFAULT_GENERATED',
       data_type: 'text',
+      server_version: MYSQL,
     });
     expect(parseColumnDefault(backslash)).toMatchObject({
       value: String.raw`C:\temp`,
@@ -42,6 +51,7 @@ describe('mysqlDefaultLiteral', () => {
           column_default: String.raw`_utf8mb4\'\'`,
           extra: 'DEFAULT_GENERATED',
           data_type: 'text',
+          server_version: MYSQL,
         }),
       ),
     ).toMatchObject({ value: '' });
@@ -67,6 +77,7 @@ describe('mysqlDefaultLiteral', () => {
             column_default: raw,
             extra: '',
             data_type: dataType,
+            server_version: MYSQL,
           }),
         ),
         `${dataType} ${raw}`,
@@ -86,6 +97,7 @@ describe('mysqlDefaultLiteral', () => {
             column_default: raw,
             extra: '',
             data_type: dataType,
+            server_version: MYSQL,
           }),
         ),
       ).toEqual({ expression: raw, value });
@@ -100,6 +112,7 @@ describe('mysqlDefaultLiteral', () => {
         column_default: raw,
         extra,
         data_type: dataType,
+        server_version: MYSQL,
       });
       expect(literal).toBe(raw);
       expect(parseColumnDefault(literal)).not.toHaveProperty('value');
@@ -109,6 +122,7 @@ describe('mysqlDefaultLiteral', () => {
         column_default: null,
         extra: '',
         data_type: 'int',
+        server_version: MYSQL,
       }),
     ).toBeNull();
     expect(
@@ -116,7 +130,125 @@ describe('mysqlDefaultLiteral', () => {
         column_default: `_utf8mb4\\'x\\'`,
         extra: 'auto_increment',
         data_type: 'int',
+        server_version: MYSQL,
       }),
     ).toBe(`_utf8mb4\\'x\\'`);
+  });
+
+  it('treats any temporal default that does not start like a date or time as an expression', () => {
+    for (const [dataType, raw] of [
+      ['datetime', 'now()'],
+      ['date', 'curdate()'],
+      ['datetime', 'current_timestamp(6)'],
+    ] as const) {
+      expect(
+        mysqlDefaultLiteral({
+          column_default: raw,
+          extra: '',
+          data_type: dataType,
+          server_version: MYSQL,
+        }),
+      ).toBe(raw);
+    }
+    expect(
+      parseColumnDefault(
+        mysqlDefaultLiteral({
+          column_default: '-01:30:00',
+          extra: '',
+          data_type: 'time',
+          server_version: MYSQL,
+        }),
+      ),
+    ).toMatchObject({ value: '-01:30:00' });
+  });
+
+  it('passes MariaDB defaults through, as it reports them in the form they were declared', () => {
+    // What MariaDB 11.8 reports in information_schema.columns.column_default, with EXTRA empty throughout.
+    for (const [dataType, raw, expected] of [
+      ['varchar', "'draft'", { value: 'draft' }],
+      ['varchar', "'it''s'", { value: "it's" }],
+      ['varchar', "'NULL'", { value: 'NULL' }],
+      ['varchar', "'42'", { value: '42' }],
+      ['enum', "'b'", { value: 'b' }],
+      ['date', "'2026-01-01'", { value: '2026-01-01' }],
+      ['text', "'hi'", { value: 'hi' }],
+      ['int', '5', { value: 5 }],
+    ] as const) {
+      expect(
+        parseColumnDefault(
+          mysqlDefaultLiteral({
+            column_default: raw,
+            extra: '',
+            data_type: dataType,
+            server_version: MARIADB,
+          }),
+        ),
+        `${dataType} ${raw}`,
+      ).toEqual({ expression: raw, ...expected });
+    }
+    for (const [dataType, raw] of [
+      ['varchar', 'uuid()'],
+      ['datetime', 'current_timestamp(3)'],
+    ] as const) {
+      expect(
+        parseColumnDefault(
+          mysqlDefaultLiteral({
+            column_default: raw,
+            extra: '',
+            data_type: dataType,
+            server_version: MARIADB,
+          }),
+        ),
+      ).toEqual({ expression: raw });
+    }
+    // A nullable column declared without a default reports the bare word NULL, where MySQL reports SQL NULL.
+    expect(
+      mysqlDefaultLiteral({
+        column_default: 'NULL',
+        extra: '',
+        data_type: 'varchar',
+        server_version: MARIADB,
+      }),
+    ).toBeNull();
+  });
+});
+
+describe('mysqlReportsDeclaredDefaults', () => {
+  it('recognizes MariaDB from 10.2.7, behind the replication prefix too', () => {
+    const read = (versions: readonly string[]): Record<string, boolean> =>
+      Object.fromEntries(
+        versions.map((version) => [
+          version,
+          mysqlReportsDeclaredDefaults(version),
+        ]),
+      );
+    expect(
+      read([
+        '11.8.9-MariaDB-ubu2404',
+        '10.2.7-MariaDB',
+        '10.6.12-MariaDB-log',
+        '5.5.5-10.11.6-MariaDB-0+deb12u1',
+      ]),
+    ).toEqual({
+      '11.8.9-MariaDB-ubu2404': true,
+      '10.2.7-MariaDB': true,
+      '10.6.12-MariaDB-log': true,
+      '5.5.5-10.11.6-MariaDB-0+deb12u1': true,
+    });
+    expect(
+      read([
+        '8.4.6',
+        '5.7.44-log',
+        '10.2.6-MariaDB',
+        '10.1.48-MariaDB',
+        '5.7.25-OceanBase_CE-v4.4.2.1',
+      ]),
+    ).toEqual({
+      '8.4.6': false,
+      '5.7.44-log': false,
+      '10.2.6-MariaDB': false,
+      '10.1.48-MariaDB': false,
+      '5.7.25-OceanBase_CE-v4.4.2.1': false,
+    });
   });
 });

@@ -186,6 +186,12 @@ export class MysqlSchemaInspector extends BaseSchemaInspector {
         [schema, identifier.tableName],
       ),
     );
+    const expressionDefaults = await this.readExpressionDefaults(
+      knex,
+      schema,
+      collection,
+      columns,
+    );
     const constraints = mysqlRows<MysqlConstraintRow>(
       await knex.raw(
         `
@@ -261,7 +267,12 @@ export class MysqlSchemaInspector extends BaseSchemaInspector {
           nullable: column.is_nullable === 'YES',
           default: generated
             ? undefined
-            : parseColumnDefault(oceanbaseDefaultLiteral(column)),
+            : parseColumnDefault(
+                oceanbaseDefaultLiteral(
+                  column,
+                  expressionDefaults.has(column.column_name),
+                ),
+              ),
           autoIncrement: column.extra.toLowerCase().includes('auto_increment'),
           unsigned: /\bunsigned\b/i.test(column.column_type),
           length: numberValue(column.character_maximum_length),
@@ -414,6 +425,38 @@ export class MysqlSchemaInspector extends BaseSchemaInspector {
     return current;
   }
 
+  /**
+   * The columns of a table whose default is an expression. `information_schema` cannot tell: OceanBase reports
+   * `default (uuid())` and `default 'uuid()'` alike, as `uuid()`, with nothing in `extra`. Only the table's DDL keeps
+   * the difference, so it is read when a character column has a default the two could be confused for.
+   */
+  private async readExpressionDefaults(
+    knex: Knex,
+    schema: string,
+    collection: MysqlCollectionRow,
+    columns: readonly MysqlColumnRow[],
+  ): Promise<ReadonlySet<string>> {
+    if (
+      collection.table_type !== 'BASE TABLE' ||
+      !columns.some(
+        (column) =>
+          typeof column.column_default === 'string' &&
+          OCEANBASE_CHARACTER_DEFAULT_TYPES.has(column.data_type.toLowerCase()),
+      )
+    ) {
+      return new Set();
+    }
+    const row = mysqlRows<{ readonly 'create table'?: unknown }>(
+      await knex.raw('show create table ??.??', [
+        schema,
+        collection.table_name,
+      ]),
+    )[0];
+    return oceanbaseExpressionDefaultColumns(
+      typeof row?.['create table'] === 'string' ? row['create table'] : '',
+    );
+  }
+
   private async readIndexes(
     knex: Knex,
     schema: string,
@@ -560,15 +603,8 @@ export class MysqlSchemaInspector extends BaseSchemaInspector {
   }
 }
 
-const OCEANBASE_TEMPORAL_TYPES: ReadonlySet<string> = new Set([
-  'date',
-  'datetime',
-  'timestamp',
-  'time',
-]);
-
-/** The data types whose literal default `information_schema` reports as the bare string value. */
-const OCEANBASE_QUOTED_DEFAULT_TYPES: ReadonlySet<string> = new Set([
+/** The data types whose literal default `information_schema` reports as the bare string value, besides temporal ones. */
+const OCEANBASE_CHARACTER_DEFAULT_TYPES: ReadonlySet<string> = new Set([
   'char',
   'varchar',
   'tinytext',
@@ -577,33 +613,65 @@ const OCEANBASE_QUOTED_DEFAULT_TYPES: ReadonlySet<string> = new Set([
   'longtext',
   'enum',
   'set',
-  ...OCEANBASE_TEMPORAL_TYPES,
 ]);
 
 /**
+ * The column default as the SQL form the shared literal parser reads: a string literal quoted, an expression as it is.
+ *
  * OceanBase, like MySQL, reports a literal default as the bare value, neither quoted nor escaped: `draft` for
  * `default 'draft'`, `it's` for `default 'it''s'`, `0` for `default 0`. A number reads correctly as it is, but the
  * shared parser takes an unquoted word for an expression, so the default of a character, enum or temporal column had no
  * value at all — and `'42'` or `'NULL'` read as a number and as null. Those types are quoted here, which makes every
- * bare value of theirs a string. A temporal column's `CURRENT_TIMESTAMP` is the one bare word that is an expression:
- * OceanBase reports it without MySQL's `DEFAULT_GENERATED`, even for `current_timestamp(3)`.
+ * bare value of theirs a string.
+ *
+ * Unlike MySQL, OceanBase marks no expression default with `DEFAULT_GENERATED`: it reports `default (uuid())` as the
+ * bare `uuid()`, exactly as it reports `default 'uuid()'`. `isExpression` says which one the table's DDL declared,
+ * since quoting an expression would hand the Repository its text to write as a value. A temporal literal starts with a
+ * digit, or a minus sign for a negative `time`, so `CURRENT_TIMESTAMP` and `curdate()` are expressions without it.
  */
-export function oceanbaseDefaultLiteral(column: {
-  readonly column_default: unknown;
-  readonly data_type: string;
-}): unknown {
+export function oceanbaseDefaultLiteral(
+  column: {
+    readonly column_default: unknown;
+    readonly data_type: string;
+  },
+  isExpression: boolean,
+): unknown {
   const raw = column.column_default;
-  if (typeof raw !== 'string') {
+  if (typeof raw !== 'string' || isExpression) {
     return raw;
   }
   const type = column.data_type.toLowerCase();
-  return OCEANBASE_QUOTED_DEFAULT_TYPES.has(type) &&
-    !(
-      OCEANBASE_TEMPORAL_TYPES.has(type) &&
-      /^current_timestamp(?:\(\d*\))?$/iu.test(raw.trim())
-    )
-    ? `'${raw.replaceAll("'", "''")}'`
+  if (mysqlTypes.temporal?.(type) !== undefined) {
+    return /^-?\d/u.test(raw.trim()) ? quoteOceanbaseBareDefault(raw) : raw;
+  }
+  return OCEANBASE_CHARACTER_DEFAULT_TYPES.has(type)
+    ? quoteOceanbaseBareDefault(raw)
     : raw;
+}
+
+function quoteOceanbaseBareDefault(raw: string): string {
+  return `'${raw.replaceAll("'", "''")}'`;
+}
+
+/**
+ * The columns `SHOW CREATE TABLE` declares with an expression default, `DEFAULT (…)`, where a literal one reads
+ * `DEFAULT '…'`. String literals are blanked first, so a comment, an enum value or a default that merely contains the
+ * words is not taken for the clause.
+ */
+export function oceanbaseExpressionDefaultColumns(
+  createTable: string,
+): ReadonlySet<string> {
+  const columns = new Set<string>();
+  for (const line of createTable.split('\n')) {
+    const match = /^\s*`((?:[^`]|``)+)`\s(.*)$/u.exec(line);
+    if (
+      match &&
+      /\bDEFAULT\s*\(/iu.test(match[2].replace(/'(?:[^'\\]|\\.|'')*'/gu, "''"))
+    ) {
+      columns.add(match[1].replaceAll('``', '`'));
+    }
+  }
+  return columns;
 }
 
 interface GroupedMysqlConstraint {
