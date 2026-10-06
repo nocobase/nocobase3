@@ -1,4 +1,5 @@
 import type {
+  CreateContext,
   EffectDefinition,
   GuardVerdict,
   Lifecycle,
@@ -73,6 +74,34 @@ function problemsOf(
 ): readonly InputProblem[] {
   if (answer === null || answer === undefined) return [];
   return typeof answer === 'string' ? [{ message: answer }] : answer;
+}
+
+/**
+ * Checks a creation against the definition's `create`: the values first,
+ * then the guard, so a guard reads only values that passed. Throws the
+ * refusal; returns when the record may be written.
+ */
+export async function checkCreation<T extends LifecycleTypes>(
+  lifecycle: Lifecycle<T>,
+  context: CreateContext<T>,
+): Promise<void> {
+  const checks = lifecycle.create;
+  const problems = problemsOf(checks.validate?.(context.values));
+  if (problems.length)
+    throw new LifecycleError(
+      'INVALID_INPUT',
+      problems.map((problem) => problem.message).join('; '),
+      { problems },
+    );
+  if (!checks.guard) return;
+  const blocker = blockerOf(
+    await checks.guard(context),
+    `"${context.actor.id}" may not create a ${lifecycle.name} record in "${context.state}".`,
+  );
+  if (blocker)
+    throw new LifecycleError('GUARD_REJECTED', blocker.message, {
+      blockers: [blocker],
+    });
 }
 
 /** What a transition will write and run, decided without touching any store. */

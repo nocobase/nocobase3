@@ -206,20 +206,22 @@ const enUS = {
     applicantOnly: 'Only the applicant can do this with their report.',
     approverOnly: 'Only the current approver can decide on this report.',
     topApprover: 'The current approver is already the highest level.',
+    customersOnly: 'Only a customer can file a ticket, for themselves.',
+    applicantsOnly:
+      'Only an employee can file an expense report, for themselves.',
   },
   problems: {
     message: 'Write a message.',
     reason: 'Give a reason.',
+    subject: 'Give the ticket a subject.',
+    description: 'Describe the problem.',
+    category: 'Choose a category.',
+    priority: 'Choose a priority.',
   },
   errors: {
     actor: 'Choose who to act as.',
     failures:
       'The number of simulated failures must be a whole number, zero or more.',
-    customersOnly: 'Only a customer can file a ticket.',
-    ticketFields: 'Give the ticket a subject and a description.',
-    category: 'Choose a category.',
-    priority: 'Choose a priority.',
-    applicantsOnly: 'Only an employee can file an expense report.',
     expenseMissing: 'The expense report does not exist.',
     ownExpenseOnly: 'Only the applicant can edit this report.',
     expenseLocked: 'A report under review cannot be edited; withdraw it first.',

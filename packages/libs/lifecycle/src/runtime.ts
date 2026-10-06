@@ -12,6 +12,7 @@ import {
   type LifecycleErrorCode,
 } from './errors.js';
 import {
+  checkCreation,
   guardBlockers,
   planTransition,
   stateOf,
@@ -509,9 +510,11 @@ export class LifecycleRuntime {
   }
 
   /**
-   * Creates a record through the lifecycle: in one transaction it writes the
+   * Creates a record through the lifecycle: in one transaction it checks the
+   * definition's `create` — the values, then the guard — and writes the
    * record in an initial state, a log entry from nothing, and the effect runs
    * the state's `onEnter` owes, so a record's history starts where it does.
+   * A refusal writes nothing and is a `LifecycleError` as a transition's is.
    */
   public async create(
     name: string,
@@ -539,6 +542,17 @@ export class LifecycleRuntime {
     const now = this.clock();
     const at = now.toISOString();
     const committed = await this.store.transaction(async (store) => {
+      await checkCreation(lifecycle, {
+        values,
+        state,
+        actor: options.actor,
+        input: options.input ?? {},
+        parameters: this.parameters(name) as ParametersOf<LifecycleTypes>,
+        services: registered.services(
+          store.transactionHandle,
+        ) as ServicesOf<LifecycleTypes>,
+        now,
+      });
       const record = await store.createRecord(lifecycle.collection, {
         ...values,
         [lifecycle.stateField]: state,

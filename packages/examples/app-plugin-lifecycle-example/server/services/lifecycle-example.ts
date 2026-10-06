@@ -7,7 +7,6 @@ import {
   type ExpenseItem,
 } from '../../shared/expense.js';
 import { person } from '../../shared/people.js';
-import { PRIORITIES, TICKET_CATEGORIES } from '../../shared/ticket.js';
 import { expenseLifecycle } from '../lifecycles/expense.js';
 import { ticketLifecycle } from '../lifecycles/ticket.js';
 import type { ExampleLifecycleName, Plain } from '../tokens.js';
@@ -101,23 +100,8 @@ export class LifecycleExampleService {
     return rows.map(plain);
   }
 
-  public async createTicket(values: NewTicket, actor: string): Promise<Plain> {
-    if (person(actor)?.role !== 'customer')
-      throw new ExampleError(
-        'FORBIDDEN',
-        'customersOnly',
-        'Only a customer can file a ticket.',
-      );
-    if (!values.subject.trim() || !values.description.trim())
-      throw new ExampleError(
-        'INVALID',
-        'ticketFields',
-        'Give the ticket a subject and a description.',
-      );
-    if (!TICKET_CATEGORIES.includes(values.category))
-      throw new ExampleError('INVALID', 'category', 'Choose a category.');
-    if (!PRIORITIES.includes(values.priority as (typeof PRIORITIES)[number]))
-      throw new ExampleError('INVALID', 'priority', 'Choose a priority.');
+  /** The lifecycle's `create` decides who may file one and what it must hold. */
+  public createTicket(values: NewTicket, actor: string): Promise<Plain> {
     return this.create(
       'tickets',
       {
@@ -129,16 +113,7 @@ export class LifecycleExampleService {
     );
   }
 
-  public async createExpense(
-    values: ExpenseDraft,
-    actor: string,
-  ): Promise<Plain> {
-    if (person(actor)?.role !== 'applicant')
-      throw new ExampleError(
-        'FORBIDDEN',
-        'applicantsOnly',
-        'Only an employee can file an expense report.',
-      );
+  public createExpense(values: ExpenseDraft, actor: string): Promise<Plain> {
     return this.create(
       'expenses',
       {

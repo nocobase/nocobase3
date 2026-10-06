@@ -800,6 +800,17 @@ const contractLifecycle = defineLifecycle({
   changedAtField: 'stageChangedAt', // defaults to 'statusChangedAt'
   versionField: 'stageVersion', // defaults to 'lifecycleVersion'
   initial: ['draft', 'signed'], // the first is the default; the others must be asked for
+  create: {
+    validate: (values) =>
+      values.customerId
+        ? null
+        : [{ field: 'customerId', message: 'Choose a customer.' }],
+    // Only an import may create a contract already signed.
+    guard: ({ state, actor }) =>
+      state !== 'signed' ||
+      actor.system === true ||
+      'Only an import creates signed contracts.',
+  },
   parameters: { remindAfterDays: 14 },
   // …
 });
@@ -821,7 +832,7 @@ runtime.register(contractLifecycle, {
 });
 ```
 
-`parameters` is called synchronously on every transition and every sweep, so it reads memory, never the database: an `async` function is refused by the type checker, and its promise would otherwise be spread into nothing and the defaults used silently. With several instances, each keeps its own copy, so `onChange` must reach all of them — through the application's pub/sub, or by restarting. Who may create a contract directly in `signed` is the plugin's decision: keep that path on a system-only route.
+`parameters` is called synchronously on every transition and every sweep, so it reads memory, never the database: an `async` function is refused by the type checker, and its promise would otherwise be spread into nothing and the defaults used silently. With several instances, each keeps its own copy, so `onChange` must reach all of them — through the application's pub/sub, or by restarting. `create` is checked by every `runtime.create()`, whichever route, import or script calls it: `validate` reads the values first, then `guard` sees the values, the state asked for and the actor, and refuses as a transition's guard does, so the create form shows the same blockers and problems.
 
 ### 22. Adopt an existing table
 

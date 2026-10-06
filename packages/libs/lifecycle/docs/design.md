@@ -52,7 +52,7 @@ A manager opens a report at version 3. Meanwhile the applicant withdraws it and 
 
 ### Creation is a transition too
 
-`runtime.create()` writes a log entry with `from: null`, `transition: '$create'` and `version: 1`, and runs the initial state's `onEnter` effects. History starts at creation, and "send a welcome mail on entering draft" needs no special case. `initial` may list several states; the first is the default and the others are asked for by name. Setting the state field in `values` is refused with `INVALID_SET`.
+`runtime.create()` writes a log entry with `from: null`, `transition: '$create'` and `version: 1`, and runs the initial state's `onEnter` effects. History starts at creation, and "send a welcome mail on entering draft" needs no special case. `initial` may list several states; the first is the default and the others are asked for by name. Setting the state field in `values` is refused with `INVALID_SET`. The definition's `create` holds a `validate` over the values and a `guard` over the values, the state and the actor, run in that order inside the creation's transaction, so who may create what is one rule for every caller rather than a check in each route.
 
 ## Effect execution
 

@@ -160,6 +160,42 @@ export interface TransitionDefinition<T extends LifecycleTypes> {
 }
 
 /**
+ * What a creation's `guard` sees: the values about to be written, the
+ * initial state asked for, and who asks. There is no record yet.
+ */
+export interface CreateContext<T extends LifecycleTypes> {
+  readonly values: Readonly<Record<string, unknown>>;
+  readonly state: T['state'];
+  readonly actor: LifecycleActor;
+  /** What `runtime.create()` keeps on the creation's log entry. */
+  readonly input: JsonObject;
+  readonly parameters: ParametersOf<T>;
+  /** Built from the transaction's handle, as a transition guard's are. */
+  readonly services: ServicesOf<T>;
+  readonly now: Date;
+}
+
+/**
+ * Who may create a record and what it must hold, checked by
+ * `runtime.create()` inside its transaction before anything is written, so
+ * every caller — a route, an import, a script — meets the same rule. A
+ * refusal is the same `GUARD_REJECTED` with blockers, or `INVALID_INPUT` with
+ * problems, as a transition's.
+ */
+export interface CreateDefinition<T extends LifecycleTypes> {
+  /** Returns what is wrong with the values: a message, a list of problems, or nothing. Runs before the guard. */
+  validate?(
+    values: Readonly<Record<string, unknown>>,
+  ): string | readonly InputProblem[] | null;
+  /**
+   * Whether this actor may create this record in this state. It answers as
+   * a transition's guard does; being allowed to create a draft says nothing
+   * about who may submit it, which is the submitting transition's guard.
+   */
+  guard?(context: CreateContext<T>): GuardVerdict | Promise<GuardVerdict>;
+}
+
+/**
  * Fires `transition` on records that have stayed in one of `when` for longer
  * than `after` milliseconds. Records are found by a query, not by a timer per
  * record, so nothing is lost when a process restarts.
@@ -191,6 +227,8 @@ export interface LifecycleDefinition<T extends LifecycleTypes> {
    * first is the default and the others must be asked for.
    */
   readonly initial: OneOrMany<T['state']>;
+  /** What `runtime.create()` checks before it writes a record. */
+  readonly create?: CreateDefinition<T>;
   /** Names, or definitions with a title, `final` and `meta`. */
   readonly states: readonly (T['state'] | StateDefinition<T['state']>)[];
   /** Defaults an administrator may override. They do not change the shape of the lifecycle. */
@@ -239,6 +277,7 @@ export interface Lifecycle<T extends LifecycleTypes> {
   readonly initial: T['state'];
   /** Every state a record may be created in, the default first. */
   readonly initialStates: readonly T['state'][];
+  readonly create: CreateDefinition<T>;
   readonly states: readonly T['state'][];
   /** Each state's title, whether it is final, and its metadata. */
   readonly stateInfo: ReadonlyMap<T['state'], LifecycleState<T['state']>>;
@@ -508,6 +547,7 @@ export function defineLifecycle<T extends LifecycleTypes>(
     versionField,
     initial: initialStates[0],
     initialStates,
+    create: definition.create ?? {},
     states: [...states],
     stateInfo,
     parameters: Object.freeze({

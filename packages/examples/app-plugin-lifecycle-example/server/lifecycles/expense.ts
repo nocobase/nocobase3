@@ -9,7 +9,7 @@ import {
 } from '@nocobase/lifecycle';
 
 import { itemProblems, parseItems } from '../../shared/expense.js';
-import { FINANCE_DIRECTOR, MANAGERS } from '../../shared/people.js';
+import { FINANCE_DIRECTOR, MANAGERS, person } from '../../shared/people.js';
 import { text } from '../../shared/text.js';
 import { LIFECYCLE_EXAMPLE_COLLECTIONS } from '../scope.js';
 import {
@@ -110,6 +110,16 @@ export const expenseLifecycle: Lifecycle<ExpenseTypes> =
     name: 'expenses',
     collection: LIFECYCLE_EXAMPLE_COLLECTIONS.expenses,
     initial: 'draft',
+    // Anyone may not file a report: an employee files their own.
+    create: {
+      guard: ({ values, actor }) =>
+        (person(actor.id)?.role === 'applicant' &&
+          values.applicantId === actor.id) || {
+          code: 'applicantsOnly',
+          message:
+            'Only an employee can file an expense report, for themselves.',
+        },
+    },
     states: [
       'draft',
       'awaitingManager',

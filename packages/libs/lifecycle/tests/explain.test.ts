@@ -8,6 +8,7 @@ import {
   defineEffect,
   defineLifecycle,
   type Lifecycle,
+  type LifecycleDefinition,
   type LifecycleRecord,
 } from '../src/index.js';
 import { createLifecycleTestKit } from '../src/testing.js';
@@ -33,7 +34,7 @@ const welcome = defineEffect<RequestTypes>({
   run: ({ record, services }) => void services.welcomed.push(record.ownerId),
 });
 
-const requests: Lifecycle<RequestTypes> = defineLifecycle<RequestTypes>({
+const requestDefinition: LifecycleDefinition<RequestTypes> = {
   name: 'requests',
   initial: ['draft', 'review'],
   states: ['draft', 'review', { name: 'done', final: true }],
@@ -67,7 +68,10 @@ const requests: Lifecycle<RequestTypes> = defineLifecycle<RequestTypes>({
     },
   },
   onEnter: { draft: [welcome] },
-});
+};
+
+const requests: Lifecycle<RequestTypes> =
+  defineLifecycle<RequestTypes>(requestDefinition);
 
 function kit() {
   const services = { welcomed: [] as string[] };
@@ -230,5 +234,58 @@ describe('creating through the lifecycle', () => {
     await expect(
       k.start({ ownerId: 'lin', status: 'done' }),
     ).rejects.toMatchObject({ code: 'INVALID_SET' });
+  });
+
+  it('checks the values and then who creates it, before writing anything', async () => {
+    const checked = defineLifecycle<RequestTypes>({
+      ...requestDefinition,
+      create: {
+        validate: (values) =>
+          typeof values.ownerId === 'string' && values.ownerId
+            ? null
+            : [{ field: 'ownerId', message: 'Name the owner.' }],
+        guard: ({ values, state, actor }) => {
+          // The guard only ever sees values that passed validation.
+          expect(typeof values.ownerId).toBe('string');
+          if (state === 'review' && actor.id !== 'reviewer')
+            return {
+              code: 'reviewerOnly',
+              message: 'Only a reviewer can file one straight into review.',
+            };
+          return (
+            values.ownerId === actor.id || {
+              code: 'ownOnly',
+              message: 'You can only file a request for yourself.',
+            }
+          );
+        },
+      },
+    });
+    const services = { welcomed: [] as string[] };
+    const k = createLifecycleTestKit(checked, { services });
+
+    await expect(k.start({}, { actor: 'lin' })).rejects.toMatchObject({
+      code: 'INVALID_INPUT',
+      problems: [{ field: 'ownerId', message: 'Name the owner.' }],
+    });
+    await expect(
+      k.start({ ownerId: 'boss' }, { actor: 'intern' }),
+    ).rejects.toMatchObject({
+      code: 'GUARD_REJECTED',
+      blockers: [{ source: 'guard', code: 'ownOnly' }],
+    });
+    await expect(
+      k.start({ ownerId: 'lin' }, { actor: 'lin', state: 'review' }),
+    ).rejects.toMatchObject({
+      code: 'GUARD_REJECTED',
+      blockers: [{ code: 'reviewerOnly' }],
+    });
+    // Nothing of the refusals was written, and no effect ran.
+    expect(await k.store.listEffectRuns({})).toEqual([]);
+    expect(services.welcomed).toEqual([]);
+
+    const request = await k.start({ ownerId: 'lin' }, { actor: 'lin' });
+    expect(request).toMatchObject({ ownerId: 'lin', status: 'draft' });
+    expect(services.welcomed).toEqual(['lin']);
   });
 });

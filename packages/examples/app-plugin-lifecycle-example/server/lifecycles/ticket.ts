@@ -8,6 +8,11 @@ import {
 } from '@nocobase/lifecycle';
 
 import { person } from '../../shared/people.js';
+import {
+  PRIORITIES,
+  TICKET_CATEGORIES,
+  type Priority,
+} from '../../shared/ticket.js';
 import { LIFECYCLE_EXAMPLE_COLLECTIONS } from '../scope.js';
 import type { ExampleServices } from './services.js';
 import { notifyAssignee, notifyCustomer } from './ticket.effects.js';
@@ -53,6 +58,28 @@ function isRequester({ record, actor }: Context): GuardVerdict {
   );
 }
 
+/** A new ticket names what it is about, in one of the desk's categories and priorities. */
+function ticketProblems(
+  values: Readonly<Record<string, unknown>>,
+): InputProblem[] {
+  const filled = (field: string): boolean =>
+    typeof values[field] === 'string' && values[field].trim() !== '';
+  return [
+    ...(filled('subject')
+      ? []
+      : [{ field: 'subject', message: 'Give the ticket a subject.' }]),
+    ...(filled('description')
+      ? []
+      : [{ field: 'description', message: 'Describe the problem.' }]),
+    ...(TICKET_CATEGORIES.includes(String(values.category))
+      ? []
+      : [{ field: 'category', message: 'Choose a category.' }]),
+    ...(PRIORITIES.includes(String(values.priority) as Priority)
+      ? []
+      : [{ field: 'priority', message: 'Choose a priority.' }]),
+  ];
+}
+
 function messageRequired(input: Record<string, unknown>): InputProblem[] {
   return typeof input.message === 'string' && input.message.trim()
     ? []
@@ -71,6 +98,16 @@ export const ticketLifecycle: Lifecycle<TicketTypes> =
     name: 'tickets',
     collection: LIFECYCLE_EXAMPLE_COLLECTIONS.tickets,
     initial: 'new',
+    // Every way a ticket is filed meets the same rule: a customer, for themselves.
+    create: {
+      validate: ticketProblems,
+      guard: ({ values, actor }) =>
+        (person(actor.id)?.role === 'customer' &&
+          values.requesterId === actor.id) || {
+          code: 'customersOnly',
+          message: 'Only a customer can file a ticket, for themselves.',
+        },
+    },
     states: ['new', 'open', 'awaitingCustomer', 'closed'],
     // A real help desk waits days; the example waits minutes so you can watch it.
     parameters: { waitMinutes: 2, reopenDays: 7 },

@@ -181,6 +181,32 @@ describe('support ticket', () => {
     ).rejects.toMatchObject({ code: 'GUARD_REJECTED' });
   });
 
+  it('lets only a customer file a ticket, for themselves, with every field', async () => {
+    const { tickets } = kit();
+    const values = { ...ticket, requesterId: 'customer-li' };
+    await expect(
+      tickets.start(values, { actor: 'agent-zhou' }),
+    ).rejects.toMatchObject({
+      code: 'GUARD_REJECTED',
+      blockers: [{ code: 'customersOnly' }],
+    });
+    await expect(
+      tickets.start(values, { actor: 'customer-wang' }),
+    ).rejects.toMatchObject({ code: 'GUARD_REJECTED' });
+    await expect(
+      tickets.start(
+        { ...values, subject: ' ', category: 'gossip' },
+        { actor: 'customer-li' },
+      ),
+    ).rejects.toMatchObject({
+      code: 'INVALID_INPUT',
+      problems: [{ field: 'subject' }, { field: 'category' }],
+    });
+    expect(await tickets.start(values, { actor: 'customer-li' })).toMatchObject(
+      { status: 'new', requesterId: 'customer-li' },
+    );
+  });
+
   it('retries a failing email after its backoff and keeps the reply', async () => {
     const { tickets } = kit();
     const created = tickets.create({ ...ticket, failNotifications: 2 });
@@ -338,6 +364,20 @@ describe('expense report', () => {
     // 王丽 has nobody above her: waiting longer escalates no further.
     expenses.advance({ minutes: 10 });
     expect(await expenses.runTriggers()).toBe(0);
+  });
+
+  it('lets only an employee file a report, for themselves', async () => {
+    const { expenses } = kit();
+    const values = { ...report(300_000), applicantId: 'lin' };
+    await expect(
+      expenses.start(values, { actor: 'chen' }),
+    ).rejects.toMatchObject({
+      code: 'GUARD_REJECTED',
+      blockers: [{ code: 'applicantsOnly' }],
+    });
+    expect(await expenses.start(values, { actor: 'lin' })).toMatchObject({
+      status: 'draft',
+    });
   });
 
   it('stays approved when every payment attempt fails', async () => {

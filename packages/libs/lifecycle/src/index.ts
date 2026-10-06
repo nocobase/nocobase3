@@ -2,6 +2,8 @@ export {
   defineEffect,
   defineLifecycle,
   describeLifecycle,
+  type CreateContext,
+  type CreateDefinition,
   type EffectContext,
   type EffectDefinition,
   type EffectRetry,
@@ -28,6 +30,7 @@ export {
   type LifecycleErrorDetails,
 } from './errors.js';
 export {
+  checkCreation,
   guardBlockers,
   planTransition,
   stateOf,
