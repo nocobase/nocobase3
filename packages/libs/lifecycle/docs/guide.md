@@ -342,6 +342,20 @@ Use `runtime.create(name, values, { actor, state? })` rather than an insert. It 
 
 Put `onTransition(context)` on the transition. It runs in the same transaction after the record and the log entry are written; `context.transactionHandle` is the transaction, and throwing rolls everything back. Nothing that reaches outside the database belongs here — that is an effect.
 
+### Set something up while a record waits in a state
+
+`onEnterState: { reviewing: hook }` runs in the transaction of every transition entering `reviewing`, `runtime.create()` included; `onLeaveState` runs in the transaction of every transition leaving it, after the record is written and before the hooks of the state it enters. The hook receives the record, `previous`, `from`, `to`, the transition, the actor, the input and `tx`. Use it for rows that belong to the stay, such as the tasks a stage opens, and end them on the way out; a self-transition runs both.
+
+A state definition may carry the same hooks itself — `{ name: 'approving', onEnterState, onLeaveState }` — and they run before the lifecycle's hooks for that state. This is how a module hands a business a whole state rather than hooks to wire by name: an approval's `approval.state('approving')` starts a run on entering and cancels it on leaving early, and the business only lists it among its `states`.
+
+### Move several records in one transaction
+
+`runtime.transaction(async (tx) => { … })` gives one transaction across every registered lifecycle: `tx.read()`, `tx.fire()` and `tx.create()` check exactly what `fire()` and `create()` check, `tx.handle` writes rows of your own, and `tx.afterCommit()` schedules a best-effort callback. Events, effects and callbacks follow the commit, and none of it happens on a rollback. A refusal before a transition writes anything leaves the transaction usable; a failure after it rolls the whole transaction back even if you catch it. Hooks and `onTransition` receive the same `tx`. Calling `runtime.fire()` instead from inside the work opens a second transaction, which on the memory store and on SQLite waits forever.
+
+### A transition only the server fires
+
+`manual: false` on a transition keeps it off every page: the standard routes refuse it with `NOT_MANUAL`, `available()` leaves it out, `can()` refuses it with a `manual` blocker and `announce` skips it. Server code fires it as usual. Use it for a conclusion that something else decides — the last vote of a stage, an external callback — so nobody can skip what decides it.
+
 ### Read other tables from a guard
 
 Register the services as a factory, `(handle) => services`, so the services a guard, `route` or `set` receives are bound to the transaction. On SQLite anything else deadlocks.
@@ -356,7 +370,7 @@ Register the services as a factory, `(handle) => services`, so the services a gu
 
 ### Draw the state diagram
 
-`toMermaid(runtime.describe('leaves'))` produces a Mermaid state diagram: ⏱ marks a trigger, ✓ and ✗ mark an effect's `onSuccess` and `onFailure`. `GET /:lifecycle` on the standard routes already includes it as `diagram`.
+`toMermaid(runtime.describe('leaves'))` produces a Mermaid state diagram: ⏱ marks a trigger, ✓ and ✗ mark an effect's `onSuccess` and `onFailure`, and ⚙ a transition only server code fires. `GET /:lifecycle` on the standard routes already includes it as `diagram`.
 
 ## Before going live
 
@@ -408,12 +422,12 @@ Changing a definition that is already in production is covered in [design.md](de
 
 `createLifecycleRoutes(runtime, { actor(c), authorize?(access, actor, c), lifecycles? })` returns a Hono app. A refusal answers `{ code, message, blockers, problems }`. Without `authorize`, only `operate` is refused; the routes do not authenticate, and an `actor` that throws refuses the request.
 
-| Request                                                                               | `access.action` | Answer                                 |
-| ------------------------------------------------------------------------------------- | --------------- | -------------------------------------- |
-| `GET /:lifecycle`                                                                     | `describe`      | `{ description, parameters, diagram }` |
-| `GET /:lifecycle/:id`                                                                 | `read`          | `RecordView`                           |
-| `POST /:lifecycle/:id/fire` with `{ transition, input?, requestId?, expectVersion? }` | `fire`          | `RecordView & { replayed }`            |
-| `POST /:lifecycle/:id/runs/:runId/retry`                                              | `operate`       | `RecordView`                           |
-| `POST /:lifecycle/:id/runs/:runId/cancel`                                             | `operate`       | `RecordView`                           |
+| Request                                                                               | `access.action` | Answer                                                                             |
+| ------------------------------------------------------------------------------------- | --------------- | ---------------------------------------------------------------------------------- |
+| `GET /:lifecycle`                                                                     | `describe`      | `{ description, parameters, diagram }`                                             |
+| `GET /:lifecycle/:id`                                                                 | `read`          | `RecordView`                                                                       |
+| `POST /:lifecycle/:id/fire` with `{ transition, input?, requestId?, expectVersion? }` | `fire`          | `RecordView & { replayed }`; a `manual: false` transition answers 403 `NOT_MANUAL` |
+| `POST /:lifecycle/:id/runs/:runId/retry`                                              | `operate`       | `RecordView`                                                                       |
+| `POST /:lifecycle/:id/runs/:runId/cancel`                                             | `operate`       | `RecordView`                                                                       |
 
 `@nocobase/lifecycle/react` wraps them. `createLifecycleHook({ useTransport, basePath, refreshMs })` returns a hook, `(lifecycle, id, query?) => …`, that a page calls once; it is built on two lower-level pieces kept for tests and for code outside a component: `createLifecycleClient({ transport, basePath, query })`, which needs only a `request({ method, path, query, json })` function such as the application's API client, and `useLifecycle(client, lifecycle, id, { refreshMs })`. The hook returns `{ client, description, view, error, busy, fire, retryRun, cancelRun, reload }`. A refusal rejects with a `LifecycleRequestError` carrying `code`, `blockers` and `problems`.

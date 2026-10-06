@@ -19,25 +19,6 @@ const COLLECTIONS: Readonly<Record<string, string>> = {
   lifecycleExampleExpenses: 'lifecycle_example_expenses',
   lifecycleExampleTransitions: 'lifecycle_example_transitions',
   lifecycleExampleEffectRuns: 'lifecycle_example_effect_runs',
-  scenarioLeaveRequests: 'scenario_leave_requests',
-  scenarioApprovalRequests: 'scenario_approval_requests',
-  scenarioApprovalStages: 'scenario_approval_stages',
-  scenarioApprovalTasks: 'scenario_approval_tasks',
-  scenarioApprovalLogs: 'scenario_approval_logs',
-  scenarioCoordinations: 'scenario_coordinations',
-  scenarioWorkItems: 'scenario_work_items',
-  scenarioAcknowledgements: 'scenario_acknowledgements',
-  scenarioNotices: 'scenario_notices',
-  scenarioOrders: 'scenario_orders',
-  scenarioSupplierOnboardings: 'scenario_supplier_onboardings',
-  scenarioReimbursements: 'scenario_reimbursements',
-  scenarioPaymentRequests: 'scenario_payment_requests',
-  scenarioAuthorizationRequests: 'scenario_authorization_requests',
-  scenarioBudgetGrants: 'scenario_budget_grants',
-  scenarioPaymentReservations: 'scenario_payment_reservations',
-  scenarioMessages: 'scenario_messages',
-  scenarioExternalOperations: 'scenario_external_operations',
-  scenarioDemoSettings: 'scenario_demo_settings',
 };
 
 it('creates the collections on up and removes them on down', async () => {
@@ -80,21 +61,6 @@ it('creates the collections on up and removes them on down', async () => {
     expect(unique).toMatch(
       /lifecycle_example_transitions.*request_id[^\n]*where[^\n]*request_id[^\n]*is not null/i,
     );
-    // An approval request keeps no stages of its own: they, its to-dos and
-    // its handling log are rows, numbered once per request.
-    for (const column of ['stages', 'cursor', 'consultations', 'materials'])
-      expect(
-        await client.schema.hasColumn('scenario_approval_requests', column),
-      ).toBe(false);
-    for (const table of [
-      'scenario_approval_stages',
-      'scenario_approval_tasks',
-      'scenario_approval_logs',
-    ])
-      expect(unique).toMatch(new RegExp(`${table}.*request_id.*seq`));
-    expect(
-      await client.schema.hasColumn('scenario_approval_logs', 'transition_id'),
-    ).toBe(true);
 
     await migrator.rollback();
     for (const [name, physical] of Object.entries(COLLECTIONS)) {

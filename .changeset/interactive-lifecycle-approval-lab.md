@@ -1,5 +1,0 @@
----
-'@nocobase/app-plugin-lifecycle-example': minor
----
-
-Add an interactive approval lab with persistent sample collections, example identities, a todo center, staged and parallel approvals, subprocesses, notice confirmations, itemized reimbursement, payment execution and reusable authorization grants. Include sample drafts, organization and rule version controls, simulated external events and failures, transition history, and operator retries. Add an approval center menu that presents the scenarios as business applications — leave, business trips, purchasing, contracts, expense claims, payments, budget authorizations, supplier onboarding, employee onboarding, product launches and notices — with a to-do center across them, route previews before submission, role-aware actions, approval flow diagrams and request history. Keep each staged approval's stages, each person's to-dos and a per-stage handling log in collections of their own, every log row tied to the transition it belongs to, so the transition history and the handling log read together as the request's complete timeline.

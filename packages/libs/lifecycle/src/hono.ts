@@ -82,7 +82,8 @@ async function body(context: Context): Promise<Record<string, unknown>> {
  * - `GET /:lifecycle` — the description, parameters and diagram
  * - `GET /:lifecycle/:id` — the record, its state and version, what the actor
  *   may do and why not, and its history
- * - `POST /:lifecycle/:id/fire` — `{ transition, input?, requestId?, expectVersion? }`
+ * - `POST /:lifecycle/:id/fire` — `{ transition, input?, requestId?, expectVersion? }`;
+ *   a transition declared `manual: false` is refused with `NOT_MANUAL`
  * - `POST /:lifecycle/:id/runs/:runId/retry` and `/cancel` — for operators
  *
  * A refusal answers `{ code, message, blockers, problems }` with a status
@@ -175,6 +176,19 @@ export function createLifecycleRoutes(
       action: 'fire',
       transition,
     });
+    // A transition only server code fires is not a button, whoever asks.
+    if (
+      runtime
+        .describe(lifecycle)
+        .transitions.some(
+          (declared) => declared.name === transition && !declared.manual,
+        )
+    )
+      throw new Refusal(
+        403,
+        'NOT_MANUAL',
+        `"${transition}" is fired by the system, not by a person.`,
+      );
     const expectVersion = values.expectVersion;
     const result = await runtime.fire(lifecycle, id, transition, {
       actor,

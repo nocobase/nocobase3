@@ -4,6 +4,8 @@ import {
   type EffectRetry,
   type Lifecycle,
   type LifecycleDescription,
+  type StateHook,
+  type StateHookContext,
   type TransitionContext,
 } from './definition.js';
 import {
@@ -159,6 +161,45 @@ export interface CreateOptions {
   readonly input?: JsonObject;
 }
 
+/**
+ * One transaction across every registered lifecycle, from
+ * `runtime.transaction()` or handed to a hook. Transitions fired in it are
+ * checked as `runtime.fire()` checks them — state, version, guards, input —
+ * and write their log entries and effect runs in it; their events, their
+ * effects and every `afterCommit` callback follow once the outermost
+ * transaction commits, and never if it rolls back.
+ *
+ * A refusal before a transition writes anything — the record moved on, a
+ * guard said no — leaves the transaction as it was, and the caller may go
+ * on. A failure after it wrote something cannot be taken back alone: the
+ * whole transaction rolls back, even if the caller catches it.
+ */
+export interface LifecycleTransaction {
+  /** The store's handle for this transaction, such as a `@nocobase/db` connection: write other rows through it. */
+  readonly handle: unknown;
+  /** The runtime's clock when the transaction began. */
+  readonly now: Date;
+  /** The record as this transaction sees it. */
+  read(lifecycle: string, id: RecordId): Promise<LifecycleRecord | undefined>;
+  fire(
+    lifecycle: string,
+    id: RecordId,
+    transition: string,
+    options: FireOptions,
+  ): Promise<FireResult>;
+  create(
+    lifecycle: string,
+    values: Readonly<Record<string, unknown>>,
+    options: CreateOptions,
+  ): Promise<FireResult>;
+  /**
+   * Runs once the transaction commits, after its events: a notification
+   * about rows written in it. Best effort, as listeners are — a callback
+   * that throws is logged, and nothing runs it again after a crash.
+   */
+  afterCommit(callback: () => void | Promise<void>): void;
+}
+
 /** What happened, told after it committed. */
 export interface LifecycleEvent {
   readonly lifecycle: string;
@@ -223,6 +264,29 @@ interface Registered {
   readonly parameters: () => object;
   /** Guards added with `addGuard()`, by transition name. */
   readonly guards: Map<string, ExtraGuard<LifecycleTypes>[]>;
+}
+
+/** A transition written in a transaction, told and dispatched once it commits. */
+interface Written {
+  readonly registered: Registered;
+  readonly actor: LifecycleActor;
+  result?: FireResult;
+}
+
+/** What one transaction owes once it commits, and whether it may commit. */
+interface Pending {
+  readonly written: Written[];
+  readonly after: (() => void | Promise<void>)[];
+  /** A failure after something was written: the transaction must roll back. */
+  broken: { readonly error: unknown } | null;
+}
+
+/** The store transaction a decision runs in, and what it owes. */
+interface Scope {
+  readonly store: LifecycleStore;
+  readonly pending: Pending;
+  readonly now: Date;
+  readonly tx: LifecycleTransaction;
 }
 
 const silent: LifecycleLogger = { warn: () => {}, error: () => {} };
@@ -315,7 +379,10 @@ export class LifecycleRuntime {
       );
     const source = options.services;
     this.lifecycles.set(lifecycle.name, {
-      lifecycle: lifecycle,
+      // Hooks take their context as a parameter, so a lifecycle of a
+      // narrower type is not one of the widest; the runtime only ever hands
+      // each its own records.
+      lifecycle: lifecycle as unknown as Lifecycle<LifecycleTypes>,
       services:
         typeof source === 'function' ? source : (): object => source ?? {},
       parameters: options.parameters ?? ((): object => ({})),
@@ -380,21 +447,35 @@ export class LifecycleRuntime {
    * and the effect runs it owes are one transaction; effects are dispatched
    * only after it commits.
    */
-  public async fire(
+  public fire(
     name: string,
     id: RecordId,
     transition: string,
     options: FireOptions,
   ): Promise<FireResult> {
-    const registered = this.get(name);
+    this.get(name);
+    return this.transaction((tx) => tx.fire(name, id, transition, options));
+  }
+
+  /**
+   * Runs `work` in one transaction of the store: read records, write rows
+   * of your own through `tx.handle`, and fire or create records of any
+   * registered lifecycle through `tx`, all committing together or not at
+   * all. A second layer of state uses it to write its conclusion and move
+   * the record it belongs to in one step. See {@link LifecycleTransaction}.
+   */
+  public async transaction<R>(
+    work: (tx: LifecycleTransaction) => Promise<R>,
+  ): Promise<R> {
+    const pending: Pending = { written: [], after: [], broken: null };
     const now = this.clock();
-    const committed = await this.store.transaction((store) =>
-      this.decide(store, registered, id, transition, options, now),
-    );
-    if (committed.replayed) return committed;
-    await this.emit(registered, committed, options.actor);
-    for (const run of committed.effectRuns) await this.handOver(run.id, null);
-    return committed;
+    const value = await this.store.transaction(async (store) => {
+      const result = await work(this.scope(store, pending, now).tx);
+      if (pending.broken) throw pending.broken.error;
+      return result;
+    });
+    await this.settle(pending);
+    return value;
   }
 
   /**
@@ -452,6 +533,7 @@ export class LifecycleRuntime {
       lifecycle,
       stateOf(lifecycle, record),
     )) {
+      if (!transition.manual) continue;
       const blockers = await guardBlockers(
         transition,
         context,
@@ -487,6 +569,17 @@ export class LifecycleRuntime {
         'UNKNOWN_TRANSITION',
         `Lifecycle "${name}" has no transition "${transition}".`,
       );
+    if (!declared.manual)
+      return {
+        allowed: false,
+        blockers: [
+          {
+            source: 'manual',
+            code: 'NOT_MANUAL',
+            message: `"${transition}" is fired by the system, not by a person.`,
+          },
+        ],
+      };
     const record = await this.require(registered, id);
     const state = stateOf(lifecycle, record);
     if (!declared.from.includes(state))
@@ -513,61 +606,13 @@ export class LifecycleRuntime {
    * record in an initial state, a log entry from nothing, and the effect runs
    * the state's `onEnter` owes, so a record's history starts where it does.
    */
-  public async create(
+  public create(
     name: string,
     values: Readonly<Record<string, unknown>>,
     options: CreateOptions,
   ): Promise<FireResult> {
-    const registered = this.get(name);
-    const { lifecycle } = registered;
-    const state = options.state ?? lifecycle.initial;
-    if (!lifecycle.initialStates.includes(state))
-      throw new LifecycleError(
-        'INVALID_STATE',
-        `"${state}" is not an initial state of "${name}".`,
-      );
-    for (const field of [
-      lifecycle.stateField,
-      lifecycle.changedAtField,
-      lifecycle.versionField,
-    ])
-      if (field in values)
-        throw new LifecycleError(
-          'INVALID_SET',
-          `Creating a ${name} record may not set "${field}"; the lifecycle owns it.`,
-        );
-    const now = this.clock();
-    const at = now.toISOString();
-    const committed = await this.store.transaction(async (store) => {
-      const record = await store.createRecord(lifecycle.collection, {
-        ...values,
-        [lifecycle.stateField]: state,
-        [lifecycle.changedAtField]: at,
-        [lifecycle.versionField]: 1,
-      });
-      const entry = await store.appendTransition({
-        lifecycle: lifecycle.name,
-        recordId: String(record.id),
-        transition: CREATE_TRANSITION,
-        from: null,
-        to: state,
-        actorId: options.actor.id,
-        input: options.input ?? {},
-        at,
-        version: 1,
-        requestId: null,
-      });
-      const effectRuns = await this.owe(
-        store,
-        lifecycle,
-        entry,
-        lifecycle.onEnter.get(state) ?? [],
-      );
-      return { record, entry, effectRuns };
-    });
-    await this.emit(registered, committed, options.actor);
-    for (const run of committed.effectRuns) await this.handOver(run.id, null);
-    return committed;
+    this.get(name);
+    return this.transaction((tx) => tx.create(name, values, options));
   }
 
   /** The names of the registered lifecycles. */
@@ -768,7 +813,8 @@ export class LifecycleRuntime {
     // Recording the outcome and firing what follows it commit together: a
     // stop between the two would otherwise leave a succeeded run whose
     // record never moves on.
-    let finished: FireResult | null | undefined;
+    let finished: boolean | undefined;
+    const pending: Pending = { written: [], after: [], broken: null };
     try {
       finished = await this.store.transaction(async (store) => {
         const recorded = await store.updateEffectRun(
@@ -777,29 +823,28 @@ export class LifecycleRuntime {
           changes,
         );
         if (!recorded) return undefined;
-        if (next === undefined) return null;
+        if (next === undefined) return false;
+        const scope = this.scope(store, pending, this.clock());
         try {
-          return await this.decide(
-            store,
-            registered,
-            run.recordId,
-            next,
-            { actor: SYSTEM_ACTOR, input },
-            this.clock(),
-          );
+          await this.decide(scope, registered, run.recordId, next, {
+            actor: SYSTEM_ACTOR,
+            input,
+          });
         } catch (error) {
           // The record has moved on, or the guard refuses: the outcome is
           // still recorded, and nothing follows from it. decide() writes
           // nothing before it refuses, so the transaction stays whole.
           // Anything else, a conflict included, rolls the attempt back so
           // it runs again rather than losing what should follow.
-          if (!isRefusal(error, MOVED_ON)) throw error;
+          if (!isRefusal(error, MOVED_ON) || pending.broken) throw error;
           this.logger.warn(
             `Effect "${run.effect}" could not continue with "${next}": ${error.message}`,
             { runId },
           );
-          return null;
+          return false;
         }
+        if (pending.broken) throw pending.broken.error;
+        return true;
       });
     } catch (error) {
       // Nothing of the outcome stuck. Put the attempt back in the queue now,
@@ -829,11 +874,7 @@ export class LifecycleRuntime {
       return this.store.findEffectRun(runId);
     }
     if (finished === undefined) this.discarded(effect.name, runId, attempt);
-    else if (finished) {
-      await this.emit(registered, finished, SYSTEM_ACTOR);
-      for (const owed of finished.effectRuns)
-        await this.handOver(owed.id, null);
-    }
+    else if (finished) await this.settle(pending);
     if (!outcome.ok)
       this.logger.warn(
         `Effect "${effect.name}" failed after ${attempt} attempt(s)`,
@@ -1121,20 +1162,190 @@ export class LifecycleRuntime {
     }
   }
 
+  /** The transaction handle `work` and the hooks of its transitions receive. */
+  private scope(store: LifecycleStore, pending: Pending, now: Date): Scope {
+    const scope: Scope = {
+      store,
+      pending,
+      now,
+      tx: Object.freeze({
+        handle: store.transactionHandle,
+        now,
+        read: (name: string, id: RecordId) =>
+          store.findRecord(this.get(name).lifecycle.collection, id),
+        fire: (
+          name: string,
+          id: RecordId,
+          transition: string,
+          options: FireOptions,
+        ) => this.decide(scope, this.get(name), id, transition, options),
+        create: (
+          name: string,
+          values: Readonly<Record<string, unknown>>,
+          options: CreateOptions,
+        ) => this.make(scope, this.get(name), values, options),
+        afterCommit: (callback: () => void | Promise<void>) => {
+          pending.after.push(callback);
+        },
+      }),
+    };
+    return scope;
+  }
+
   /**
-   * Decides and writes one transition on `store`, which is a transaction.
-   * Everything it checks comes before anything it writes, so a refusal
-   * leaves the transaction as it found it.
+   * Tells the listeners about every transition a committed transaction
+   * wrote, runs its `afterCommit` callbacks, then hands over the effect runs
+   * it owes, in the order they were written.
+   */
+  private async settle(pending: Pending): Promise<void> {
+    const written = pending.written.filter(
+      (each): each is Written & { result: FireResult } =>
+        each.result !== undefined,
+    );
+    for (const each of written)
+      await this.emit(each.registered, each.result, each.actor);
+    for (const callback of pending.after)
+      try {
+        await callback();
+      } catch (error) {
+        this.logger.error('An afterCommit callback failed', { error });
+      }
+    for (const each of written)
+      for (const run of each.result.effectRuns)
+        await this.handOver(run.id, null);
+  }
+
+  /**
+   * Runs `write` once the first row of a transition is written. Anything it
+   * throws breaks the transaction: a refusal from here on would leave half a
+   * transition behind, so the transaction rolls back even if a caller
+   * catches it.
+   */
+  private async writing(
+    scope: Scope,
+    written: Written,
+    write: () => Promise<FireResult>,
+  ): Promise<FireResult> {
+    scope.pending.written.push(written);
+    try {
+      written.result = await write();
+      return written.result;
+    } catch (error) {
+      scope.pending.broken ??= { error };
+      throw error;
+    }
+  }
+
+  private async runHooks(
+    hooks: readonly StateHook<LifecycleTypes>[] | undefined,
+    context: StateHookContext<LifecycleTypes>,
+  ): Promise<void> {
+    for (const hook of hooks ?? []) await hook(context);
+  }
+
+  /**
+   * Creates one record in `scope`. Everything it checks comes before the
+   * record is written; the initial state's enter hooks then run in the same
+   * transaction.
+   */
+  private async make(
+    scope: Scope,
+    registered: Registered,
+    values: Readonly<Record<string, unknown>>,
+    options: CreateOptions,
+  ): Promise<FireResult> {
+    const { lifecycle } = registered;
+    const state = options.state ?? lifecycle.initial;
+    if (!lifecycle.initialStates.includes(state))
+      throw new LifecycleError(
+        'INVALID_STATE',
+        `"${state}" is not an initial state of "${lifecycle.name}".`,
+      );
+    for (const field of [
+      lifecycle.stateField,
+      lifecycle.changedAtField,
+      lifecycle.versionField,
+    ])
+      if (field in values)
+        throw new LifecycleError(
+          'INVALID_SET',
+          `Creating a ${lifecycle.name} record may not set "${field}"; the lifecycle owns it.`,
+        );
+    const { store, now } = scope;
+    const at = now.toISOString();
+    const created = await store.createRecord(lifecycle.collection, {
+      ...values,
+      [lifecycle.stateField]: state,
+      [lifecycle.changedAtField]: at,
+      [lifecycle.versionField]: 1,
+    });
+    return this.writing(
+      scope,
+      { registered, actor: options.actor },
+      async () => {
+        const record = Object.freeze({ ...created }) as LifecycleRecord;
+        const input = options.input ?? {};
+        const entry = await store.appendTransition({
+          lifecycle: lifecycle.name,
+          recordId: String(record.id),
+          transition: CREATE_TRANSITION,
+          from: null,
+          to: state,
+          actorId: options.actor.id,
+          input,
+          at,
+          version: 1,
+          requestId: null,
+        });
+        await this.runHooks(
+          lifecycle.onEnterState.get(state),
+          Object.freeze({
+            lifecycle: lifecycle.name,
+            record,
+            previous: null,
+            from: null,
+            to: state,
+            transition: CREATE_TRANSITION,
+            actor: options.actor,
+            input,
+            entry,
+            parameters: this.parameters(
+              lifecycle.name,
+            ) as ParametersOf<LifecycleTypes>,
+            services: registered.services(
+              store.transactionHandle,
+            ) as ServicesOf<LifecycleTypes>,
+            tx: scope.tx,
+            now,
+          }),
+        );
+        const effectRuns = await this.owe(
+          store,
+          lifecycle,
+          entry,
+          lifecycle.onEnter.get(state) ?? [],
+        );
+        return { record, entry, effectRuns };
+      },
+    );
+  }
+
+  /**
+   * Decides and writes one transition in `scope`. Everything it checks comes
+   * before anything it writes, so a refusal leaves the transaction as it
+   * found it. Once the record is written, the hooks of the state it leaves,
+   * the transition's own hook and the hooks of the state it enters run, in
+   * that order, in the same transaction.
    */
   private async decide(
-    store: LifecycleStore,
+    scope: Scope,
     registered: Registered,
     id: RecordId,
     transition: string,
     options: FireOptions,
-    now: Date,
   ): Promise<FireResult> {
     const { lifecycle } = registered;
+    const { store, now } = scope;
     const current = await store.findRecord(lifecycle.collection, id);
     if (!current)
       throw new LifecycleError(
@@ -1172,15 +1383,17 @@ export class LifecycleRuntime {
         'CONFLICT',
         `The ${lifecycle.collection} record "${String(id)}" changed state after ${expected.changedBefore}.`,
       );
+    const parameters = this.parameters(
+      lifecycle.name,
+    ) as ParametersOf<LifecycleTypes>;
+    const services = registered.services(
+      store.transactionHandle,
+    ) as ServicesOf<LifecycleTypes>;
     const plan = await planTransition(lifecycle, current, transition, {
       actor: options.actor,
       ...(options.input === undefined ? {} : { input: options.input }),
-      parameters: this.parameters(
-        lifecycle.name,
-      ) as ParametersOf<LifecycleTypes>,
-      services: registered.services(
-        store.transactionHandle,
-      ) as ServicesOf<LifecycleTypes>,
+      parameters,
+      services,
       now,
       guards: registered.guards.get(transition) ?? [],
     });
@@ -1200,46 +1413,70 @@ export class LifecycleRuntime {
         'CONFLICT',
         `The ${lifecycle.collection} record "${String(id)}" changed while "${transition}" was being decided.`,
       );
-    const at = now.toISOString();
-    const entry = await store.appendTransition({
-      lifecycle: lifecycle.name,
-      recordId: String(current.id),
-      transition,
-      from: plan.from,
-      to: plan.to,
-      actorId: options.actor.id,
-      input: plan.input,
-      at,
-      version: plan.nextVersion,
-      requestId: options.requestId ?? null,
-    });
-    const record = Object.freeze({
-      ...current,
-      ...plan.values,
-    }) as LifecycleRecord;
-    const definition = lifecycle.transitions.get(transition)?.definition;
-    if (definition?.onTransition)
-      await definition.onTransition(
-        Object.freeze({
-          record,
-          previous: current,
-          actor: options.actor,
-          input: plan.input,
+    return this.writing(
+      scope,
+      { registered, actor: options.actor },
+      async () => {
+        const entry = await store.appendTransition({
+          lifecycle: lifecycle.name,
+          recordId: String(current.id),
+          transition,
           from: plan.from,
           to: plan.to,
+          actorId: options.actor.id,
+          input: plan.input,
+          at: now.toISOString(),
+          version: plan.nextVersion,
+          requestId: options.requestId ?? null,
+        });
+        const record = Object.freeze({
+          ...current,
+          ...plan.values,
+        }) as LifecycleRecord;
+        const hook: StateHookContext<LifecycleTypes> = Object.freeze({
+          lifecycle: lifecycle.name,
+          record,
+          previous: current,
+          from: plan.from,
+          to: plan.to,
+          transition,
+          actor: options.actor,
+          input: plan.input,
           entry,
-          parameters: this.parameters(
-            lifecycle.name,
-          ) as ParametersOf<LifecycleTypes>,
-          services: registered.services(
-            store.transactionHandle,
-          ) as ServicesOf<LifecycleTypes>,
-          transactionHandle: store.transactionHandle,
+          parameters,
+          services,
+          tx: scope.tx,
           now,
-        }),
-      );
-    const effectRuns = await this.owe(store, lifecycle, entry, plan.effects);
-    return { record, entry, effectRuns };
+        });
+        await this.runHooks(lifecycle.onLeaveState.get(plan.from), hook);
+        const definition = lifecycle.transitions.get(transition)?.definition;
+        if (definition?.onTransition)
+          await definition.onTransition(
+            Object.freeze({
+              record,
+              previous: current,
+              actor: options.actor,
+              input: plan.input,
+              from: plan.from,
+              to: plan.to,
+              entry,
+              parameters,
+              services,
+              transactionHandle: store.transactionHandle,
+              tx: scope.tx,
+              now,
+            }),
+          );
+        await this.runHooks(lifecycle.onEnterState.get(plan.to), hook);
+        const effectRuns = await this.owe(
+          store,
+          lifecycle,
+          entry,
+          plan.effects,
+        );
+        return { record, entry, effectRuns };
+      },
+    );
   }
 
   /** Tells the listeners about a committed transition; a failing listener is logged, never thrown. */
@@ -1263,12 +1500,12 @@ export class LifecycleRuntime {
     const deliveries: [Subscription['event'], LifecycleEvent][] = [
       ['completed', base],
       ['entered', base],
-      ...transitionsFrom(lifecycle, entry.to).map(
-        (next): [Subscription['event'], LifecycleEvent] => [
+      ...transitionsFrom(lifecycle, entry.to)
+        .filter((next) => next.manual)
+        .map((next): [Subscription['event'], LifecycleEvent] => [
           'announce',
           Object.freeze({ ...base, next: next.name }) as AnnounceEvent,
-        ],
-      ),
+        ]),
     ];
     for (const [event, payload] of deliveries)
       for (const subscription of [...this.subscriptions]) {

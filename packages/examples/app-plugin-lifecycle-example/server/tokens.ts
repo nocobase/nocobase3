@@ -12,10 +12,3 @@ export const lifecycleExampleServiceToken: ServiceToken<LifecycleExampleService>
   createServiceToken<LifecycleExampleService>(
     '@nocobase/app-plugin-lifecycle-example/service',
   );
-
-import type { ApprovalLabService } from './approval-lab/service.js';
-
-export const approvalLabServiceToken: ServiceToken<ApprovalLabService> =
-  createServiceToken<ApprovalLabService>(
-    '@nocobase/app-plugin-lifecycle-example/approval-lab',
-  );

@@ -484,4 +484,73 @@ describe('Repository lifecycle store', () => {
       { status: 'succeeded', attempts: 2 },
     ]);
   });
+
+  it('runs state hooks and a transaction across records in one database transaction', async () => {
+    interface NotedTypes {
+      record: TicketTypes['record'];
+      state: TicketTypes['state'];
+    }
+    const first = await createTicket();
+    const second = await createTicket();
+    const notes = (handle: unknown) =>
+      (handle as DatabaseConnection).repository('notes');
+    const hooked = new LifecycleRuntime({ store, clock: () => now });
+    hooked.register(
+      defineLifecycle<NotedTypes>({
+        name: 'hookedTickets',
+        collection: 'tickets',
+        initial: 'open',
+        states: ['open', 'awaitingCustomer', { name: 'closed', final: true }],
+        transitions: {
+          wait: { from: 'open', to: 'awaitingCustomer' },
+          close: { from: 'awaitingCustomer', to: 'closed', manual: false },
+        },
+        onEnterState: {
+          awaitingCustomer: async ({ record, tx }) => {
+            await notes(tx.handle).createOne({
+              values: { ticketId: String(record.id), text: 'waiting' },
+            });
+          },
+        },
+        onLeaveState: {
+          awaitingCustomer: async ({ record, tx }) => {
+            await notes(tx.handle).createOne({
+              values: { ticketId: String(record.id), text: 'left' },
+            });
+          },
+        },
+      }),
+    );
+    await hooked.transaction(async (tx) => {
+      await tx.fire('hookedTickets', first, 'wait', { actor: { id: 'agent' } });
+      await tx.fire('hookedTickets', second, 'wait', {
+        actor: { id: 'agent' },
+      });
+    });
+    await expect(
+      hooked.transaction(async (tx) => {
+        await tx.fire('hookedTickets', first, 'close', {
+          actor: { id: 'agent' },
+        });
+        await notes(tx.handle).createOne({
+          values: { ticketId: first, text: 'closing note' },
+        });
+        // The second record has moved on since this page read it.
+        await tx.fire('hookedTickets', second, 'close', {
+          actor: { id: 'agent' },
+          expect: { version: 0 },
+        });
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(
+      (await database.repository('notes').findMany({})).map(
+        (row) => `${String(row.ticketId)}:${String(row.text)}`,
+      ),
+    ).toEqual([`${first}:waiting`, `${second}:waiting`]);
+    expect(
+      await database
+        .repository('tickets')
+        .findOne({ filter: { id: Number(first) } }),
+    ).toMatchObject({ status: 'awaitingCustomer', lifecycleVersion: 1 });
+  });
 });

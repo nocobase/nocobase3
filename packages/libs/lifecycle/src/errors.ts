@@ -17,7 +17,7 @@ export type LifecycleErrorCode =
  * is what to show the person.
  */
 export interface Blocker {
-  readonly source: 'state' | 'guard';
+  readonly source: 'state' | 'guard' | 'manual';
   readonly code: string;
   readonly message: string;
 }

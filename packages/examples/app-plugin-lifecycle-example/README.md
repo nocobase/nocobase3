@@ -2,15 +2,16 @@
 
 Shows record lifecycles built on `@nocobase/lifecycle`: a business record keeps its state in one of its own fields, every change is a transition declared in source, and the side effects a transition owes run after it commits, with retries. There is no separate process instance — where a ticket or an expense stands is its `status`.
 
-The examples run under **Lifecycle Example** in the application menu, each behind a page that reads like the product rather than like the lifecycle:
+Two lifecycles run under **Lifecycle Example** in the application menu, each behind a page that reads like the product rather than like the lifecycle:
 
-| Page               | Lifecycle                      | What it shows                                                                                                                                                                                                                                   |
-| ------------------ | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Approval scenarios | `server/approval-scenarios/`   | Interactive approval cases 1–28, with a shared todo center, persistent requests, organization and policy controls, and simulated execution; see [the approval lab guide](docs/approval-lab.md)                                                  |
-| Help desk          | `server/lifecycles/ticket.ts`  | A customer files a ticket; agents take it from a queue and reply; a ticket left waiting on the customer closes itself, a customer reply brings it back, and a closed ticket can be reopened for a week. The conversation is the transition log  |
-| Expense reports    | `server/lifecycles/expense.ts` | An employee claims itemized expenses; the amount decides whether it is approved automatically or needs the manager and finance; approvers approve, send back or reject with a reason; an idle manager is passed over; payment runs as an effect |
+| Page            | Lifecycle                      | What it shows                                                                                                                                                                                                                                   |
+| --------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Help desk       | `server/lifecycles/ticket.ts`  | A customer files a ticket; agents take it from a queue and reply; a ticket left waiting on the customer closes itself, a customer reply brings it back, and a closed ticket can be reopened for a week. The conversation is the transition log  |
+| Expense reports | `server/lifecycles/expense.ts` | An employee claims itemized expenses; the amount decides whether it is approved automatically or needs the manager and finance; approvers approve, send back or reject with a reason; an idle manager is passed over; payment runs as an effect |
 
 Each page has a **Signed in as** switch over the example's people — agents and customers, or employees, managers, an executive and the finance director — so one person can play every role; a real application takes the actor from the signed-in user and authorizes the action. The waits are minutes rather than days so you can watch a trigger fire, and a demo option on each new record makes its first email deliveries or payment attempts fail on purpose, to show retries. Under each record, **Under the hood** shows its states, parameters, transition log and effect runs.
+
+`server/second-layer/` shows what goes on while a record waits in one state, written by hand without a page of its own: a visa waits in `supplementing` while the applicant and the officer exchange material in rounds, and an order waits in `replanning` while an assistant asks the planner to choose. Each keeps its rounds in rows of its own, set up and ended by the state's `onEnterState` and `onLeaveState` hooks, and moves the record only when it concludes, by firing a `manual: false` transition in `runtime.transaction()` — so the record's version and clock stay where they were until then. Approvals are this pattern made reusable, in `@nocobase/app-plugin-approval`.
 
 ## Try it
 
@@ -21,12 +22,6 @@ Run the examples application with `pnpm --filter @nocobase/app-template-examples
 3. **See retries.** Create a report with "payments that fail on purpose" set to 5 and approve it. The payment run fails three times and becomes `failed`. Click **Retry**: it gets three more attempts; the fourth and fifth fail, the sixth succeeds, the report becomes `paid` and the payment reference is written onto it.
 4. **See the concurrency guard.** Open the same waiting report in two windows. Approve it in one, then send it back in the other: the second click is refused because the version it saw is stale.
 5. **See the diagram.** The panel shows the Mermaid source of the lifecycle, its parameters, its log and its effect runs.
-
-## Approval lab
-
-Open **Approvals → To-do center**, or `/approval-center/inbox` beneath the application's base path, to use the scenarios as business applications: each business page lets you start a request, switch to the people it involves, and handle it. Open **Lifecycle Example → Approval scenarios**, or `/lifecycle-example/approvals` beneath the application's base path. Click **Load sample drafts** as `zhang` or `admin`, then open a draft, submit it, and switch to its current approver. Samples are created once and later loads preserve their progress. The lab's migrations run with the examples application's normal database setup; for an existing application, run `pnpm nocobase db apply` from its root before starting it.
-
-The lab is a signed-in demonstration: its selectable identities are personas rather than real user accounts, every authenticated demo user can inspect its sample records, and lifecycle guards enforce business actions. Only the `admin` persona configures the organization and policy versions, simulates system events, or operates effect runs. External operations and notifications are local database-backed simulations.
 
 ## How it is wired
 
@@ -55,9 +50,9 @@ The lab is a signed-in demonstration: its selectable identities are personas rat
 
 ## Testing
 
-`tests/approval-scenarios/` tests the individual approval recipes with memory storage and a fake clock. `tests/approval-scenarios.test.ts` runs the interactive lab against SQLite, including parallel children, grants, confirmation, transaction rollback, restart, input validation and concurrent requests. `tests/approvals-page.test.tsx` exercises the lab page and `tests/approval-center.test.tsx` the approval center pages against the production router.
-
 `tests/lifecycles.test.ts` tests both lifecycles with `@nocobase/lifecycle/testing`: a memory store, a fake clock and in-process effects, so waiting, escalating and retrying are plain function calls. `tests/provider.test.ts` runs the real Provider against SQLite and the memory jobs service, and `tests/routes.test.ts` covers the HTTP boundary.
+
+`tests/second-layer.test.ts` runs the two hand-written second layers on memory storage and a fake clock: rounds that leave the record alone, the conclusion that moves it, and a late answer for a stay that has already ended being refused.
 
 ```bash
 pnpm --filter @nocobase/app-plugin-lifecycle-example lint

@@ -17,8 +17,8 @@ function label(text: string): string {
 /**
  * The lifecycle as a Mermaid state diagram, for documentation or an admin
  * page. Initial states start from `[*]` and final states end there; a
- * transition a trigger fires says which, and one an effect continues with
- * names the effect.
+ * transition a trigger fires says which, one an effect continues with
+ * names the effect, and one only server code fires is marked ⚙.
  */
 export function toMermaid(
   description: LifecycleDescription,
@@ -33,6 +33,7 @@ export function toMermaid(
     lines.push(`  [*] --> ${id(state)}`);
   for (const transition of description.transitions) {
     const notes: string[] = [];
+    if (!transition.manual) notes.push('⚙');
     for (const trigger of description.triggers)
       if (trigger.transition === transition.name)
         notes.push(`⏱ ${trigger.name}`);

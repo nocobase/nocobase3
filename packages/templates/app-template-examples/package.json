@@ -159,6 +159,8 @@
     "zod": "catalog:",
     "@nocobase/app-plugin-ai-employee": "workspace:^",
     "@nocobase/app-plugin-api-keys": "workspace:^",
+    "@nocobase/app-plugin-approval": "workspace:^",
+    "@nocobase/app-plugin-approval-example": "workspace:^",
     "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-plugin-authorization": "workspace:^",
     "@nocobase/app-plugin-authorization-example": "workspace:^",
@@ -203,6 +205,7 @@
     "@nocobase/queue": "workspace:^",
     "@nocobase/jobs": "workspace:^",
     "@nocobase/i18n": "workspace:^",
+    "@nocobase/lifecycle": "workspace:^",
     "@nocobase/caching": "workspace:^",
     "@nocobase/ai-employee": "workspace:^",
     "@nocobase/app-cli": "workspace:^"

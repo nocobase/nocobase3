@@ -53,7 +53,7 @@ export function StateBadge({
   const { t } = useTranslation(NAMESPACE);
   return (
     <Badge className={TONES[STATE_TONES[state] ?? 'neutral']}>
-      {t(`states.${state}`, { defaultValue: state })}
+      {t(`states.${state}`)}
     </Badge>
   );
 }
@@ -97,12 +97,10 @@ export function LifecyclePanel({
   detail,
   actions,
   onChange,
-  allowOperate = true,
 }: {
   readonly detail: RecordDetail;
   /** The library's operator actions on this record's runs. */
   readonly actions: Pick<UseLifecycleResult, 'retryRun' | 'cancelRun'>;
-  readonly allowOperate?: boolean;
   readonly onChange: () => Promise<void>;
 }): ReactElement {
   const { t, i18n } = useTranslation(NAMESPACE);
@@ -330,7 +328,7 @@ export function LifecyclePanel({
                         </td>
                         <td className='py-1.5 pr-3 whitespace-nowrap'>
                           <div>{t(`runs.${run.status}`)}</div>
-                          {allowOperate && RETRYABLE.has(run.status) ? (
+                          {RETRYABLE.has(run.status) ? (
                             <Button
                               size='sm'
                               variant='outline'
@@ -339,7 +337,7 @@ export function LifecyclePanel({
                             >
                               {t('lifecycle.retry')}
                             </Button>
-                          ) : allowOperate && CANCELLABLE.has(run.status) ? (
+                          ) : CANCELLABLE.has(run.status) ? (
                             <Button
                               size='sm'
                               variant='ghost'
