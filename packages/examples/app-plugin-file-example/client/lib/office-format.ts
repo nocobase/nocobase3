@@ -1,14 +1,9 @@
 import type { FileRecord } from '@nocobase/app-plugin-file/client';
 
+import { isActiveMarkupMimeType } from './mime.js';
+
 export type OfficeOpenXmlFormat = 'docx' | 'xlsx' | 'pptx';
 
-const ACTIVE_MIME_TYPES: ReadonlySet<string> = new Set([
-  'application/xhtml+xml',
-  'application/xml',
-  'image/svg+xml',
-  'text/html',
-  'text/xml',
-]);
 const ACTIVE_EXTENSIONS: ReadonlySet<string> = new Set([
   '.htm',
   '.html',
@@ -48,11 +43,6 @@ const OFFICE_EXTENSIONS: ReadonlySet<string> = new Set([
   '.ppt',
   '.xls',
 ]);
-// Active markup runs script when a browser treats it as a document.
-export function isActiveMarkupMimeType(value: string): boolean {
-  const mimeType = value.split(';', 1)[0]?.trim().toLowerCase() ?? '';
-  return ACTIVE_MIME_TYPES.has(mimeType) || mimeType.endsWith('+xml');
-}
 
 export function resolveOfficeOpenXmlFormat(
   file: FileRecord,

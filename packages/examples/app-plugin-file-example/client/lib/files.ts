@@ -1,9 +1,7 @@
 import type { FileRecord } from '@nocobase/app-plugin-file/client';
 
-import {
-  isActiveMarkupMimeType,
-  resolveOfficeOpenXmlFormat,
-} from './office-format.js';
+import { isActiveMarkupMimeType } from './mime.js';
+import { resolveOfficeOpenXmlFormat } from './office-format.js';
 
 export type FilePreviewKind =
   'image' | 'pdf' | 'text' | 'audio' | 'video' | 'ooxml' | 'unsupported';

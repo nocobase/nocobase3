@@ -9,10 +9,8 @@ import { useEffect, useRef, useState, type ReactElement } from 'react';
 import type { FileRecord } from '@nocobase/app-plugin-file/client';
 
 import { formatBytes, previewKind } from '../lib/files.js';
-import {
-  isActiveMarkupMimeType,
-  resolveOfficeOpenXmlFormat,
-} from '../lib/office-format.js';
+import { isActiveMarkupMimeType } from '../lib/mime.js';
+import { resolveOfficeOpenXmlFormat } from '../lib/office-format.js';
 import { resolveSafeFileUrl } from '../lib/file-url.js';
 import { OfficeOpenXmlPreview } from './office-open-xml-preview.js';
 

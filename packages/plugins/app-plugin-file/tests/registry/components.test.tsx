@@ -334,7 +334,7 @@ it('refuses to embed a PDF response that answers with an active document', async
   );
   await screen.findByRole('alert');
   expect(screen.getByRole('alert')).toHaveTextContent(
-    'Unable to load the PDF preview.',
+    'The file URL returned HTML or XML instead of a PDF.',
   );
   expect(create).not.toHaveBeenCalled();
   expect(screen.queryByTitle('invoice.pdf')).toBeNull();
