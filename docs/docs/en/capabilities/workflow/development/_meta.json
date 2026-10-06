@@ -2,21 +2,16 @@
   {
     "type": "file",
     "name": "index",
-    "label": "Development overview"
+    "label": "Overview and preparation"
   },
   {
     "type": "file",
-    "name": "using-skill",
-    "label": "Use the Workflow Skill"
-  },
-  {
-    "type": "file",
-    "name": "design",
-    "label": "From requirements to workflow"
+    "name": "process",
+    "label": "Development process"
   },
   {
     "type": "file",
     "name": "verification-and-diagnostics",
-    "label": "Validation, builds, and diagnostics"
+    "label": "Validation, builds, and publishing"
   }
 ]

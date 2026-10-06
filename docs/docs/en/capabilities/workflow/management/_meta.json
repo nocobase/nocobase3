@@ -12,7 +12,7 @@
   {
     "type": "file",
     "name": "parameters-and-versions",
-    "label": "Parameters, status, and versions"
+    "label": "Parameters, enablement, and versions"
   },
   {
     "type": "file",
@@ -22,6 +22,6 @@
   {
     "type": "file",
     "name": "run-inspection",
-    "label": "Run inspection and diagnostics"
+    "label": "Execution records and diagnosis"
   }
 ]

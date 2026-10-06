@@ -92,7 +92,7 @@ NocoBase 3 工作流用于实现具有独立生命周期的业务过程：每次
 
 ## 下一步
 
-- [快速开始](./quick-start.md)：几步完成开发、启用、运行和查看记录
+- [快速开始](./quick-start.md)：启用并运行现成示例，查看路径与节点结果
 - [使用 Agent 开发](./development/index.md)：准备要求、开发流程和发布验证
 - [管理概览](./management/index.md)：面向业务管理员
 - [参考](./reference/dsl.md)：DSL、节点和触发 API，供审阅代码时查阅
