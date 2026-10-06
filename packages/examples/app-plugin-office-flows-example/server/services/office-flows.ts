@@ -1,4 +1,8 @@
-import type { DatabaseManager, RepositoryRecord } from '@nocobase/db';
+import type {
+  DatabaseManager,
+  RepositoryFilter,
+  RepositoryRecord,
+} from '@nocobase/db';
 import type {
   AvailableTransition,
   EffectRun,
@@ -29,6 +33,11 @@ import {
   type Plain,
   type TaskKind,
 } from './store.js';
+import {
+  EXTRACTION_FIELDS,
+  INCOMING_FIELDS,
+  TASK_FIELDS,
+} from '../../shared/fields.js';
 import { text } from '../../shared/text.js';
 
 export type LifecycleName =
@@ -45,10 +54,17 @@ const TASK_LIFECYCLES: Readonly<Record<TaskKind, LifecycleName>> = {
   executor: 'executorTasks',
 };
 
-/** A refusal the service makes itself, before any lifecycle is involved. */
+/**
+ * A refusal the service makes itself, before any lifecycle is involved:
+ * `INVALID` is the request, `LOCKED` the record's state, `CONFLICT` a
+ * concurrent change.
+ */
 export class OfficeFlowsError extends Error {
   public constructor(
-    public readonly code: 'NOT_FOUND' | 'FORBIDDEN' | 'INVALID' | 'CONFLICT',
+    public readonly code:
+      'NOT_FOUND' | 'FORBIDDEN' | 'INVALID' | 'LOCKED' | 'CONFLICT',
+    /** Stable, UPPER_SNAKE_CASE: what a client branches on. */
+    public readonly reason: string,
     message: string,
   ) {
     super(message);
@@ -66,6 +82,19 @@ export interface RecordView {
   };
   readonly traces: readonly Plain[];
 }
+
+export interface Paging {
+  /** From 1. */
+  readonly page: number;
+  readonly pageSize: number;
+}
+
+export interface PlainPage {
+  readonly records: readonly Plain[];
+  readonly total: number;
+}
+
+const FIRST_PAGE: Paging = { page: 1, pageSize: 20 };
 
 export interface ProcessingLevel {
   readonly title: string;
@@ -105,45 +134,6 @@ const DATA_REQUEST_FIELDS: readonly (keyof DataRequestForm)[] = [
   'ndaFiles',
   'securityFiles',
 ];
-
-const INCOMING_FIELDS: readonly string[] = [
-  'title',
-  'code',
-  'sender',
-  'senderRef',
-  'summary',
-  'officeOpinion',
-  'attachments',
-  'distributionType',
-  'officeHeadId',
-  'officeLeaderId',
-  'ccManagement',
-];
-
-const EXTRACTION_FIELDS: readonly string[] = [
-  'category',
-  'complexity',
-  'agreedDeliveryAt',
-  'sourceSystem',
-  'needsDownload',
-  'feedbackNote',
-  'feedbackFiles',
-  'reviewerId',
-  'managerId',
-  'confirmerId',
-];
-
-const TASK_FIELDS: Readonly<Record<TaskKind, readonly string[]>> = {
-  clerk: [
-    'opinion',
-    'redHeadFeedback',
-    'outgoingRef',
-    'attachments',
-    'feedback',
-  ],
-  team: ['opinion', 'redHeadFeedback', 'attachments', 'feedback'],
-  executor: ['redHeadFeedback', 'attachments', 'feedback'],
-};
 
 /** Which state a record may be edited in, per kind. */
 const EDITABLE_STATES: Readonly<Record<string, readonly string[]>> = {
@@ -192,13 +182,12 @@ export class OfficeFlowsService {
     };
   }
 
-  public async notices(actor: string): Promise<Plain[]> {
-    const rows = await this.database.repository(COLLECTIONS.notices).findMany({
-      filter: { recipient: actor },
-      sort: (sort) => sort.field('id').desc(),
-      limit: 100,
-    });
-    return rows.map((row) => ({ ...row }));
+  /** The persona's reminders, newest first. */
+  public async notices(
+    actor: string,
+    page: Paging = FIRST_PAGE,
+  ): Promise<PlainPage> {
+    return this.newestFirst(COLLECTIONS.notices, page, { recipient: actor });
   }
 
   // ── Shared ─────────────────────────────────────────────────────────────
@@ -241,6 +230,7 @@ export class OfficeFlowsService {
     if (!record)
       throw new OfficeFlowsError(
         'NOT_FOUND',
+        'RECORD_NOT_FOUND',
         `Record "${text(id)}" does not exist.`,
       );
     return record;
@@ -256,12 +246,14 @@ export class OfficeFlowsService {
     const record = await this.require(collection, id);
     if (!EDITABLE_STATES[name].includes(text(record.status)))
       throw new OfficeFlowsError(
-        'INVALID',
+        'LOCKED',
+        'RECORD_LOCKED',
         'The record cannot be edited at this step.',
       );
     if (!allowed(record))
       throw new OfficeFlowsError(
         'FORBIDDEN',
+        'EDIT_NOT_ALLOWED',
         'The current role cannot edit this record.',
       );
     if (!Object.keys(values).length) return;
@@ -281,14 +273,15 @@ export class OfficeFlowsService {
     if (!updatedCount)
       throw new OfficeFlowsError(
         'CONFLICT',
+        'RECORD_CHANGED',
         'Someone else changed the record; reload and try again.',
       );
   }
 
   // ── Data usage requests ────────────────────────────────────────────────
 
-  public async listDataRequests(): Promise<Plain[]> {
-    return this.newestFirst(COLLECTIONS.dataRequests);
+  public async listDataRequests(page: Paging = FIRST_PAGE): Promise<PlainPage> {
+    return this.newestFirst(COLLECTIONS.dataRequests, page);
   }
 
   public async createDataRequest(
@@ -298,6 +291,7 @@ export class OfficeFlowsService {
     if (actor !== DATA_REQUEST_ROLES.applicant)
       throw new OfficeFlowsError(
         'FORBIDDEN',
+        'APPLICANT_ONLY',
         'Only the applicant can create a request.',
       );
     // Created through the lifecycle: the request's history starts here.
@@ -373,16 +367,18 @@ export class OfficeFlowsService {
       executorIds: string[];
     },
     actor: string,
-  ): Promise<void> {
+  ): Promise<Plain> {
     const request = await this.require(COLLECTIONS.dataRequests, id);
     if (request.status !== 'accepting' || actor !== DATA_REQUEST_ROLES.acceptor)
       throw new OfficeFlowsError(
         'FORBIDDEN',
+        'ACCEPTOR_ONLY',
         'Only the acceptor can create an extraction task, and only while the request is in acceptance.',
       );
     if (!values.topic.trim() || !isDate(values.scheduledDate))
       throw new OfficeFlowsError(
         'INVALID',
+        'EXTRACTION_FIELDS_REQUIRED',
         'Give the extraction task a topic and a first extraction date.',
       );
     // A manual task has no period: its key is the number it is given, so
@@ -400,8 +396,10 @@ export class OfficeFlowsService {
     if (!created)
       throw new OfficeFlowsError(
         'CONFLICT',
+        'REQUEST_LEFT_ACCEPTANCE',
         'The request left acceptance before the task was created; reload and try again.',
       );
+    return created;
   }
 
   /**
@@ -476,14 +474,15 @@ export class OfficeFlowsService {
 
   // ── Incoming documents ─────────────────────────────────────────────────
 
-  public async listIncoming(): Promise<Plain[]> {
-    return this.newestFirst(COLLECTIONS.incoming);
+  public async listIncoming(page: Paging = FIRST_PAGE): Promise<PlainPage> {
+    return this.newestFirst(COLLECTIONS.incoming, page);
   }
 
   public async createIncoming(values: Plain, actor: string): Promise<Plain> {
     if (actor !== INCOMING_ROLES.registrar)
       throw new OfficeFlowsError(
         'FORBIDDEN',
+        'REGISTRAR_ONLY',
         'Only the office registrar can record an incoming document.',
       );
     // Created through the lifecycle: the document's history starts here.
@@ -563,13 +562,18 @@ export class OfficeFlowsService {
   ): Promise<number> {
     const parent = await this.rowParent(parentKind, parentId, actor);
     if (!input.includeClerks)
-      throw new OfficeFlowsError('INVALID', 'A row must include the clerks.');
+      throw new OfficeFlowsError(
+        'INVALID',
+        'ROW_CLERKS_REQUIRED',
+        'A row must include the clerks.',
+      );
     const department = await this.database
       .repository(COLLECTIONS.departments)
       .findOne({ filter: { name: input.departmentName } });
     if (!department)
       throw new OfficeFlowsError(
         'INVALID',
+        'DEPARTMENT_REQUIRED',
         'Choose a department to distribute to.',
       );
     // A clerk task's "派发其他部门协助" row goes to the root document's own
@@ -614,12 +618,14 @@ export class OfficeFlowsService {
     const row = await this.require(COLLECTIONS.assignments, rowId);
     if (row.dispatched)
       throw new OfficeFlowsError(
-        'INVALID',
+        'LOCKED',
+        'ROW_DISPATCHED',
         'A row that has been dispatched cannot be removed.',
       );
     if (row.createdBy !== actor)
       throw new OfficeFlowsError(
         'FORBIDDEN',
+        'ROW_OWNER_ONLY',
         'Only the person who added a row can remove it.',
       );
     await this.database
@@ -631,11 +637,12 @@ export class OfficeFlowsService {
     incomingId: string,
     input: { groupId?: number; groupName?: string; members?: string[] },
     actor: string,
-  ): Promise<void> {
+  ): Promise<number> {
     const record = await this.require(COLLECTIONS.incoming, incomingId);
     if (record.status !== 'dispatching' || record.registrarId !== actor)
       throw new OfficeFlowsError(
         'FORBIDDEN',
+        'MANAGEMENT_NOT_ALLOWED',
         'Only the registrar can add management groups, and only while the document is being dispatched.',
       );
     let groupName = (input.groupName ?? '').trim();
@@ -655,18 +662,22 @@ export class OfficeFlowsService {
     if (!groupName || !members.length)
       throw new OfficeFlowsError(
         'INVALID',
+        'MANAGEMENT_GROUP_REQUIRED',
         'Name the group and choose who to copy.',
       );
-    await this.database.repository(COLLECTIONS.managementCc).createOne({
-      values: {
-        incomingId: idOf(incomingId),
-        groupName,
-        members,
-        fromConfig,
-        forwarded: false,
-        createdAt: this.store.now(),
-      },
-    });
+    const created = await this.database
+      .repository(COLLECTIONS.managementCc)
+      .createOne({
+        values: {
+          incomingId: idOf(incomingId),
+          groupName,
+          members,
+          fromConfig,
+          forwarded: false,
+          createdAt: this.store.now(),
+        },
+      });
+    return idOf(created.record.id);
   }
 
   public async removeManagement(rowId: string, actor: string): Promise<void> {
@@ -674,12 +685,14 @@ export class OfficeFlowsService {
     const record = await this.require(COLLECTIONS.incoming, row.incomingId);
     if (row.forwarded)
       throw new OfficeFlowsError(
-        'INVALID',
+        'LOCKED',
+        'MANAGEMENT_ROW_FORWARDED',
         'A row that has been forwarded cannot be removed.',
       );
     if (record.registrarId !== actor)
       throw new OfficeFlowsError(
         'FORBIDDEN',
+        'MANAGEMENT_ROW_NOT_ALLOWED',
         'The current role cannot remove this row.',
       );
     await this.database
@@ -709,7 +722,15 @@ export class OfficeFlowsService {
 
   // ── Incoming-document tasks ────────────────────────────────────────────
 
-  public async myTasks(actor: string): Promise<Plain[]> {
+  /**
+   * The persona's tasks of every kind, clerk tasks first and each kind
+   * newest first. They span three collections, so the page is cut from the
+   * persona's own tasks in memory; a persona holds few.
+   */
+  public async myTasks(
+    actor: string,
+    page: Paging = FIRST_PAGE,
+  ): Promise<PlainPage> {
     const tasks: Plain[] = [];
     for (const kind of ['clerk', 'team', 'executor'] as const) {
       const rows = await this.database
@@ -720,7 +741,11 @@ export class OfficeFlowsService {
         });
       tasks.push(...rows.map((row) => ({ ...row, kind })));
     }
-    return tasks;
+    const start = (page.page - 1) * page.pageSize;
+    return {
+      records: tasks.slice(start, start + page.pageSize),
+      total: tasks.length,
+    };
   }
 
   public async taskDetail(
@@ -790,11 +815,23 @@ export class OfficeFlowsService {
 
   // ── Helpers ────────────────────────────────────────────────────────────
 
-  private async newestFirst(collection: string): Promise<Plain[]> {
-    const rows = await this.database
-      .repository(collection)
-      .findMany({ sort: (sort) => sort.field('id').desc(), limit: 50 });
-    return rows.map((row) => ({ ...row }));
+  private async newestFirst(
+    collection: string,
+    page: Paging,
+    filter?: RepositoryFilter<RepositoryRecord>,
+  ): Promise<PlainPage> {
+    const repository = this.database.repository(collection);
+    const where = filter === undefined ? {} : { filter };
+    const rows = await repository.findMany({
+      ...where,
+      sort: (sort) => sort.field('id').desc(),
+      limit: page.pageSize,
+      offset: (page.page - 1) * page.pageSize,
+    });
+    return {
+      records: rows.map((row) => ({ ...row })),
+      total: await repository.count(where),
+    };
   }
 
   private async pendingRows(
@@ -820,6 +857,7 @@ export class OfficeFlowsService {
       if (record.status !== 'dispatching' || record.registrarId !== actor)
         throw new OfficeFlowsError(
           'FORBIDDEN',
+          'ROWS_NOT_ALLOWED',
           'Only the registrar can add rows, and only while the document is being dispatched.',
         );
       return { ...record, rootId: record.id };
@@ -829,6 +867,7 @@ export class OfficeFlowsService {
     if (record.status !== open || !people(record.assignees).includes(actor))
       throw new OfficeFlowsError(
         'FORBIDDEN',
+        'TASK_ROWS_NOT_ALLOWED',
         'Only an assignee of a task in progress can add rows.',
       );
     return record;

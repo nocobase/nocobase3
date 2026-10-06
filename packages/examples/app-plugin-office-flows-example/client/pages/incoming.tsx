@@ -3,6 +3,7 @@ import { useApiClient } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 
 import { INCOMING_ROLES, PEOPLE, personName } from '../../shared/people.js';
+import { pickEditable, INCOMING_FIELDS } from '../../shared/fields.js';
 import {
   Actions,
   Choice,
@@ -308,11 +309,7 @@ export default function IncomingPage(): ReactElement {
   const [error, setError] = useState('');
   const [tick, setTick] = useState(0);
   const config = useLoader(() => client.get<Config>('config'), 'config');
-  const records = useLoader(
-    () =>
-      client.get<{ records: Plain[] }>('incoming').then((body) => body.records),
-    `list:${tick}`,
-  );
+  const records = useLoader(() => client.list('incoming'), `list:${tick}`);
   const detailId = selected && selected !== 'new' ? selected : undefined;
   const detail = useLoader(
     detailId
@@ -353,14 +350,14 @@ export default function IncomingPage(): ReactElement {
     if (selected === 'new') {
       const created = await client.post<Plain>('incoming', {
         actAs: actor,
-        values: current ?? {},
+        values: pickEditable(current ?? {}, INCOMING_FIELDS),
       });
       setSelected(text(created.id));
       return text(created.id);
     }
-    await client.put(`incoming/${text(selected)}`, {
+    await client.patch(`incoming/${text(selected)}`, {
       actAs: actor,
-      values: current ?? {},
+      values: pickEditable(current ?? {}, INCOMING_FIELDS),
     });
     return text(selected);
   }
@@ -513,7 +510,7 @@ export default function IncomingPage(): ReactElement {
                       busy={busy}
                       onAdd={(row) =>
                         void act(() =>
-                          client.post(`incoming/${detailId}/management`, {
+                          client.post(`incoming/${detailId}/managementRows`, {
                             actAs: actor,
                             ...row,
                           }),
@@ -521,7 +518,7 @@ export default function IncomingPage(): ReactElement {
                       }
                       onRemove={(rowId) =>
                         void act(() =>
-                          client.remove(`management/${rowId}`, actor),
+                          client.remove(`managementRows/${rowId}`, actor),
                         )
                       }
                       onForward={() => void fire('forwardManagement')}

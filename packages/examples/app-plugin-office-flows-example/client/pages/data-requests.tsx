@@ -13,6 +13,7 @@ import {
   WEEKDAYS,
   type DataRequestForm,
 } from '../../shared/data-request.js';
+import { pickEditable, EXTRACTION_FIELDS } from '../../shared/fields.js';
 import { DATA_REQUEST_ROLES, personName } from '../../shared/people.js';
 import {
   Actions,
@@ -499,9 +500,9 @@ function ExtractionPanel({
             disabled={busy || !Object.keys(draft).length}
             onClick={() =>
               void act(() =>
-                client.put(`extractions/${id}`, {
+                client.patch(`extractions/${id}`, {
                   actAs: actor,
-                  values: draft,
+                  values: pickEditable(draft, EXTRACTION_FIELDS),
                 }),
               )
             }
@@ -516,9 +517,9 @@ function ExtractionPanel({
           onFire={(transition, input) =>
             void act(async () => {
               if (Object.keys(draft).length)
-                await client.put(`extractions/${id}`, {
+                await client.patch(`extractions/${id}`, {
                   actAs: actor,
-                  values: draft,
+                  values: pickEditable(draft, EXTRACTION_FIELDS),
                 });
               await client.post(`extractions/${id}/fire`, {
                 actAs: actor,
@@ -680,7 +681,7 @@ function Extractions({
               size='sm'
               onClick={() =>
                 void client
-                  .post(`data-requests/${text(detail.record.id)}/extractions`, {
+                  .post(`dataRequests/${text(detail.record.id)}/extractions`, {
                     actAs: actor,
                     ...manual,
                     executorIds: [],
@@ -722,17 +723,11 @@ export default function DataRequestsPage(): ReactElement {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [tick, setTick] = useState(0);
-  const records = useLoader(
-    () =>
-      client
-        .get<{ records: Plain[] }>('data-requests')
-        .then((body) => body.records),
-    `list:${tick}`,
-  );
+  const records = useLoader(() => client.list('dataRequests'), `list:${tick}`);
   const detailId = selected && selected !== 'new' ? selected : undefined;
   const detail = useLoader(
     detailId
-      ? () => client.get<RequestDetail>(`data-requests/${detailId}`, actor)
+      ? () => client.get<RequestDetail>(`dataRequests/${detailId}`, actor)
       : undefined,
     `${detailId}:${actor}:${tick}`,
   );
@@ -769,14 +764,14 @@ export default function DataRequestsPage(): ReactElement {
   async function save(): Promise<string> {
     if (!current) throw new Error('nothing to save');
     if (selected === 'new') {
-      const created = await client.post<Plain>('data-requests', {
+      const created = await client.post<Plain>('dataRequests', {
         actAs: actor,
         form: { ...current },
       });
       setSelected(text(created.id));
       return text(created.id);
     }
-    await client.put(`data-requests/${text(selected)}`, {
+    await client.patch(`dataRequests/${text(selected)}`, {
       actAs: actor,
       form: { ...current },
     });
@@ -888,7 +883,7 @@ export default function DataRequestsPage(): ReactElement {
                             return;
                           void act(async () => {
                             const id = await save();
-                            await client.post(`data-requests/${id}/fire`, {
+                            await client.post(`dataRequests/${id}/fire`, {
                               actAs: actor,
                               transition: 'submit',
                               input: {},
@@ -908,7 +903,7 @@ export default function DataRequestsPage(): ReactElement {
                       needsReason={['returnToApplicant', 'acceptanceReturn']}
                       onFire={(transition, input) =>
                         void act(() =>
-                          client.post(`data-requests/${detailId}/fire`, {
+                          client.post(`dataRequests/${detailId}/fire`, {
                             actAs: actor,
                             transition,
                             input,

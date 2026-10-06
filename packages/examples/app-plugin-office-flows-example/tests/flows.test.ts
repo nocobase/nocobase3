@@ -94,7 +94,7 @@ async function approveToAcceptance(id: string): Promise<void> {
 }
 
 async function noticesOf(person: string): Promise<Plain[]> {
-  return service.notices(person);
+  return (await service.notices(person, { page: 1, pageSize: 100 })).records;
 }
 
 describe('data usage request', () => {
@@ -315,7 +315,7 @@ describe('incoming document', () => {
       'zhoujie',
     );
     await service.fireIncoming(id, 'dispatchClerks', {}, 'zhoujie');
-    const [clerk] = await service.myTasks('gaoyan');
+    const [clerk] = (await service.myTasks('gaoyan')).records;
     const clerkId = String(clerk!.id);
 
     // Both of 财务部's clerks countersign before it moves on.
@@ -373,7 +373,7 @@ describe('incoming document', () => {
       expect.arrayContaining(['财务部派发执行团队', '财务部派发其他部门协助']),
     );
 
-    const [team] = await service.myTasks('luoxin');
+    const [team] = (await service.myTasks('luoxin')).records;
     const teamId = String(team!.id);
     expect(team!.kind).toBe('team');
     await service.addRow(
@@ -383,7 +383,7 @@ describe('incoming document', () => {
       'luoxin',
     );
     await service.fireTask('team', teamId, 'dispatchExecutors', {}, 'luoxin');
-    const [executor] = await service.myTasks('tangjun');
+    const [executor] = (await service.myTasks('tangjun')).records;
     expect(executor!.kind).toBe('executor');
 
     const executorView = await service.taskDetail(
@@ -433,7 +433,7 @@ describe('incoming document', () => {
       'zhoujie',
     );
     await service.fireIncoming(id, 'dispatchClerks', {}, 'zhoujie');
-    const [clerk] = await service.myTasks('luoxin');
+    const [clerk] = (await service.myTasks('luoxin')).records;
     await service.fireTask(
       'clerk',
       String(clerk!.id),

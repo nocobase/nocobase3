@@ -7,6 +7,11 @@ import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { LifecycleError } from '@nocobase/lifecycle';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
+import {
+  findApiDocumentSchemaProblems,
+  findUndeclaredApiRoutes,
+  generateApiDocument,
+} from '@nocobase/app-server/router';
 import { describe, expect, it, vi } from 'vitest';
 
 import { apiRoutes } from '../server/routes/index.js';
@@ -61,16 +66,17 @@ function post(path: string, body: unknown): Request {
 describe('office flows routes', () => {
   it('requires a signed-in user', async () => {
     const router = await apiRoutes.createRouter(application(deny).app);
-    expect((await router.request('/office-flows/config')).status).toBe(401);
+    expect((await router.request('/officeFlowsExample/config')).status).toBe(
+      401,
+    );
   });
 
   it('fires a transition as one of the example people', async () => {
     const { app, service } = application(allow);
     const router = await apiRoutes.createRouter(app);
     const response = await router.request(
-      post('/office-flows/incoming/7/fire', {
+      post('/officeFlowsExample/incoming/7/fire?actAs=zhoujie', {
         transition: 'dispatchClerks',
-        actAs: 'zhoujie',
       }),
     );
     expect(response.status).toBe(204);
@@ -82,63 +88,89 @@ describe('office flows routes', () => {
     );
   });
 
-  it('rejects someone outside the cast', async () => {
+  it('rejects someone outside the cast, and a field the route does not take', async () => {
     const router = await apiRoutes.createRouter(application(allow).app);
-    const response = await router.request(
-      post('/office-flows/incoming/7/fire', {
+    const stranger = await router.request(
+      post('/officeFlowsExample/incoming/7/fire?actAs=mallory', {
         transition: 'close',
-        actAs: 'mallory',
       }),
     );
-    expect(response.status).toBe(400);
+    expect(stranger.status).toBe(400);
+    await expect(stranger.json()).resolves.toMatchObject({
+      error: {
+        reason: 'INVALID_INPUT',
+        fieldViolations: [expect.objectContaining({ field: 'actAs' })],
+      },
+    });
+    const extra = await router.request(
+      post('/officeFlowsExample/incoming/7/fire?actAs=zhoujie', {
+        transition: 'close',
+        actAs: 'zhoujie',
+      }),
+    );
+    expect(extra.status).toBe(400);
   });
 
-  it('maps refusals to HTTP statuses', async () => {
+  it('answers refusals in the standard error body', async () => {
     const { app, service } = application(allow);
     service.fireTask.mockRejectedValueOnce(
-      new LifecycleError('GUARD_REJECTED', 'no'),
+      new LifecycleError('GUARD_REJECTED', 'no', {
+        blockers: [{ source: 'guard', code: 'notAssignee', message: 'no' }],
+      }),
     );
     service.addRow.mockRejectedValueOnce(
-      new OfficeFlowsError('FORBIDDEN', 'no'),
+      new OfficeFlowsError('FORBIDDEN', 'TASK_ROWS_NOT_ALLOWED', 'no'),
     );
     const router = await apiRoutes.createRouter(app);
     const fired = await router.request(
-      post('/office-flows/tasks/clerk/3/fire', {
+      post('/officeFlowsExample/tasks/clerk/3/fire?actAs=gaoyan', {
         transition: 'sign',
-        actAs: 'gaoyan',
       }),
     );
     const added = await router.request(
-      post('/office-flows/tasks/clerk/3/rows', {
+      post('/officeFlowsExample/tasks/clerk/3/rows?actAs=gaoyan', {
         departmentName: '工会',
-        actAs: 'gaoyan',
       }),
     );
     const unknownKind = await router.request(
-      post('/office-flows/tasks/nobody/3/fire', {
+      post('/officeFlowsExample/tasks/nobody/3/fire?actAs=gaoyan', {
         transition: 'sign',
-        actAs: 'gaoyan',
+      }),
+    );
+    const executorRows = await router.request(
+      post('/officeFlowsExample/tasks/executor/3/rows?actAs=gaoyan', {
+        departmentName: '工会',
       }),
     );
     expect(fired.status).toBe(403);
+    await expect(fired.json()).resolves.toMatchObject({
+      error: {
+        status: 'PERMISSION_DENIED',
+        reason: 'GUARD_REJECTED',
+        domain: 'officeFlowsExample',
+        metadata: { blockers: [{ code: 'notAssignee' }] },
+      },
+    });
     expect(added.status).toBe(403);
-    expect(unknownKind.status).toBe(404);
+    await expect(added.json()).resolves.toMatchObject({
+      error: { reason: 'TASK_ROWS_NOT_ALLOWED', domain: 'officeFlowsExample' },
+    });
+    expect(unknownKind.status).toBe(400);
+    expect(executorRows.status).toBe(400);
   });
 
   it('answers a form field of the wrong type with a 400', async () => {
     const { app, service } = application(allow);
     const router = await apiRoutes.createRouter(app);
     const wrong = await router.request(
-      post('/office-flows/data-requests', {
-        actAs: 'zhangwei',
+      post('/officeFlowsExample/dataRequests?actAs=zhangwei', {
         form: { subject: 123, consumers: 'all' },
       }),
     );
     expect(wrong.status).toBe(400);
     expect(service.createDataRequest).not.toHaveBeenCalled();
     const right = await router.request(
-      post('/office-flows/data-requests', {
-        actAs: 'zhangwei',
+      post('/officeFlowsExample/dataRequests?actAs=zhangwei', {
         form: {
           subject: '客户画像',
           consumers: ['内部合规风险审计'],
@@ -147,6 +179,7 @@ describe('office flows routes', () => {
       }),
     );
     expect(right.status).toBe(201);
+    await expect(right.json()).resolves.toEqual({ data: { id: '1' } });
     expect(service.createDataRequest).toHaveBeenCalledWith(
       expect.objectContaining({
         subject: '客户画像',
@@ -155,6 +188,27 @@ describe('office flows routes', () => {
         reason: '',
       }),
       'zhangwei',
+    );
+  });
+
+  it('declares every route in the API document', async () => {
+    const router = await apiRoutes.createRouter(application(allow).app);
+    expect(findUndeclaredApiRoutes(router)).toEqual([]);
+    const document = await generateApiDocument(router, {
+      info: { title: 'Office flows example', version: '0.0.0' },
+    });
+    expect(findApiDocumentSchemaProblems(document)).toEqual([]);
+    const operations = Object.values(document.paths ?? {}).flatMap((item) =>
+      Object.values(item ?? {}),
+    ) as { operationId?: string; tags?: string[] }[];
+    expect(operations).toHaveLength(26);
+    expect(
+      operations.every(({ operationId }) =>
+        operationId?.startsWith('officeFlowsExample'),
+      ),
+    ).toBe(true);
+    expect(new Set(operations.flatMap(({ tags }) => tags ?? []))).toEqual(
+      new Set(['OfficeFlowsExample']),
     );
   });
 });
