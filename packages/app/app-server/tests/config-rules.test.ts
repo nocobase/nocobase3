@@ -364,9 +364,12 @@ describe('section environment variables', () => {
       enabled: true,
       disableSignUp: true,
     });
-    expect(config.sectionEnvironmentVariables()).toEqual({
-      AUTH_SECRET: 'auth.secret',
-      AUTH_DISABLE_SIGN_UP: 'auth.emailAndPassword.disableSignUp',
+    expect(config.sectionEnvironmentVariables()).toMatchObject({
+      AUTH_SECRET: { path: 'auth.secret', type: 'string' },
+      AUTH_DISABLE_SIGN_UP: {
+        path: 'auth.emailAndPassword.disableSignUp',
+        type: 'boolean',
+      },
     });
   });
 
