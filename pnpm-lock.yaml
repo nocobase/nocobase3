@@ -840,10 +840,13 @@ importers:
       tailwind-merge:
         specifier: 'catalog:'
         version: 3.6.0
+      zod:
+        specifier: 'catalog:'
+        version: 4.6.5
     devDependencies:
-      '@nocobase/db-sqlite':
+      '@nocobase/app-testing':
         specifier: workspace:*
-        version: link:../../libs/db-sqlite
+        version: link:../../tools/app-testing
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
@@ -3364,9 +3367,9 @@ importers:
         specifier: workspace:^
         version: link:../../libs/lifecycle
     devDependencies:
-      '@nocobase/db-sqlite':
+      '@nocobase/app-testing':
         specifier: workspace:*
-        version: link:../../libs/db-sqlite
+        version: link:../../tools/app-testing
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
