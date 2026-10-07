@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createMigrator, type DatabaseManager } from '@nocobase/db';
 import {
   createTestDatabase,
@@ -61,6 +61,8 @@ async function setup() {
       updatedAt?: Date;
       messageAt?: Date | null;
       toolCalls?: unknown[];
+      /** The two messages' ids, earlier first; generated when omitted. */
+      messageIds?: readonly [string, string];
     },
   ): Promise<void> {
     await repositories.aiConversations.create({
@@ -77,6 +79,7 @@ async function setup() {
       await repositories.aiMessages.create({
         values: {
           sessionId,
+          ...(options.messageIds ? { messageId: options.messageIds[0] } : {}),
           role: 'user',
           content: { type: 'text', content: 'earlier' },
           createdAt: old,
@@ -86,6 +89,7 @@ async function setup() {
       await repositories.aiMessages.create({
         values: {
           sessionId,
+          ...(options.messageIds ? { messageId: options.messageIds[1] } : {}),
           role: 'assistant',
           content: { type: 'text', content: 'latest' },
           ...(options.toolCalls ? { toolCalls: options.toolCalls } : {}),
@@ -205,6 +209,35 @@ describe('CheckpointCleaner', () => {
     expect(await checkpointRows(session(5), 0)).toEqual([1, 1, 1]);
   });
 
+  it('finds the latest message by an id beyond what a JavaScript number holds', async () => {
+    const { cleaner, conversation, checkpointRows, threadOf } = await setup();
+    // Rounded to a number, both ids are 9007199254740992, which names the
+    // earlier message, so the call the latest one asks for would go unseen.
+    await conversation(session(1), {
+      thread: 1,
+      messageIds: ['9007199254740992', '9007199254740993'],
+      toolCalls: [{ id: 'call-1', name: 'lookup', args: {} }],
+    });
+
+    await expect(cleaner.cleanOutdated(expiredAt)).resolves.toBe(0);
+
+    expect(await threadOf(session(1))).toBe(1);
+    expect(await checkpointRows(session(1), 1)).toEqual([2, 2, 2]);
+  });
+
+  it('reads the latest messages of a whole batch at once', async () => {
+    const { cleaner, cleanerRepositories, conversation } = await setup();
+    for (const index of [1, 2, 3, 4, 5])
+      await conversation(session(index), { thread: 1 });
+    const find = vi.spyOn(cleanerRepositories.messages, 'find');
+    const findOne = vi.spyOn(cleanerRepositories.messages, 'findOne');
+
+    await expect(cleaner.cleanOutdated(expiredAt)).resolves.toBe(5);
+
+    expect(find).toHaveBeenCalledOnce();
+    expect(findOne).not.toHaveBeenCalled();
+  });
+
   it('goes through every batch, past the conversations it keeps', async () => {
     const { cleaner, conversation, checkpointRows, threadOf } = await setup();
     for (const index of [1, 2, 3, 4, 5, 6, 7]) {
@@ -238,12 +271,12 @@ describe('CheckpointCleaner', () => {
     const cleaner = new CheckpointCleaner(database.connection(), {
       ...cleanerRepositories,
       messages: Object.assign(Object.create(messages), {
-        findOne: async (...args: Parameters<typeof messages.findOne>) => {
+        find: async (...args: Parameters<typeof messages.find>) => {
           await conversations.update({
             values: { llmActiveState: 'streaming', updatedAt: new Date() },
             filter: { sessionId: session(1) },
           });
-          return messages.findOne(...args);
+          return messages.find(...args);
         },
       }),
     });

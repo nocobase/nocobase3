@@ -41,6 +41,11 @@ export interface CleanOutdatedOptions {
   readonly signal?: AbortSignal;
 }
 
+type LatestMessageSource = {
+  readonly sessionId: string;
+  readonly messageId: string;
+};
+
 type ReleaseTarget = {
   readonly sessionId: string;
   readonly thread: number;
@@ -109,35 +114,67 @@ export class CheckpointCleaner {
       const last = conversations.at(-1);
       if (!last?.sessionId) break;
       after = last.sessionId;
-      const targets: ReleaseTarget[] = [];
-      for (const conversation of conversations) {
-        if (await this.isIdle(conversation, expiredAt)) {
-          targets.push({
-            sessionId: conversation.sessionId!,
-            thread: Number(conversation.thread),
-          });
-        }
-      }
+      const idle = await this.idleSessionIds(conversations, expiredAt);
+      const targets: ReleaseTarget[] = conversations
+        .filter((conversation) => idle.has(conversation.sessionId!))
+        .map((conversation) => ({
+          sessionId: conversation.sessionId!,
+          thread: Number(conversation.thread),
+        }));
       released += await this.release(targets, expiredAt);
       if (conversations.length < batchSize) break;
     }
     return released;
   }
 
-  private async isIdle(
-    conversation: AIConversationEntity,
+  /**
+   * The conversations whose latest message is older than `expiredAt` and asks
+   * for no tool call, in two queries per batch however many it holds. A
+   * conversation without messages has nothing to replay and is left alone.
+   */
+  private async idleSessionIds(
+    conversations: readonly AIConversationEntity[],
     expiredAt: Date,
-  ): Promise<boolean> {
-    if (!conversation.sessionId) return false;
-    const message = await this.repositories.messages.findOne({
-      filter: { sessionId: conversation.sessionId },
-      sort: ['-messageId'],
-    });
-    if (!message?.updatedAt) return false;
-    return (
-      new Date(message.updatedAt) < expiredAt &&
-      !hasToolCalls(message.toolCalls)
-    );
+  ): Promise<Set<string>> {
+    const sessionIds = conversations
+      .map((conversation) => conversation.sessionId)
+      .filter((sessionId): sessionId is string => Boolean(sessionId));
+    const latestMessageIds: string[] = [];
+    // Through the Repository rather than the query builder: it reads a bigint
+    // aggregate back exactly on every dialect, and a message id is a snowflake
+    // beyond the integers a JavaScript number holds.
+    const messages =
+      this.database.repository<LatestMessageSource>('aiMessages');
+    for (const ids of chunk(sessionIds, IN_LIST_LIMIT)) {
+      const rows = await messages.groupBy({
+        by: ['sessionId'],
+        aggregate: (aggregate) => ({
+          latestMessageId: aggregate.max('messageId'),
+        }),
+        filter: (filter) =>
+          filter.or(ids.map((id) => filter.string('sessionId').eq(id))),
+      });
+      for (const row of rows) {
+        if (row.latestMessageId != null)
+          latestMessageIds.push(String(row.latestMessageId));
+      }
+    }
+    const idle = new Set<string>();
+    for (const ids of chunk(latestMessageIds, IN_LIST_LIMIT)) {
+      const latest = await this.repositories.messages.find({
+        filter: { messageId: { $in: ids } },
+      });
+      for (const message of latest) {
+        if (
+          message.sessionId &&
+          message.updatedAt &&
+          new Date(message.updatedAt) < expiredAt &&
+          !hasToolCalls(message.toolCalls)
+        )
+          idle.add(message.sessionId);
+      }
+    }
+    return idle;
   }
 
   /**
