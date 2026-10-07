@@ -53,7 +53,7 @@ const SIMPLE_REQUESTS: readonly string[] = [
 const migration: MigrationDefinition = defineMigration({
   name: '202610060001_approval_example_create_collections',
 
-  async up({ builder, connection }) {
+  async up({ builder }) {
     // The lifecycle log the example's records share.
     await builder.createCollection('approvalExampleTransitions', (table) => {
       table.bigInt('id').primary().autoIncrement().notNull();
@@ -68,14 +68,11 @@ const migration: MigrationDefinition = defineMigration({
       table.datetimeTz('at').notNull();
       table.integer('version').notNull();
       table.string('requestId');
+      table.string('requestKey').notNull();
       table.index(['lifecycle', 'recordId', 'id']);
       table.index(['actorId', 'id']);
       table.unique(['lifecycle', 'recordId', 'version']);
-      table.unique(['lifecycle', 'recordId', 'requestId'], {
-        ...(connection.capabilities.partialIndexes
-          ? { predicate: { requestId: { $notNull: true } } }
-          : {}),
-      });
+      table.unique(['lifecycle', 'recordId', 'requestKey']);
     });
 
     await builder.createCollection('approvalExampleEffectRuns', (table) => {

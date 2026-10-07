@@ -251,6 +251,7 @@ export const noticeLifecycle: Lifecycle<NoticeTypes> =
           if (publisher !== true) return publisher;
           return (
             context.record.recipientIds.length > 0 || {
+              kind: 'precondition',
               code: 'noRecipients',
               message: 'Name at least one recipient.',
             }

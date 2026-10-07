@@ -294,6 +294,7 @@ function nextAfterInstallment({ record }: Context): PaymentState {
 function currentInstallment({ input, record }: Context): GuardVerdict {
   return (
     input.installment === num(record.installmentsPaid) + 1 || {
+      kind: 'precondition',
       code: 'staleResult',
       message: 'This result is for another installment.',
     }

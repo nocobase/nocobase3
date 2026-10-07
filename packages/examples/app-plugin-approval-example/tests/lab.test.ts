@@ -2,7 +2,8 @@
 // The lab against a real database: both migrations, every scenario's
 // lifecycle and approval on the Repository store, and the main path of each
 // business walked through the service the routes call — records, runs,
-// tasks, effects and simulated providers all in SQLite.
+// tasks, effects and simulated providers on the selected test database.
+import { describeMigration } from '@nocobase/app-testing/server';
 import type { JsonObject, LifecycleRecord } from '@nocobase/lifecycle';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -17,6 +18,7 @@ import { APPROVAL_EXAMPLE_COLLECTIONS } from '../server/scope.js';
 import {
   createTestLab,
   EXAMPLE_MIGRATIONS,
+  APPROVAL_MIGRATIONS,
   type TestLab,
 } from './support/lab.js';
 
@@ -85,25 +87,58 @@ beforeEach(async () => {
 
 afterEach(() => test.destroy());
 
-describe('the migration', () => {
-  it('creates a collection for every scenario lifecycle and the lab, and removes them on down', async () => {
-    const connection = test.database.connection('main');
-    const names = [
-      ...new Set(LAB_LIFECYCLES.map((lifecycle) => lifecycle.collection)),
+describeMigration('202610060001_approval_example_create_collections', {
+  sources: [
+    {
+      directory: APPROVAL_MIGRATIONS,
+      packageName: '@nocobase/app-plugin-approval',
+    },
+    { directory: EXAMPLE_MIGRATIONS, packageName: packageMetadata.name },
+  ],
+  up: async ({ connection, expectCollection }) => {
+    for (const name of [
+      ...new Set(LAB_LIFECYCLES.map((l) => l.collection)),
       ...Object.values(APPROVAL_EXAMPLE_COLLECTIONS),
-    ];
-    for (const name of names)
-      expect(await connection.collectionMetadata.get(name)).toBeDefined();
-    await test.database
-      .createMigrator({
-        connection: 'main',
-        directory: EXAMPLE_MIGRATIONS,
-        packageName: packageMetadata.name,
-      })
-      .rollback();
-    for (const name of names)
-      expect(await connection.collectionMetadata.get(name)).toBeUndefined();
-  });
+    ])
+      await expectCollection(name).toExist();
+    await expectCollection(
+      APPROVAL_EXAMPLE_COLLECTIONS.transitions,
+    ).toHaveField('requestKey', { nullable: false });
+    await expectCollection(
+      APPROVAL_EXAMPLE_COLLECTIONS.transitions,
+    ).toHaveIndex(['lifecycle', 'recordId', 'requestKey'], { unique: true });
+    const log = connection.repository(APPROVAL_EXAMPLE_COLLECTIONS.transitions);
+    const values = (
+      version: number,
+      requestId: string | null,
+      requestKey: string,
+    ) => ({
+      lifecycle: 'test',
+      recordId: '1',
+      transition: 'next',
+      from: null,
+      to: 'ready',
+      actorId: 'admin',
+      input: {},
+      at: new Date().toISOString(),
+      version,
+      requestId,
+      requestKey,
+    });
+    await log.createOne({ values: values(1, null, '$v:1') });
+    await log.createOne({ values: values(2, null, '$v:2') });
+    await log.createOne({ values: values(3, 'click', 'click') });
+    await expect(
+      log.createOne({ values: values(4, 'click', 'click') }),
+    ).rejects.toThrow();
+  },
+  down: async ({ expectCollection }) => {
+    for (const name of [
+      ...new Set(LAB_LIFECYCLES.map((l) => l.collection)),
+      ...Object.values(APPROVAL_EXAMPLE_COLLECTIONS),
+    ])
+      await expectCollection(name).not.toExist();
+  },
 });
 
 describe('samples', () => {
@@ -120,7 +155,7 @@ describe('samples', () => {
   });
 });
 
-describe('approvals walked through on SQLite', () => {
+describe('approvals walked through on the selected test database', () => {
   it('leave: the manager approves, the record moves once, and the registration effect follows', async () => {
     const leave = await start('leave', {
       days: 2,

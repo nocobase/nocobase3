@@ -31,7 +31,7 @@ Run the examples application with `pnpm --filter @nocobase/app-template-examples
 | Records and their tables     | `database/migrations/`, one collection per business with exactly the fields its lifecycle writes, the lifecycle log, and the lab's simulated messages, external calls and settings                                                 |
 | Runs, tasks and the log      | `@nocobase/app-plugin-approval`'s own collections, created by its migration                                                                                                                                                        |
 | Effects, triggers, the clock | `createLifecycleJobs()`: effects as jobs, and a sweep every ten seconds that runs the triggers and `ApprovalExampleService.sweep()` — reminders, escalations, claim timeouts, scheduled payments, expiring grants and orders       |
-| Routes                       | `server/routes/index.ts`: the pages' reads and the approval layer's operations under `/approval-example`, and the library's standard record routes beneath it for transitions and effect runs                                      |
+| Routes                       | `server/routes/index.ts`: the pages' reads and the approval layer's operations under `/approvalExample`, and the plugin's lifecycle record routes beneath it for transitions and effect runs                                       |
 | Pages                        | `client/center/` for the approval center, `client/lab/` for the lab                                                                                                                                                                |
 
 `server/lab/center.ts` is a read model: it summarizes every record for its business, derives each person's to-do center from the task table, the notices' acknowledgements and the business transitions waiting for them, and previews the route of a new request from the same definitions and organization that will decide it. Every action goes through `ApprovalExampleService`, the approval layer or the lifecycle's routes, so the page offers only what their rules allow.
@@ -40,7 +40,7 @@ This is an inspectable demonstration, not an approval product: any signed-in use
 
 ## Testing
 
-`tests/scenarios/` runs the 28 scenarios on memory storage and a fake clock, one file per family, against the approval layer's service. `tests/lab.test.ts` applies both migrations to SQLite and walks every business through its main path with the service the routes call — records, runs, tasks, effects and simulated providers all in the database. `tests/routes.test.ts` covers the HTTP boundary, `tests/provider.test.ts` the real provider on the memory jobs service, and `tests/client/` renders the approval center and the lab against the real routes.
+`tests/scenarios/` runs the 28 scenarios on the selected test database and a fake clock, one file per family, against the approval layer's service. `tests/lab.test.ts` applies both migrations to the selected test database and walks every business through its main path with the service the routes call — records, runs, tasks, effects and simulated providers all in the database. `tests/routes.test.ts` covers the HTTP boundary, `tests/provider.test.ts` the real provider on the memory jobs service, and `tests/client/` renders the approval center and the lab against the real routes.
 
 ```bash
 pnpm --filter @nocobase/app-plugin-approval-example lint
@@ -48,3 +48,7 @@ pnpm --filter @nocobase/app-plugin-approval-example typecheck
 pnpm --filter @nocobase/app-plugin-approval-example test
 pnpm --filter @nocobase/app-plugin-approval-example build
 ```
+
+## HTTP API
+
+Routes start at `/api/approvalExample` and are documented by the host at `/api/swagger/docs`. Successful requests return `{ data }`; `GET /records` returns `{ data, meta }` with `page` and `pageSize` (default 20, maximum 100). `/overview` is an aggregate for the demonstration dashboard. Settings use `PATCH /settings`. Task, record and simulated event actions have individually declared routes and strict JSON bodies. The plugin owns its lifecycle routes under `/lifecycles`; human fire requests pass `manual: true` to the runtime, and errors use `ApiError` with lifecycle blockers and problems in `metadata`.

@@ -211,9 +211,14 @@ function guardResubmission(context: Context): GuardVerdict {
   ];
   for (const id of touched) {
     if (!record.lines.some((line) => line.id === id))
-      return { code: 'unknownLine', message: `No line "${id}".` };
+      return {
+        kind: 'precondition',
+        code: 'unknownLine',
+        message: `No line "${id}".`,
+      };
     if (record.decisions?.[id]?.outcome !== 'return')
       return {
+        kind: 'precondition',
         code: 'notReturned',
         message: `Line "${id}" was not returned; only returned lines can be changed.`,
       };
@@ -302,7 +307,7 @@ export const reimbursementLifecycle: Lifecycle<ReimbursementTypes> =
             );
           if (!lines.length)
             throw new LifecycleError(
-              'INVALID_INPUT',
+              'INVALID_STATE',
               'Keep at least one line.',
             );
           return { lines };

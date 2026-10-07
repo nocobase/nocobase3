@@ -369,6 +369,7 @@ export const supplierLifecycle: Lifecycle<SupplierTypes> = defineLifecycle({
         return (
           (context.input.round === context.record.verificationRound &&
             context.input.registrationNo === context.record.registrationNo) || {
+            kind: 'precondition',
             code: 'staleResult',
             message: 'This result answers an earlier check.',
           }
@@ -397,6 +398,7 @@ export const supplierLifecycle: Lifecycle<SupplierTypes> = defineLifecycle({
         return (
           failedRound(context.input.error) ===
             context.record.verificationRound || {
+            kind: 'precondition',
             code: 'staleResult',
             message: 'This failure belongs to an earlier check.',
           }

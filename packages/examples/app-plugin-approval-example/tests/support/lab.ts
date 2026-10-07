@@ -1,13 +1,11 @@
-// The lab on a real SQLite database: the approval plugin's migration and the
+// The lab on a selected test database: the approval plugin's migration and the
 // example's, one runtime on the Repository store, and a dispatcher that
 // queues effect runs for the test to run when it chooses.
-import { mkdtemp, rm } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import os from 'node:os';
 import path from 'node:path';
 
-import { createDatabaseManager, type DatabaseManager } from '@nocobase/db';
-import sqlite from '@nocobase/db-sqlite';
+import { createTestDatabase } from '@nocobase/app-testing/server';
+import type { DatabaseManager } from '@nocobase/db';
 import {
   createRepositoryLifecycleStore,
   LifecycleRuntime,
@@ -43,22 +41,16 @@ export interface TestLab {
 }
 
 export async function createTestLab(): Promise<TestLab> {
-  // A file, not :memory:, so the pool behaves as it does in an application.
-  const folder = await mkdtemp(path.join(os.tmpdir(), 'approval-example-'));
-  const database = createDatabaseManager({
-    default: 'main',
-    drivers: { sqlite },
-    connections: {
-      main: { dialect: 'sqlite', filename: path.join(folder, 'main.sqlite') },
-    },
+  const fixture = await createTestDatabase({
+    migrations: [
+      {
+        directory: APPROVAL_MIGRATIONS,
+        packageName: '@nocobase/app-plugin-approval',
+      },
+      { directory: EXAMPLE_MIGRATIONS, packageName: packageMetadata.name },
+    ],
   });
-  for (const [directory, packageName] of [
-    [APPROVAL_MIGRATIONS, '@nocobase/app-plugin-approval'],
-    [EXAMPLE_MIGRATIONS, packageMetadata.name],
-  ] as const)
-    await database
-      .createMigrator({ connection: 'main', directory, packageName })
-      .latest();
+  const database = fixture.database;
   const queued: string[] = [];
   const runtime = (): LifecycleRuntime =>
     new LifecycleRuntime({
@@ -88,8 +80,7 @@ export async function createTestLab(): Promise<TestLab> {
           await lab.runtime.runEffect(runId);
     },
     destroy: async () => {
-      await database.destroy();
-      await rm(folder, { recursive: true, force: true });
+      await fixture.destroy();
     },
   };
 }

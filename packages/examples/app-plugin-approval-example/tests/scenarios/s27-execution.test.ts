@@ -358,7 +358,7 @@ describe('scenario 27 · the request changed', () => {
     });
   });
 
-  it('limitation: an operator retryRun on a failed run still pays without moving the record; the business key saves the retry after it', async () => {
+  it('refuses an operator retry after the failure continuation; the business transition retries safely', async () => {
     const h = setup();
     h.external.balanceCents = 0;
     const id = await approved(h);
@@ -366,7 +366,9 @@ describe('scenario 27 · the request changed', () => {
       (item) => item.effect === 'scenarioPayments.executePayment',
     );
     h.external.balanceCents = 1_000_000;
-    await h.runtime.retryRun(run.id);
+    await expect(h.runtime.retryRun(run.id)).rejects.toMatchObject({
+      code: 'RUN_SETTLED',
+    });
     expect(record(h, id)).toMatchObject({
       status: 'executionFailed',
       paidCents: 0,

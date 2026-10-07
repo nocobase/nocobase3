@@ -1,5 +1,5 @@
 // @vitest-environment node
-// The real Provider against SQLite and the memory jobs service: an approval
+// The real Provider on the selected test database and the memory jobs service: an approval
 // decided through the service sends its record on, and the effects that
 // follow run as jobs.
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -10,12 +10,8 @@ import { createAppPaths } from '@nocobase/app-server/config';
 import { jobExecutorServiceToken } from '@nocobase/app-server/jobs';
 import { loggingToken } from '@nocobase/app-server/logging';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
-import {
-  createDatabaseManager,
-  databaseManagerToken,
-  type DatabaseManager,
-} from '@nocobase/db';
-import sqlite from '@nocobase/db-sqlite';
+import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
+import { createTestDatabase } from '@nocobase/app-testing/server';
 import { createJobExecutorService } from '@nocobase/jobs';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
@@ -28,31 +24,26 @@ import { APPROVAL_MIGRATIONS, EXAMPLE_MIGRATIONS } from './support/lab.js';
 
 let directory: string;
 let database: DatabaseManager;
+let fixture: Awaited<ReturnType<typeof createTestDatabase>>;
 
 const logger = { info: () => {}, warn: () => {}, error: () => {} };
 
 beforeEach(async () => {
   directory = await mkdtemp(path.join(os.tmpdir(), 'approval-provider-'));
-  database = createDatabaseManager({
-    drivers: { sqlite },
-    connections: {
-      main: {
-        dialect: 'sqlite',
-        filename: path.join(directory, 'main.sqlite'),
+  fixture = await createTestDatabase({
+    migrations: [
+      {
+        directory: APPROVAL_MIGRATIONS,
+        packageName: '@nocobase/app-plugin-approval',
       },
-    },
+      { directory: EXAMPLE_MIGRATIONS, packageName: packageMetadata.name },
+    ],
   });
-  for (const [migrations, packageName] of [
-    [APPROVAL_MIGRATIONS, '@nocobase/app-plugin-approval'],
-    [EXAMPLE_MIGRATIONS, packageMetadata.name],
-  ] as const)
-    await database
-      .createMigrator({ directory: migrations, packageName })
-      .latest();
+  database = fixture.database;
 });
 
 afterEach(async () => {
-  await database.destroy();
+  await fixture.destroy();
   await rm(directory, { recursive: true, force: true });
 });
 

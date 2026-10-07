@@ -228,6 +228,7 @@ export function defineWorkItemLifecycle(
             record.cursor === null ? undefined : record.steps[record.cursor];
           return (
             step?.key === text(input.step) || {
+              kind: 'precondition',
               code: 'staleStep',
               message: 'That step is not the one in progress.',
             }

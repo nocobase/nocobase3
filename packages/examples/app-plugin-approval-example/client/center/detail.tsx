@@ -6,7 +6,7 @@ import { ArrowLeft, BellRing, ChevronRight } from 'lucide-react';
 import type { RecordDetail, RecordSummary } from '../../shared/types.js';
 import { text as str } from '../../shared/text.js';
 import { Button } from '../components/ui/button.js';
-import { errorMessage, exampleApi } from '../lib/api.js';
+import { errorMessage, exampleApi, useLifecycle } from '../lib/api.js';
 import { useText, type Text } from '../lib/text.js';
 import { useLoader } from '../lib/use-loader.js';
 import { cn } from '../lib/utils.js';
@@ -295,7 +295,32 @@ export function RequestDetail({
 }): ReactElement {
   const text = useText();
   const client = useApiClient();
-  const api = exampleApi(client);
+  const lifecycleState = useLifecycle(lifecycle, id, { actAs: actor });
+  const api = {
+    ...exampleApi(client),
+    fire: async (
+      _lifecycle: string,
+      _id: string,
+      transition: string,
+      input: JsonObject,
+      _actor: string,
+      expectVersion?: number | null,
+    ): Promise<void> => {
+      await lifecycleState.fire(transition, {
+        input,
+        ...(expectVersion === undefined ? {} : { expectVersion }),
+      });
+    },
+    operate: async (
+      _lifecycle: string,
+      _id: string,
+      runId: string,
+      action: 'retry' | 'cancel',
+    ): Promise<void> => {
+      if (action === 'retry') await lifecycleState.retryRun(runId);
+      else await lifecycleState.cancelRun(runId);
+    },
+  };
   const loaded = useLoader(
     () => api.detail(lifecycle, id, actor),
     `detail:${lifecycle}:${id}:${actor}`,

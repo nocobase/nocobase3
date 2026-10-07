@@ -129,11 +129,13 @@ async function standingGrantBlocker(
       String(grant.id) !== record.supersedes
     )
       return {
+        kind: 'precondition',
         code: 'activeGrant',
         message: `Grant "${String(grant.id)}" already covers ${record.matter}; ask to supersede it.`,
       };
     if (conflicting(record.matter, grant.matter, parameters.conflictingMatters))
       return {
+        kind: 'precondition',
         code: 'conflictingGrant',
         message: `Grant "${String(grant.id)}" for ${grant.matter} conflicts with ${record.matter}.`,
       };
@@ -192,7 +194,7 @@ function approvedScope({
     throw new LifecycleError('INVALID_INPUT', 'Approve a positive limit.');
   if (typeof limit === 'number' && requested !== null && limit > requested)
     throw new LifecycleError(
-      'INVALID_INPUT',
+      'INVALID_STATE',
       'An approval may lower the limit asked for, not raise it.',
     );
   return {
@@ -227,7 +229,11 @@ export const grantRequestLifecycle: Lifecycle<RequestTypes> = defineLifecycle({
           };
         const problems = scopeProblems(record.requested);
         if (problems.length)
-          return { code: 'invalidScope', message: problems.join(' ') };
+          return {
+            kind: 'precondition',
+            code: 'invalidScope',
+            message: problems.join(' '),
+          };
         const duplicates = await services.records.list(
           GRANT_REQUESTS,
           (row) =>
@@ -238,6 +244,7 @@ export const grantRequestLifecycle: Lifecycle<RequestTypes> = defineLifecycle({
         );
         if (duplicates.length)
           return {
+            kind: 'precondition',
             code: 'duplicateRequest',
             message: `Request "${String(duplicates[0].id)}" already asks for ${record.matter} on this subject.`,
           };
@@ -250,6 +257,7 @@ export const grantRequestLifecycle: Lifecycle<RequestTypes> = defineLifecycle({
           )
         )
           return {
+            kind: 'precondition',
             code: 'nothingToSupersede',
             message: `No active ${record.matter} grant "${record.supersedes}" to supersede.`,
           };

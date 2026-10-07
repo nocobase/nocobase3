@@ -278,6 +278,7 @@ export const matterLifecycle: Lifecycle<MatterTypes> = defineLifecycle({
         );
         return (
           busy.length === 0 || {
+            kind: 'precondition',
             code: 'subjectBusy',
             message: `${record.subjectKey} already has a request under review.`,
           }

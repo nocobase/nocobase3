@@ -1,5 +1,11 @@
-import type { ApiClient } from '@nocobase/app-client';
-import type { Blocker, JsonObject } from '@nocobase/lifecycle/react';
+import { useApiClient, type ApiClient } from '@nocobase/app-client';
+import {
+  createLifecycleClient,
+  createLifecycleHook,
+  LifecycleRequestError,
+  type Blocker,
+  type JsonObject,
+} from '@nocobase/lifecycle/react';
 
 import { EXAMPLE_ROUTES, LIFECYCLE_ROUTES } from '../../shared/routes.js';
 import type {
@@ -18,7 +24,7 @@ export interface ExampleApi {
   detail(lifecycle: string, id: string, actAs: string): Promise<RecordDetail>;
   preview(demo: string, form: JsonObject, actAs: string): Promise<Preview>;
   create(demo: string, form: JsonObject, actAs: string): Promise<Created>;
-  /** A business transition, through the library's standard route. */
+  /** A business transition, through the plugin's lifecycle route. */
   fire(
     lifecycle: string,
     id: string,
@@ -58,33 +64,47 @@ export interface ExampleApi {
   saveSettings(settings: LabSettings, actAs: string): Promise<void>;
 }
 
+export const useLifecycle: ReturnType<typeof createLifecycleHook> =
+  createLifecycleHook({
+    useTransport: useApiClient,
+    basePath: LIFECYCLE_ROUTES,
+  });
+
 const base = EXAMPLE_ROUTES;
 
 export function exampleApi(client: ApiClient): ExampleApi {
   const post = <T>(path: string, actAs: string, json: unknown = {}) =>
-    client.request<T>({ method: 'POST', path, query: { actAs }, json });
+    client
+      .request<{ data: T }>({ method: 'POST', path, query: { actAs }, json })
+      .then((response) => response.data);
   return {
     overview: (actAs) =>
-      client.request<Overview>({ path: `${base}/overview`, query: { actAs } }),
+      client
+        .request<{ data: Overview }>({
+          path: `${base}/overview`,
+          query: { actAs },
+        })
+        .then((response) => response.data),
     detail: (lifecycle, id, actAs) =>
-      client.request<RecordDetail>({
-        path: `${base}/records/${lifecycle}/${encodeURIComponent(id)}`,
-        query: { actAs },
-      }),
+      client
+        .request<{ data: RecordDetail }>({
+          path: `${base}/records/${lifecycle}/${encodeURIComponent(id)}`,
+          query: { actAs },
+        })
+        .then((response) => response.data),
     preview: (demo, form, actAs) =>
       post<Preview>(`${base}/preview/${demo}`, actAs, form),
     create: (demo, form, actAs) =>
       post<Created>(`${base}/requests/${demo}`, actAs, form),
     fire: async (lifecycle, id, transition, input, actAs, expectVersion) => {
-      await post(
-        `${LIFECYCLE_ROUTES}/${lifecycle}/${encodeURIComponent(id)}/fire`,
-        actAs,
-        {
-          transition,
-          input,
-          ...(typeof expectVersion === 'number' ? { expectVersion } : {}),
-        },
-      );
+      await createLifecycleClient({
+        transport: client,
+        basePath: LIFECYCLE_ROUTES,
+        query: { actAs },
+      }).fire(lifecycle, id, transition, {
+        input,
+        ...(expectVersion === undefined ? {} : { expectVersion }),
+      });
     },
     task: (taskId, action, body, actAs) =>
       post<JsonObject>(
@@ -105,10 +125,14 @@ export function exampleApi(client: ApiClient): ExampleApi {
         body,
       ),
     operate: async (lifecycle, id, runId, action, actAs) => {
-      await post(
-        `${LIFECYCLE_ROUTES}/${lifecycle}/${encodeURIComponent(id)}/runs/${encodeURIComponent(runId)}/${action}`,
-        actAs,
-      );
+      const lifecycleClient = createLifecycleClient({
+        transport: client,
+        basePath: LIFECYCLE_ROUTES,
+        query: { actAs },
+      });
+      if (action === 'retry')
+        await lifecycleClient.retryRun(lifecycle, id, runId);
+      else await lifecycleClient.cancelRun(lifecycle, id, runId);
     },
     samples: async (actAs) =>
       (await post<{ created: number }>(`${base}/samples`, actAs)).created,
@@ -116,7 +140,7 @@ export function exampleApi(client: ApiClient): ExampleApi {
       (await post<{ moved: number }>(`${base}/sweep`, actAs)).moved,
     saveSettings: async (settings, actAs) => {
       await client.request({
-        method: 'PUT',
+        method: 'PATCH',
         path: `${base}/settings`,
         query: { actAs },
         json: settings,
@@ -140,7 +164,30 @@ interface RefusalPayload {
 
 function payloadOf(cause: unknown): RefusalPayload | undefined {
   if (typeof cause !== 'object' || cause === null) return undefined;
-  const payload = (cause as { payload?: unknown }).payload;
+  if (cause instanceof LifecycleRequestError)
+    return {
+      reason: cause.reason,
+      message: cause.message,
+      blockers: cause.blockers,
+      problems: cause.problems,
+    };
+  const envelope = (
+    cause as {
+      payload?: {
+        error?: RefusalPayload & {
+          metadata?: { blockers?: unknown; problems?: unknown };
+        };
+      };
+    }
+  ).payload;
+  const error = envelope?.error;
+  const payload = error
+    ? {
+        ...error,
+        blockers: error.metadata?.blockers,
+        problems: error.metadata?.problems,
+      }
+    : undefined;
   return typeof payload === 'object' && payload !== null ? payload : undefined;
 }
 

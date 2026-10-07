@@ -1,5 +1,5 @@
 // The approval center and the lab rendered against the real routes and the
-// real service on SQLite: the API client is a bridge to the router, so a
+// real service on the selected test database: the API client is a bridge to the router, so a
 // click goes through the same path a browser's request would.
 import {
   authenticationToken,

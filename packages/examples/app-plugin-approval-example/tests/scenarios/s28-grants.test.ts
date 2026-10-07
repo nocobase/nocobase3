@@ -156,7 +156,7 @@ describe('scenario 28 · an approval produces a grant', () => {
     const id = await submitted(h, { matter: 'budget' });
     expect(
       (await refusal(approveWith(h, id, { limitCents: 200_000 }))).code,
-    ).toBe('INVALID_INPUT');
+    ).toBe('INVALID_STATE');
     expect(h.all(GRANTS)).toEqual([]);
     expect(await h.stage(GRANT_REQUESTS, id)).toBe('approval');
     expect(await h.open(GRANT_REQUESTS, id)).toEqual(['dana:pending']);

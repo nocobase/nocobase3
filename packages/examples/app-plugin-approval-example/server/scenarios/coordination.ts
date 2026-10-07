@@ -572,10 +572,18 @@ export function defineCoordinationLifecycle(
     try {
       const { problems } = planOf(context.record, context.services, content);
       return problems.length
-        ? { code: 'unplannable', message: problems.join(' ') }
+        ? {
+            kind: 'precondition',
+            code: 'unplannable',
+            message: problems.join(' '),
+          }
         : true;
     } catch (error) {
-      return error instanceof Error ? error.message : String(error);
+      return {
+        kind: 'precondition',
+        code: 'unplannable',
+        message: error instanceof Error ? error.message : String(error),
+      };
     }
   };
 
@@ -858,6 +866,7 @@ export function defineCoordinationLifecycle(
             };
           return (
             text(input.reason) !== null || {
+              kind: 'precondition',
               code: 'reasonRequired',
               message: 'Say why it is cancelled.',
             }
