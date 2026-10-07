@@ -83,6 +83,7 @@ export type {
   LifecycleStore,
   NewEffectRun,
   NewTransitionEntry,
+  PendingContinuation,
   RecordCondition,
   TransactionOptions,
   TransitionEntry,

@@ -40,7 +40,7 @@ export const ticketLifecycle: Lifecycle<TicketTypes> =
 | Effect     | A function run after commit, with `retry`, a stable `idempotencyKey`, and `onSuccess`/`onFailure` transitions, fired with the effect's result or its error — a code and details when it throws an `EffectFailure` — as input; `onEnter` runs effects per state |
 | Trigger    | Fires a transition on records idle in a state for longer than `after`, found by a query rather than a timer per record                                                                                                                                         |
 
-`LifecycleRuntime.fire()` checks the state, writes the record, a transition log entry and the effect runs in one transaction, guarded by a conditional update on the state and on a version every transition increments, so two concurrent transitions of one record cannot both commit. Effects are handed to a dispatcher after commit, retried by policy, and fenced so a reclaimed attempt cannot record a result over its replacement. `runTriggers()` sweeps the triggers, `reclaim()` hands over again what no process is working on — attempts whose lease expired and queued runs whose dispatch was lost, and `recover()` picks up what an earlier process left queued.
+`LifecycleRuntime.fire()` checks the state, writes the record, a transition log entry and the effect runs in one transaction, guarded by a conditional update on the state and on a version every transition increments, so two concurrent transitions of one record cannot both commit. Effects are handed to a dispatcher after commit, retried by policy, and fenced so a reclaimed attempt cannot record a result over its replacement. `runTriggers()` sweeps the triggers, `reclaim()` hands over again what no process is working on — attempts whose lease expired and queued runs whose dispatch was lost — and tries again a continuation that waits for a deploy, and `recover()` picks up what an earlier process left queued.
 
 ## Entries
 
@@ -51,7 +51,7 @@ export const ticketLifecycle: Lifecycle<TicketTypes> =
 | `@nocobase/lifecycle/react`   | `createLifecycleHook()`, configured once per plugin so a page calls one hook; `createLifecycleClient()` and `useLifecycle()` beneath it                                                                               |
 | `@nocobase/lifecycle/testing` | `createLifecycleTestKit()`: a memory store, a fake clock and in-process effects whose retries wait for that clock, so waits and retries are unit tests                                                                |
 
-`@nocobase/db` is a peer; `@nocobase/jobs` and `react` are optional peers, each needed only by the entry that imports it. The library ships no HTTP routes: they belong to the plugin, under its namespace and declared for the application's API document, and the guide shows how to write the ones the React hook calls.
+`@nocobase/db` is a peer; `@nocobase/jobs` and `react` are optional peers, each needed only by the entry that imports it. A plugin declares `@nocobase/lifecycle` itself in `peerDependencies`, never in `dependencies`, and the application provides it in its own `dependencies`: the plugins of an application share one runtime, and code recognises `LifecycleError` and `EffectFailure` with `instanceof`, which a second copy of the module fails. The library ships no HTTP routes: they belong to the plugin, under its namespace and declared for the application's API document, and the guide shows how to write the ones the React hook calls.
 
 ## Documentation
 

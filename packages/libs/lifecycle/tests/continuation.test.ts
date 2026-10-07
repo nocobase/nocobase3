@@ -20,6 +20,7 @@ import {
   type LifecycleError,
   type LifecycleLogger,
   type LifecycleRecord,
+  type TransitionDefinition,
 } from '../src/index.js';
 
 interface Services {
@@ -216,6 +217,7 @@ describe('an effect’s continuation', () => {
     // Nothing is told and nothing more is handed over.
     expect(context.trace).toEqual([]);
     expect(context.dispatcher.handed).toEqual([runId]);
+    expect(run?.continuation).toBeNull();
     expect(context.logger.warn).toHaveBeenCalledWith(
       expect.stringContaining('The order is blocked.'),
       expect.objectContaining({ runId, code: 'GUARD_REJECTED' }),
@@ -253,7 +255,16 @@ describe('an effect’s continuation', () => {
     const run = await context.runtime.runEffect(runId);
 
     expect(context.services.calls).toEqual(['tasks.work']);
-    expect(run).toMatchObject({ status: 'succeeded', attempts: 1 });
+    expect(run).toMatchObject({
+      status: 'succeeded',
+      attempts: 1,
+      // Waiting for a definition that accepts it; see pending-continuation.test.ts.
+      continuation: {
+        transition: 'finish',
+        code: 'INVALID_INPUT',
+        input: { done: true },
+      },
+    });
     expect(context.dispatcher.handed).toEqual([runId]);
     expect(context.store.record('tasks', context.task.id)?.status).toBe(
       'working',
@@ -268,6 +279,7 @@ describe('an effect’s continuation', () => {
     const context = setup();
     const runId = await startWork(context);
     for (const requestId of [
+      '',
       `$run:${runId}:succeeded`,
       `$run:${runId}:failed`,
       '$v:2',
@@ -401,26 +413,22 @@ describe('an EffectFailure’s details', () => {
 });
 
 describe('a trigger refused on a sweep', () => {
-  it('is skipped, and said so in the log', async () => {
-    interface Reminder extends LifecycleRecord {
-      readonly status: 'waiting' | 'expired';
-    }
-    interface ReminderTypes {
-      record: Reminder;
-      state: Reminder['status'];
-      services: object;
-    }
+  interface Reminder extends LifecycleRecord {
+    readonly status: 'waiting' | 'expired';
+    readonly orderId?: string;
+  }
+  interface ReminderTypes {
+    record: Reminder;
+    state: Reminder['status'];
+    services: Services;
+  }
+
+  function sweepSetup(expire: TransitionDefinition<ReminderTypes>) {
     const reminders = defineLifecycle<ReminderTypes>({
       name: 'reminders',
       initial: 'waiting',
       states: ['waiting', { name: 'expired', final: true }],
-      transitions: {
-        expire: {
-          from: 'waiting',
-          to: 'expired',
-          guard: () => ({ code: 'ON_HOLD', message: 'On hold.' }),
-        },
-      },
+      transitions: { expire },
       triggers: {
         expireIdle: { transition: 'expire', when: 'waiting', after: () => 0 },
       },
@@ -435,15 +443,54 @@ describe('a trigger refused on a sweep', () => {
       logger,
       clock: () => new Date('2026-10-02T00:00:00Z'),
     });
-    runtime.register(reminders);
+    const services: Services = { runtime: () => runtime, calls: [] };
+    runtime.register(orders, { services });
+    runtime.register(reminders, { services });
+    const order = store.insertRecord('orders', {
+      status: 'open',
+      lifecycleVersion: 0,
+      blocked: true,
+    });
     const reminder = store.insertRecord('reminders', {
       status: 'waiting',
       statusChangedAt: '2026-10-01T00:00:00.000Z',
       lifecycleVersion: 0,
+      orderId: String(order.id),
     });
-    await expect(runtime.runTriggers()).resolves.toBe(0);
+    return { store, logger, runtime, reminder };
+  }
+
+  it('passes over a record its own guard refuses without a word, sweep after sweep', async () => {
+    const { logger, runtime, store, reminder } = sweepSetup({
+      from: 'waiting',
+      to: 'expired',
+      guard: () => ({ code: 'ON_HOLD', message: 'On hold.' }),
+    });
+    for (let sweep = 0; sweep < 3; sweep += 1)
+      await expect(runtime.runTriggers()).resolves.toBe(0);
+    expect(store.record('reminders', reminder.id)?.status).toBe('waiting');
+    expect(logger.warn).not.toHaveBeenCalled();
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
+  it('says so on every sweep when a lifecycle call in its onTransition is refused', async () => {
+    const { logger, runtime, store, reminder } = sweepSetup({
+      from: 'waiting',
+      to: 'expired',
+      // The blocked order refuses, on every sweep, until someone unblocks it.
+      onTransition: ({ record, tx }) =>
+        tx
+          .fire('orders', String(record.orderId), 'complete', {
+            actor: SYSTEM_ACTOR,
+          })
+          .then(() => undefined),
+    });
+    for (let sweep = 0; sweep < 2; sweep += 1)
+      await expect(runtime.runTriggers()).resolves.toBe(0);
+    expect(store.record('reminders', reminder.id)?.status).toBe('waiting');
+    expect(logger.warn).toHaveBeenCalledTimes(2);
     expect(logger.warn).toHaveBeenCalledWith(
-      expect.stringContaining('On hold.'),
+      expect.stringContaining('The order is blocked.'),
       {
         lifecycle: 'reminders',
         recordId: String(reminder.id),

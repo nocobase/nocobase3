@@ -18,6 +18,7 @@ import type {
   LifecycleStore,
   NewEffectRun,
   NewTransitionEntry,
+  PendingContinuation,
   RecordCondition,
   TransactionOptions,
   TransitionEntry,
@@ -163,6 +164,48 @@ function toEffectRun(row: Row): EffectRun {
     updatedAt: text(row.updatedAt) ?? '',
     claimedAt: text(row.claimedAt),
     runAfter: text(row.runAfter),
+    continuation: toContinuation(row.continuation),
+  };
+}
+
+/** A pending continuation as stored, or null; a value of another shape reads as none. */
+function toContinuation(value: unknown): PendingContinuation | null {
+  const stored = json<JsonValue>(value, null);
+  if (typeof stored !== 'object' || stored === null || Array.isArray(stored))
+    return null;
+  const { transition, outcome, input, error, code, attempts, failedAt } =
+    stored;
+  if (
+    typeof transition !== 'string' ||
+    (outcome !== 'succeeded' && outcome !== 'failed') ||
+    typeof input !== 'object' ||
+    input === null ||
+    Array.isArray(input)
+  )
+    return null;
+  return {
+    transition,
+    outcome,
+    input,
+    error: typeof error === 'string' ? error : '',
+    code: typeof code === 'string' ? code : '',
+    attempts: typeof attempts === 'number' ? attempts : 0,
+    failedAt: typeof failedAt === 'string' ? failedAt : '',
+  };
+}
+
+/**
+ * The columns a run's continuation is written to: the continuation itself,
+ * and `continuationFailedAt`, a plain timestamp that is null exactly when
+ * nothing is pending, so a query finds the pending runs on every dialect
+ * without filtering on JSON.
+ */
+function continuationColumns(
+  continuation: PendingContinuation | null,
+): Record<string, unknown> {
+  return {
+    continuation,
+    continuationFailedAt: continuation?.failedAt ?? null,
   };
 }
 
@@ -333,6 +376,7 @@ class RepositoryLifecycleStore implements LifecycleStore {
       values: asRow({
         ...run,
         transitionId: key(run.transitionId),
+        ...continuationColumns(run.continuation ?? null),
       }),
     });
     return toEffectRun(created.record);
@@ -358,7 +402,12 @@ class RepositoryLifecycleStore implements LifecycleStore {
           ? {}
           : { attempts: condition.attempts }),
       },
-      values: asRow({ ...changes }),
+      values: asRow({
+        ...changes,
+        ...(changes.continuation === undefined
+          ? {}
+          : continuationColumns(changes.continuation)),
+      }),
     });
     return result.updatedCount > 0;
   }
@@ -385,6 +434,13 @@ class RepositoryLifecycleStore implements LifecycleStore {
           ...(query.updatedBefore === undefined
             ? []
             : [filter.date('updatedAt').before(query.updatedBefore)]),
+          ...(query.continuationPending === undefined
+            ? []
+            : [
+                query.continuationPending
+                  ? filter.date('continuationFailedAt').notEmpty()
+                  : filter.date('continuationFailedAt').empty(),
+              ]),
         ]),
       sort: (sort) => sort.field('id').asc(),
       ...(query.limit === undefined ? {} : { limit: query.limit }),
@@ -403,6 +459,8 @@ class RepositoryLifecycleStore implements LifecycleStore {
             query.statuses.map((status) => filter.string('status').eq(status)),
           ),
           filter.date('updatedAt').before(query.updatedBefore),
+          // Its outcome has yet to move the record.
+          filter.date('continuationFailedAt').empty(),
         ]),
     });
     return deletedCount;
@@ -426,6 +484,11 @@ class RepositoryLifecycleStore implements LifecycleStore {
  * The log collection declares unique indexes on `(lifecycle, recordId,
  * version)` and `(lifecycle, recordId, requestKey)`, the same on every
  * dialect.
+ *
+ * Each effect run also stores `continuationFailedAt`, a nullable
+ * `datetimeTz` column alongside the nullable `continuation` (json): the
+ * `failedAt` of a pending continuation, and null when there is none, which is
+ * how the pending runs are found without filtering on JSON.
  */
 export function createRepositoryLifecycleStore(
   database: DatabaseManager,

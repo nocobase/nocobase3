@@ -246,8 +246,15 @@ const migration: MigrationDefinition = defineMigration({
       table.datetimeTz('updatedAt').notNull();
       table.datetimeTz('claimedAt');
       table.datetimeTz('runAfter');
+      // A continuation the outcome still has to fire, refused so far for a
+      // reason a deploy can remove; null when nothing is pending.
+      table.json('continuation');
+      // When that continuation was last refused: null exactly when nothing is
+      // pending, so the sweep finds the pending runs without a JSON filter.
+      table.datetimeTz('continuationFailedAt');
       table.index(['status', 'id']);
       table.index(['lifecycle', 'recordId', 'id']);
+      table.index(['continuationFailedAt']);
     });
   },
 

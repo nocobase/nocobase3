@@ -15,7 +15,8 @@ export type LifecycleErrorCode =
   | 'REQUEST_REUSED'
   | 'NOT_MANUAL'
   | 'INVALID_REQUEST_ID'
-  | 'RUN_SETTLED';
+  | 'RUN_SETTLED'
+  | 'NO_CONTINUATION';
 
 /**
  * What kind of refusal a blocker is: `permission` when this actor may not do

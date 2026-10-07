@@ -60,6 +60,33 @@ export interface EffectRun {
   readonly claimedAt: string | null;
   /** Earliest time a queued run may start, for a retry with backoff. */
   readonly runAfter: string | null;
+  /**
+   * The transition the run's outcome still has to fire, or null when there
+   * is none. Set when the effect's `onSuccess` or `onFailure` was refused
+   * for a reason a deploy or a definition change can remove, such as
+   * `UNKNOWN_TRANSITION` or `INVALID_SET`: the outcome is recorded and the
+   * effect never runs again, while `reclaim()` and `continueRun()` try the
+   * continuation again until it fires or the record moves on.
+   */
+  readonly continuation: PendingContinuation | null;
+}
+
+/** An effect's continuation that has not fired yet; see {@link EffectRun.continuation}. */
+export interface PendingContinuation {
+  /** The effect's `onSuccess` or `onFailure` when the outcome was recorded. */
+  readonly transition: string;
+  /** Which outcome it continues: its request id is `$run:<runId>:<outcome>`. */
+  readonly outcome: 'succeeded' | 'failed';
+  /** What the transition receives: the effect's result, or `{ error, errorCode?, details? }`. */
+  readonly input: JsonObject;
+  /** Why the last try was refused. */
+  readonly error: string;
+  /** The `LifecycleError` code of that refusal. */
+  readonly code: string;
+  /** How many times it has been tried. */
+  readonly attempts: number;
+  /** When the last try was refused. */
+  readonly failedAt: string;
 }
 
 export type NewTransitionEntry = Omit<TransitionEntry, 'id'>;
@@ -79,7 +106,10 @@ export function transitionRequestKey(
 ): string {
   return entry.requestId ?? `$v:${String(entry.version)}`;
 }
-export type NewEffectRun = Omit<EffectRun, 'id'>;
+/** A run as written for a transition; it has no pending continuation unless it says so. */
+export type NewEffectRun = Omit<EffectRun, 'id' | 'continuation'> & {
+  readonly continuation?: PendingContinuation | null;
+};
 export type EffectRunChanges = Partial<
   Omit<EffectRun, 'id' | 'transitionId' | 'lifecycle' | 'recordId' | 'effect'>
 >;
@@ -114,10 +144,15 @@ export interface EffectRunQuery {
   readonly claimedBefore?: string;
   /** Runs last changed before this instant. */
   readonly updatedBefore?: string;
+  /** True for the runs with a pending continuation only, false for those without one. */
+  readonly continuationPending?: boolean;
   readonly limit?: number;
 }
 
-/** Which finished runs `deleteEffectRuns` removes. */
+/**
+ * Which finished runs `deleteEffectRuns` removes. A run with a pending
+ * continuation is never removed: its outcome has yet to move the record.
+ */
 export interface EffectRunPruneQuery {
   readonly statuses: readonly EffectRunStatus[];
   /** Runs last changed before this instant. */
@@ -238,6 +273,6 @@ export interface LifecycleStore {
   ): Promise<boolean>;
   /** Oldest first. */
   listEffectRuns(query: EffectRunQuery): Promise<EffectRun[]>;
-  /** Removes finished runs; returns how many. */
+  /** Removes finished runs without a pending continuation; returns how many. */
   deleteEffectRuns(query: EffectRunPruneQuery): Promise<number>;
 }

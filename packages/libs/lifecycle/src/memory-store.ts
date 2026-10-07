@@ -427,7 +427,11 @@ export class MemoryLifecycleStore implements LifecycleStore, MemoryRows {
 
   public createEffectRun(run: NewEffectRun): Promise<EffectRun> {
     if (this.scope?.finished) return Promise.reject(new Error(FINISHED));
-    const saved = Object.freeze({ ...run, id: String(this.next()) });
+    const saved: EffectRun = Object.freeze({
+      ...run,
+      continuation: run.continuation ?? null,
+      id: String(this.next()),
+    });
     this.log(write(this.state.effectRuns, saved.id, saved));
     return Promise.resolve(saved);
   }
@@ -472,7 +476,9 @@ export class MemoryLifecycleStore implements LifecycleStore, MemoryRows {
         (query.claimedBefore === undefined ||
           (run.claimedAt !== null && run.claimedAt < query.claimedBefore)) &&
         (query.updatedBefore === undefined ||
-          run.updatedAt < query.updatedBefore),
+          run.updatedAt < query.updatedBefore) &&
+        (query.continuationPending === undefined ||
+          (run.continuation !== null) === query.continuationPending),
     );
     return Promise.resolve(
       query.limit === undefined ? runs : runs.slice(0, query.limit),
@@ -485,7 +491,8 @@ export class MemoryLifecycleStore implements LifecycleStore, MemoryRows {
     for (const [id, run] of this.state.effectRuns)
       if (
         query.statuses.includes(run.status) &&
-        run.updatedAt < query.updatedBefore
+        run.updatedAt < query.updatedBefore &&
+        run.continuation === null
       ) {
         this.log(write(this.state.effectRuns, id, undefined));
         deleted += 1;

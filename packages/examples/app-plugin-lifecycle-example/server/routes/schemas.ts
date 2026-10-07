@@ -307,6 +307,21 @@ const Run: z.ZodType<EffectRun> = z
     updatedAt: z.iso.datetime(),
     claimedAt: z.iso.datetime().nullable(),
     runAfter: z.iso.datetime().nullable(),
+    continuation: z
+      .object({
+        transition: z.string(),
+        outcome: z.enum(['succeeded', 'failed']),
+        input: jsonObject,
+        error: z.string(),
+        code: z.string(),
+        attempts: z.number(),
+        failedAt: z.iso.datetime(),
+      })
+      .nullable()
+      .meta({
+        description:
+          'The transition the outcome still has to fire, refused so far for a reason a deploy can remove; null when nothing is pending.',
+      }),
   })
   .meta({ ref: 'LifecycleExampleEffectRun' });
 

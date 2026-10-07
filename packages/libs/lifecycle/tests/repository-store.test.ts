@@ -5,11 +5,13 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   CREATE_TRANSITION,
   createRepositoryLifecycleStore,
+  defineEffect,
   defineLifecycle,
   LIFECYCLE_COLLECTIONS,
   LifecycleRuntime,
   type EffectDispatcher,
   type LifecycleStore,
+  SYSTEM_ACTOR,
 } from '../src/index.js';
 import { ticketLifecycle, type TicketTypes } from './fixtures/ticket.js';
 
@@ -67,6 +69,10 @@ async function createTables(): Promise<void> {
     table.datetimeTz('updatedAt').notNull();
     table.datetimeTz('claimedAt');
     table.datetimeTz('runAfter');
+    // A continuation waiting to be tried again, and when it was last refused:
+    // null exactly when nothing is pending, so the sweep finds the pending ones.
+    table.json('continuation');
+    table.datetimeTz('continuationFailedAt');
   });
 }
 
@@ -645,6 +651,110 @@ describe('Repository lifecycle store', () => {
         .repository('tickets')
         .findOne({ filter: { id: Number(first) } }),
     ).toMatchObject({ status: 'awaitingCustomer', lifecycleVersion: 1 });
+  });
+});
+
+describe('a continuation waiting on the database', () => {
+  interface Flags {
+    broken: boolean;
+  }
+  interface DeliveryTypes {
+    record: TicketTypes['record'];
+    state: TicketTypes['state'];
+    services: { readonly flags: Flags; readonly calls: string[] };
+  }
+
+  const deliver = defineEffect<DeliveryTypes>({
+    name: 'deliveries.deliver',
+    onSuccess: 'close',
+    run: ({ services }) => {
+      services.calls.push('deliver');
+      return { trackingNumber: 'T-1' };
+    },
+  });
+
+  const deliveries = defineLifecycle<DeliveryTypes>({
+    name: 'deliveries',
+    collection: 'tickets',
+    initial: 'open',
+    states: ['open', 'awaitingCustomer', { name: 'closed', final: true }],
+    transitions: {
+      ship: { from: 'open', to: 'awaitingCustomer', effects: [deliver] },
+      close: {
+        from: 'awaitingCustomer',
+        to: 'closed',
+        // A bug the next deploy fixes: it writes a field the lifecycle owns.
+        set: ({ services }) =>
+          services.flags.broken ? { status: 'closed' } : {},
+      },
+    },
+  });
+
+  it('keeps the outcome, waits, and fires once the definition is fixed', async () => {
+    const id = await createTicket();
+    const flags: Flags = { broken: true };
+    const calls: string[] = [];
+    const runtime = new LifecycleRuntime({ store, clock: () => now });
+    runtime.register(deliveries, { services: { flags, calls } });
+
+    const shipped = await runtime.fire('deliveries', id, 'ship', {
+      actor: SYSTEM_ACTOR,
+    });
+    const runId = shipped.effectRuns[0].id;
+    await expect(store.findEffectRun(runId)).resolves.toMatchObject({
+      status: 'succeeded',
+      result: { trackingNumber: 'T-1' },
+      continuation: {
+        transition: 'close',
+        outcome: 'succeeded',
+        input: { trackingNumber: 'T-1' },
+        code: 'INVALID_SET',
+        attempts: 1,
+      },
+    });
+    await expect(
+      runtime.listEffectRuns({ continuationPending: true }),
+    ).resolves.toMatchObject([{ id: runId }]);
+    await expect(
+      runtime.listEffectRuns({ continuationPending: false }),
+    ).resolves.toEqual([]);
+    // Waiting, it is not pruned.
+    await expect(
+      runtime.prune({ olderThan: new Date(now.getTime() + 60_000) }),
+    ).resolves.toBe(0);
+
+    await expect(runtime.reclaim()).resolves.toBe(0);
+    await expect(store.findEffectRun(runId)).resolves.toMatchObject({
+      continuation: { attempts: 2 },
+    });
+
+    flags.broken = false;
+    await expect(runtime.reclaim()).resolves.toBe(1);
+    expect(
+      await database
+        .repository('tickets')
+        .findOne({ filter: { id: Number(id) } }),
+    ).toMatchObject({ status: 'closed', lifecycleVersion: 2 });
+    await expect(store.findEffectRun(runId)).resolves.toMatchObject({
+      status: 'succeeded',
+      continuation: null,
+    });
+    await expect(
+      runtime.listEffectRuns({ continuationPending: true }),
+    ).resolves.toEqual([]);
+    expect(calls).toEqual(['deliver']);
+    expect(
+      (await runtime.history('deliveries', id)).transitions.at(-1),
+    ).toMatchObject({
+      transition: 'close',
+      requestId: `$run:${runId}:succeeded`,
+    });
+    await expect(runtime.continueRun(runId)).rejects.toMatchObject({
+      code: 'NO_CONTINUATION',
+    });
+    await expect(
+      runtime.prune({ olderThan: new Date(now.getTime() + 60_000) }),
+    ).resolves.toBe(1);
   });
 });
 
