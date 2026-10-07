@@ -4,15 +4,26 @@ import {
   betterAuth,
   getBaseURL,
   getOrigin,
+  type AuthContext,
   type BetterAuthOptions,
   type BetterAuthPlugin,
   type FilteredAPI,
   type Session,
   type User,
 } from 'better-auth';
-import { username } from 'better-auth/plugins';
+import {
+  openAPI,
+  username,
+  type OpenAPIModelSchema,
+  type Path,
+} from 'better-auth/plugins';
 import type { Context, MiddlewareHandler } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
+import {
+  ApiError,
+  apiErrorHandler,
+  apiErrorStatusFromHttp,
+} from '@nocobase/app-server/router';
 import { databaseAdapter } from './better-auth/database-adapter.js';
 
 export interface AuthOptions extends Omit<BetterAuthOptions, 'database'> {
@@ -30,6 +41,28 @@ export type AuthSession = { user: User; session: Session } | null;
 
 export interface AuthEnv {
   Variables: { auth: AuthSession };
+}
+
+/** How `Auth.getSession()` resolves a request's credential. */
+export interface GetSessionOptions {
+  /**
+   * Leave the session's expiry as it is instead of extending it. A read that must not change state, such as
+   * deciding whether a request may read the API documentation, passes `true`.
+   */
+  readonly disableRefresh?: boolean;
+}
+
+/** One operation of Better Auth's OpenAPI description, as its generator writes it. */
+export type AuthOpenAPIOperation = NonNullable<Path['get']>;
+
+/** What `Auth.openAPISchema()` returns: Better Auth's paths, keyed by path then lower-case method, and its models. */
+export interface AuthOpenAPISchema {
+  /** The public path Better Auth serves its endpoints under, including the application's base path. */
+  readonly basePath: string;
+  readonly paths: Record<string, Record<string, AuthOpenAPIOperation>>;
+  readonly components: {
+    readonly schemas: Record<string, OpenAPIModelSchema>;
+  };
 }
 
 export interface AuthMiddlewareOptions {
@@ -154,8 +187,14 @@ export class Auth {
     return this.auth.handler(request);
   }
 
-  async getSession(headers: Headers): Promise<AuthSession> {
-    const session = await this.auth.api.getSession({ headers });
+  async getSession(
+    headers: Headers,
+    options: GetSessionOptions = {},
+  ): Promise<AuthSession> {
+    const session = await this.auth.api.getSession({
+      headers,
+      ...(options.disableRefresh ? { query: { disableRefresh: true } } : {}),
+    });
     if (!session) return null;
     const user = await this.connection.query
       .selectFrom('user')
@@ -193,7 +232,7 @@ export class Auth {
       origin ??
       context.req.header('referer');
     if (!source || source === 'null') {
-      return context.json({ code: 'INVALID_CSRF_ORIGIN' }, 403);
+      return invalidCsrfOrigin(context);
     }
 
     // Better Auth also accepts per-request trusted origins. Its static context contains the
@@ -215,7 +254,7 @@ export class Auth {
       allowRelativePaths: false,
     });
     if (!trustedByAuth) {
-      return context.json({ code: 'INVALID_CSRF_ORIGIN' }, 403);
+      return invalidCsrfOrigin(context);
     }
   }
 
@@ -232,6 +271,70 @@ export class Auth {
       if (typeof endpoint === 'function') api[name] = endpoint;
     }
     return api as FilteredAPI<NonNullable<TPlugin['endpoints']>>;
+  }
+
+  /** The Better Auth plugin registered under `pluginId`, as the application configured it, or `undefined`. */
+  plugin<TPlugin extends BetterAuthPlugin>(
+    pluginId: TPlugin['id'],
+  ): TPlugin | undefined {
+    return this.options.plugins?.find((item) => item.id === pluginId) as
+      TPlugin | undefined;
+  }
+
+  /**
+   * Better Auth's OpenAPI description of every endpoint it serves, built by its own generator. Paths are relative to
+   * Better Auth's base path, and each operation's `operationId` is the name of its `auth.api` method.
+   */
+  async openAPISchema(): Promise<AuthOpenAPISchema> {
+    // The same context object: its type is parameterized by this instance's literal options, which TypeScript holds
+    // invariant against the generator's `AuthContext<BetterAuthOptions>`.
+    const context = (await this.auth.$context) as unknown as AuthContext;
+    const schema = await generateOpenAPISchema(context);
+    const methodNames = new Map<string, string>();
+    for (const [name, endpoint] of Object.entries(this.auth.api)) {
+      const path: unknown = Reflect.get(endpoint, 'path');
+      const options: unknown = Reflect.get(endpoint, 'options');
+      if (typeof path !== 'string' || typeof options !== 'object' || !options)
+        continue;
+      const method: unknown = Reflect.get(options, 'method');
+      for (const verb of Array.isArray(method) ? method : [method]) {
+        if (typeof verb === 'string')
+          methodNames.set(`${verb.toLowerCase()} ${toOpenAPIPath(path)}`, name);
+      }
+    }
+    const used = new Set<string>();
+    const paths: Record<string, Record<string, AuthOpenAPIOperation>> = {};
+    for (const [path, item] of Object.entries(schema.paths)) {
+      const operations: Record<string, AuthOpenAPIOperation> = {};
+      for (const method of ['get', 'post', 'put', 'patch', 'delete'] as const) {
+        const operation = item[method];
+        if (!operation) continue;
+        const name =
+          methodNames.get(`${method} ${path}`) ?? operation.operationId;
+        let operationId = name;
+        if (operationId && used.has(operationId))
+          operationId = `${operationId}${method.charAt(0).toUpperCase()}${method.slice(1)}`;
+        if (operationId) used.add(operationId);
+        operations[method] = {
+          ...operation,
+          ...(operationId ? { operationId } : {}),
+        };
+      }
+      paths[path] = operations;
+    }
+    return {
+      basePath: context.options.basePath ?? '/api/auth',
+      paths,
+      components: { schemas: schema.components.schemas },
+    };
+  }
+
+  /**
+   * The name of the cookie that carries a signed-in session, as Better Auth sets it under this configuration: the cookie
+   * prefix (`advanced.cookiePrefix`), `__Secure-` in front when cookies are secure, and any `advanced.cookies` rename.
+   */
+  async sessionCookieName(): Promise<string> {
+    return (await this.auth.$context).authCookies.sessionToken.name;
   }
 
   /** @internal Used by the Authentication-owned administration service. */
@@ -255,12 +358,8 @@ export class Auth {
       try {
         context.set('auth', await this.getSession(context.req.raw.headers));
       } catch (error) {
-        if (error instanceof APIError) {
-          return context.json(
-            error.body ?? { code: error.status, message: error.message },
-            error.statusCode as ContentfulStatusCode,
-          );
-        }
+        if (error instanceof APIError)
+          return rejectedCredential(context, error);
         throw error;
       }
       await next();
@@ -278,23 +377,21 @@ export class Auth {
       let auth: AuthSession;
       try {
         auth = await this.getSession(context.req.raw.headers);
-        // A refused credential is Better Auth's APIError; answer with its own status and body.
+        // A refused credential is Better Auth's APIError; answer with its status, and its code as the reason.
       } catch (error) {
-        if (error instanceof APIError) {
-          return context.json(
-            error.body ?? { code: error.status, message: error.message },
-            error.statusCode as ContentfulStatusCode,
-          );
-        }
+        if (error instanceof APIError)
+          return rejectedCredential(context, error);
         throw error;
       }
       if (!auth) {
-        return context.json(
-          {
-            code: 'UNAUTHORIZED',
-            message: 'Authentication required',
-          },
-          401,
+        return apiErrorHandler(
+          new ApiError({
+            status: 'UNAUTHENTICATED',
+            reason: 'AUTHENTICATION_REQUIRED',
+            domain: 'authentication',
+            message: 'Authentication required.',
+          }),
+          context,
         );
       }
       context.set('auth', auth);
@@ -313,4 +410,53 @@ export function createAuthentication(
     ...options,
     connection: options.connection,
   });
+}
+
+/**
+ * Runs Better Auth's own OpenAPI generator. `better-auth/plugins` declares `generator` but does not export it at
+ * runtime, so this calls the `openAPI` plugin's endpoint function directly with the application's auth context. The
+ * plugin is never registered, so neither its `/open-api/generate-schema` route nor its `/reference` page is served.
+ */
+async function generateOpenAPISchema(context: AuthContext) {
+  return openAPI().endpoints.generateOpenAPISchema({ context });
+}
+
+/** Better Auth's `/reset-password/:token` as its generator writes it, `/reset-password/{token}`. */
+function toOpenAPIPath(path: string): string {
+  return path
+    .split('/')
+    .map((part) => (part.startsWith(':') ? `{${part.slice(1)}}` : part))
+    .join('/');
+}
+
+/** A cookie-bearing write whose origin is neither the application's own nor a trusted one. */
+function invalidCsrfOrigin(context: Context): Response {
+  return apiErrorHandler(
+    new ApiError({
+      status: 'PERMISSION_DENIED',
+      reason: 'INVALID_CSRF_ORIGIN',
+      domain: 'authentication',
+      message:
+        'The request origin is not trusted for a cookie-authenticated write.',
+    }),
+    context,
+  );
+}
+
+/** A credential Better Auth refused, answered in the standard API error body with Better Auth's code as the reason. */
+function rejectedCredential(context: Context, error: APIError): Response {
+  return apiErrorHandler(
+    new ApiError({
+      status: apiErrorStatusFromHttp(error.statusCode),
+      reason:
+        typeof error.body?.code === 'string'
+          ? error.body.code
+          : 'AUTHENTICATION_FAILED',
+      domain: 'authentication',
+      message: error.message,
+      httpStatus: error.statusCode as ContentfulStatusCode,
+      cause: error,
+    }),
+    context,
+  );
 }

@@ -20,7 +20,6 @@ import {
   type StateDefinition,
   type StateHookContext,
 } from '../src/index.js';
-import { createLifecycleRoutes } from '../src/hono.js';
 
 type ReviewState = 'draft' | 'reviewing' | 'approved';
 
@@ -512,19 +511,15 @@ describe('transitions only server code fires', () => {
     ).toEqual(['concluded', 'restart']);
   });
 
-  it('are refused by the standard routes', async () => {
+  it('are refused when the caller marks a human action', async () => {
     const h = setup();
     const id = await submitted(h);
-    const app = createLifecycleRoutes(h.runtime, {
-      actor: () => ({ id: 'zoe' }),
-    });
-    const response = await app.request(`/reviews/${id}/fire`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ transition: 'concluded' }),
-    });
-    expect(response.status).toBe(403);
-    expect(await response.json()).toMatchObject({ code: 'NOT_MANUAL' });
+    await expect(
+      h.runtime.fire('reviews', id, 'concluded', {
+        actor: { id: 'zoe' },
+        manual: true,
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_MANUAL' });
     expect(h.store.record('reviews', id)).toMatchObject({
       status: 'reviewing',
     });

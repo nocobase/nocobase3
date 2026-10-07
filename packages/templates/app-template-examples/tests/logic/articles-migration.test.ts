@@ -1,58 +1,71 @@
 // @vitest-environment node
 import path from 'node:path';
-import { createDatabaseManager } from '@nocobase/db';
-import sqlite from '@nocobase/db-sqlite';
-import type { Knex } from 'knex';
+import { createMigrator, type MigrationSource } from '@nocobase/db';
+import {
+  createTestDatabase,
+  describeMigration,
+  inspectCollection,
+} from '@nocobase/app-testing/server';
 import { expect, it } from 'vitest';
 
-it('creates article schema and metadata, preserves migration history, and reverses the schema', async () => {
-  const database = createDatabaseManager({
-    default: 'main',
-    drivers: { sqlite },
-    connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
-  });
-  try {
-    const migrator = database.createMigrator({
-      connection: 'main',
-      directory: path.resolve(
-        import.meta.dirname,
-        '../../database/main/migrations',
-      ),
-      packageName: 'articles-test',
-    });
-    await migrator.latest();
-    const connection = database.connection('main');
-    const client = await connection.client<Knex>();
-    const columns = await client('articles').columnInfo();
-    expect(Object.keys(columns)).toEqual([
+const sources: readonly MigrationSource[] = [
+  {
+    packageName: 'articles-test',
+    directory: path.resolve(
+      import.meta.dirname,
+      '../../database/main/migrations',
+    ),
+  },
+];
+
+describeMigration('202609080001_create_articles', {
+  sources,
+  up: async ({ expectCollection }) => {
+    const articles = await expectCollection('articles').toExist();
+    expect(Object.keys(articles.fields)).toEqual([
       'id',
       'title',
       'summary',
       'content',
       'status',
-      'published_at',
-      'created_at',
-      'updated_at',
+      'publishedAt',
+      'createdAt',
+      'updatedAt',
     ]);
-    expect(columns.title).toMatchObject({ nullable: false, type: 'varchar' });
-    expect(columns.content.type).toBe('text');
-    expect(columns.published_at.nullable).toBe(true);
-    expect(
-      await client('sqlite_master')
-        .where({ type: 'index', tbl_name: 'articles' })
-        .pluck('name'),
-    ).toEqual(
-      expect.arrayContaining([
-        'idx_articles_status_published_at',
-        'idx_articles_created_at',
-      ]),
-    );
+    expect(articles.primaryKey).toEqual(['id']);
+    await expectCollection('articles').toHaveField('title', {
+      type: 'string',
+      nullable: false,
+    });
+    await expectCollection('articles').toHaveField('content', {
+      type: 'text',
+    });
+    await expectCollection('articles').toHaveField('publishedAt', {
+      nullable: true,
+    });
+    await expectCollection('articles').toHaveIndex(['status', 'publishedAt']);
+    await expectCollection('articles').toHaveIndex(['createdAt']);
+  },
+  down: async ({ expectCollection }) => {
+    await expectCollection('articles').not.toExist();
+  },
+});
+
+it('applies article defaults, preserves migration history and metadata, and reverses the schema', async () => {
+  const testDatabase = await createTestDatabase();
+  try {
+    const { database, connection } = testDatabase;
+    const migrator = createMigrator({ database, sources });
+    await migrator.latest();
     const timestamp = new Date('2026-09-08T00:00:00Z');
+    // `content` is given: its default lives in the table on most dialects, but OceanBase keeps none on a TEXT column
+    // and leaves it to the Repository, so this insert, below the Repository, checks only the portable defaults.
     await database
       .query()
       .insertInto('articles')
       .values({
         title: 'First article',
+        content: '',
         createdAt: timestamp,
         updatedAt: timestamp,
       })
@@ -66,7 +79,6 @@ it('creates article schema and metadata, preserves migration history, and revers
     ).toMatchObject({
       title: 'First article',
       status: 'draft',
-      content: '',
       publishedAt: null,
     });
     await expect(
@@ -83,9 +95,12 @@ it('creates article schema and metadata, preserves migration history, and revers
       title: '文章',
     });
     await migrator.rollback();
-    expect(await client.schema.hasTable('articles')).toBe(false);
+    expect(await inspectCollection(connection, 'articles')).toBeUndefined();
+    expect(
+      await connection.collections.getPhysical('articles'),
+    ).toBeUndefined();
     expect(await connection.collectionMetadata.get('articles')).toBeUndefined();
   } finally {
-    await database.destroy();
+    await testDatabase.destroy();
   }
 });

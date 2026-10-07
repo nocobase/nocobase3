@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-api-keys",
   "displayName": "API Keys App Plugin",
   "description": "API key authentication for NocoBase applications, built on Better Auth.",
-  "version": "0.1.0-beta.10",
+  "version": "1.0.0-beta.12",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -90,8 +90,9 @@
     "tailwind-merge": "catalog:"
   },
   "devDependencies": {
-    "@nocobase/db-sqlite": "workspace:*",
+    "@nocobase/app-testing": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
+    "@testing-library/react": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "eslint": "catalog:",
@@ -101,7 +102,6 @@
     "tailwindcss": "catalog:",
     "tw-animate-css": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:",
-    "@testing-library/react": "catalog:"
+    "vitest": "catalog:"
   }
 }

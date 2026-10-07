@@ -13,7 +13,7 @@ Sections 1–7, 9–12, 14, 15, 17–19, 21 and 25 are run by `tests/recipes.tes
 | Effects and the outside | [9. A background process in steps](#9-a-background-process-in-steps) · [10. Pay and continue](#10-pay-and-continue-after-the-external-call) · [11. Confirm by webhook](#11-confirm-by-webhook) · [12. Refuse while an effect is in flight](#12-refuse-while-an-effect-is-in-flight) · [13. Write related data with the transition](#13-write-related-data-with-the-transition) |
 | Several records         | [14. Wait for every signer](#14-wait-for-every-signer) · [15. Wait for child tasks](#15-wait-for-child-tasks) · [16. Dispatch sub-records repeatedly](#16-dispatch-sub-records-repeatedly) · [17. Two lifecycles on one record](#17-two-lifecycles-on-one-record) · [18. Act on many records at once](#18-act-on-many-records-at-once)                                         |
 | Extending and adopting  | [19. Add a rule from another plugin](#19-add-a-rule-from-another-plugin) · [20. A to-do list from announce](#20-a-to-do-list-from-announce) · [21. Configuration](#21-configuration-fields-initial-states-and-administrator-parameters) · [22. Adopt an existing table](#22-adopt-an-existing-table)                                                                           |
-| Operating               | [23. An operations page](#23-an-operations-page) · [24. Duplicate requests and stale pages](#24-duplicate-requests-and-stale-pages) · [25. A data fix as a transition](#25-a-data-fix-as-a-transition) · [26. Permissions on the standard routes](#26-permissions-on-the-standard-routes)                                                                                      |
+| Operating               | [23. An operations page](#23-an-operations-page) · [24. Duplicate requests and stale pages](#24-duplicate-requests-and-stale-pages) · [25. A data fix as a transition](#25-a-data-fix-as-a-transition) · [26. Permissions on the record routes](#26-permissions-on-the-record-routes)                                                                                          |
 | Pages and tests         | [27. A record page](#27-a-record-page-reasons-field-problems-conflicts-and-meta) · [28. Testing waits, retries and refusals](#28-testing-waits-retries-and-refusals)                                                                                                                                                                                                           |
 
 ## Modelling transitions
@@ -317,7 +317,7 @@ const reserveStock = defineEffect({
   name: 'orders.reserveStock',
   retry: { attempts: 3, backoffMs: 5_000, factor: 2 },
   onSuccess: 'reserved', // fired as the system with the result as input
-  onFailure: 'backordered', // fired as the system with { error } as input
+  onFailure: 'backordered', // fired as the system with { error } as input, plus errorCode and details for an EffectFailure
   run: ({ record, idempotencyKey, services }) =>
     services.inventory.reserve(record.items, { idempotencyKey }),
 });
@@ -358,14 +358,23 @@ const requestPayment = defineEffect({
   onSuccess: 'paid',
   onFailure: 'paymentFailed',
   run: async ({ record, services, signal }) => {
-    const payment = await services.payments.pay({
-      amountCents: record.amountCents,
-      recipientId: record.applicantId,
-      // One key per report, not per run: see below.
-      idempotencyKey: `expense-payment:${record.id}`,
-      signal,
-    });
-    return { paymentRef: payment.reference };
+    try {
+      const payment = await services.payments.pay({
+        amountCents: record.amountCents,
+        recipientId: record.applicantId,
+        // One key per report, not per run: see below.
+        idempotencyKey: `expense-payment:${record.id}`,
+        signal,
+      });
+      return { paymentRef: payment.reference };
+    } catch (error) {
+      // A frozen account is an answer: fail at once, with a code to branch on.
+      if (error instanceof PayeeFrozen)
+        throw new EffectFailure('payeeFrozen', 'The payee account is frozen.', {
+          details: { payeeId: record.applicantId },
+        });
+      throw error;
+    }
   },
 });
 
@@ -381,8 +390,11 @@ paid: {
 },
 paymentFailed: {
   from: 'approved',
-  to: 'paymentNeedsAttention',
+  to: ['paymentNeedsAttention', 'needsNewAccount'],
   guard: systemOnly,
+  // input is { error, errorCode, details } for an EffectFailure, { error } otherwise.
+  route: ({ input }) =>
+    input.errorCode === 'payeeFrozen' ? 'needsNewAccount' : 'paymentNeedsAttention',
   accept: ['error'],
 },
 retryPayment: {
@@ -394,7 +406,9 @@ retryPayment: {
 
 The effect's own `idempotencyKey` is the same on every attempt of one run, but `retryPayment` re-enters `approved` and so creates a new run with a new key. If an earlier attempt did pay and only its response was lost — a timeout, say — a key per run would let the second run pay again. The business key above, one per report, makes the payment service refuse the duplicate; where the service has no idempotency, look the payment up by that key before paying.
 
-`retryRun()` on the failed run does not undo `onFailure`: a late success would try `paid` from `paymentNeedsAttention` and be refused with `INVALID_STATE`. Decide the recovery path explicitly, as `retryPayment` does here. Pass `signal` to services that can cancel.
+An effect that knows why it failed throws an `EffectFailure`: it is not retried unless it passes `retry: true`, and `onFailure` receives its `code` as `errorCode` and its `details` as they are, so the route branches on a code rather than on the wording of a message.
+
+`retryRun()` on the failed run is refused with `RUN_SETTLED` once `paymentFailed` has moved the report on: a payment made now would leave the report waiting for attention with the money gone, because `paid` cannot start from `paymentNeedsAttention`. Recover through the record's own transitions, as `retryPayment` does here. When the provider confirms the failed attempts paid nothing, `retryRun(id, { force: true, reason })` runs it anyway, and a success still continues only if the state allows `onSuccess`. A continuation's log entry carries `$run:<runId>:failed` or `:succeeded` as its `requestId`, which is how the runtime knows, and why a run continues its record at most once per outcome. Pass `signal` to services that can cancel.
 
 ### 11. Confirm by webhook
 
@@ -427,10 +441,13 @@ router.post('/payments/callback', async (c) => {
       },
     );
   } catch (error) {
-    // The record has moved on or is gone: acknowledge, so the provider stops retrying.
+    // The record has moved on or is gone, or the event's id already carried
+    // the other outcome: acknowledge, so the provider stops retrying.
     if (
       error instanceof LifecycleError &&
-      (error.code === 'INVALID_STATE' || error.code === 'RECORD_NOT_FOUND')
+      (error.code === 'INVALID_STATE' ||
+        error.code === 'RECORD_NOT_FOUND' ||
+        error.code === 'REQUEST_REUSED')
     )
       return c.body(null, 204);
     // A conflict or a database failure answers 500, and the provider retries.
@@ -440,7 +457,7 @@ router.post('/payments/callback', async (c) => {
 });
 ```
 
-A replay returns the first log entry with `replayed: true` and the record as it is now. Acknowledge only what can never succeed; a `CONFLICT` may succeed on the provider's next delivery, and a store failure certainly should be retried.
+A replay returns the first log entry with `replayed: true` and the record as it is now. The same `requestId` sent for another transition, or by another actor, is not a replay but `REQUEST_REUSED`, and changes nothing. Acknowledge only what can never succeed; a `CONFLICT` may succeed on the provider's next delivery, and a store failure certainly should be retried.
 
 ### 12. Refuse while an effect is in flight
 
@@ -448,10 +465,12 @@ A report whose payment is queued or running cannot be withdrawn: withdrawing wou
 
 ```ts
 // The plugin's service, bound to the transaction like any other a guard reads.
+// available(), view() and can() ask the guard outside any transaction and
+// hand the factory no handle: read through the database manager then.
 const effectRuns = {
   bound: (handle) => ({
     inFlight: (lifecycle, recordId, effect) =>
-      handle
+      (handle ?? database)
         .repository('lifecycleEffectRuns') // the store's effectRuns collection
         .count({
           filter: (f) =>
@@ -563,12 +582,13 @@ complete: {
     return (await services.tasks.countOpen(record.id)) === 0 || {
       code: 'openTasks',
       message: 'Finish the outstanding tasks first.',
+      kind: 'precondition', // the owner may act once they are done: 400, not 403
     };
   },
 },
 ```
 
-The guard admits the system as well as the owner, so the last task can finish the document. Give the task's finishing transition an effect that does so:
+The guard admits the system as well as the owner, so the last task can finish the document. The open tasks are a `precondition` rather than a missing permission, so the owner's route answers `400 FAILED_PRECONDITION` and the page says what is outstanding, while a stranger still gets `403`. Give the task's finishing transition an effect that does so:
 
 ```ts
 const nudgeParent = defineEffect({
@@ -595,7 +615,7 @@ const nudgeParent = defineEffect({
 });
 ```
 
-The guard alone is not enough when another transaction can create a child while the completion is being decided. Create children in a transaction that first touches the parent while it is still in the right state, bumping its version, so a `complete` decided on a stale count meets a conflict:
+The guard alone is not enough when another transaction can create a child while the completion is being decided. Create children in a transaction that first touches the parent while it is still in the right state, bumping its version, so a `complete` decided on a stale count meets a conflict, and create the child through its own lifecycle inside that transaction:
 
 ```ts
 async createTask(parentId, values) {
@@ -605,21 +625,17 @@ async createTask(parentId, values) {
       values: { lifecycleVersion: { increment: 1 } },
     });
     if (open.updatedCount === 0) return undefined; // the parent moved on
-    const created = await connection.repository('tasks').createOne({
-      values: {
-        ...values,
-        parentId,
-        status: 'pending',
-        statusChangedAt: this.now(),
-        lifecycleVersion: 0,
-      },
-    });
-    return created.record;
+    const { record } = await this.runtime.create(
+      'tasks',
+      { ...values, parentId },
+      { actor: SYSTEM_ACTOR, transaction: connection },
+    );
+    return record;
   });
 }
 ```
 
-This insert writes the child's lifecycle fields itself, which is a deliberate exception to creating records through `runtime.create()`: that method always opens a transaction of its own and cannot join this one, so the child gets no `$create` log entry and its initial state's `onEnter` does not run. Keep `onEnter` of the child's initial state empty, or fire its first step after the transaction commits. Decide as explicitly how reopening a task relates to a parent that is already `done`. `OfficeStore.createExtraction()` in the office flows example is the complete version.
+`transaction: connection` nests the creation in the caller's transaction as a savepoint: the child gets its `$create` log entry and owes its initial state's `onEnter` effects, which are dispatched once the outer transaction commits and dropped if it rolls back. A refused creation undoes only its own writes, so the caller may catch it and go on. The same option on `fire()` lets a child's last transition move its parent on in the same commit, from `onTransition` with its `transactionHandle`, instead of through `nudgeParent`: a parent that refuses then refuses the child's transition too, rather than leaving it finished with a parent that never heard. Keep the effect where the parent may legitimately say no, or be busy, without the child having to wait for it. Decide as explicitly how reopening a task relates to a parent that is already `done`. `OfficeStore.createExtraction()` in the office flows example touches the parent the same way, and inserts the task directly.
 
 ### 16. Dispatch sub-records repeatedly
 
@@ -800,6 +816,17 @@ const contractLifecycle = defineLifecycle({
   changedAtField: 'stageChangedAt', // defaults to 'statusChangedAt'
   versionField: 'stageVersion', // defaults to 'lifecycleVersion'
   initial: ['draft', 'signed'], // the first is the default; the others must be asked for
+  create: {
+    validate: (values) =>
+      values.customerId
+        ? null
+        : [{ field: 'customerId', message: 'Choose a customer.' }],
+    // Only an import may create a contract already signed.
+    guard: ({ state, actor }) =>
+      state !== 'signed' ||
+      actor.system === true ||
+      'Only an import creates signed contracts.',
+  },
   parameters: { remindAfterDays: 14 },
   // …
 });
@@ -821,7 +848,7 @@ runtime.register(contractLifecycle, {
 });
 ```
 
-`parameters` is called synchronously on every transition and every sweep, so it reads memory, never the database: an `async` function is refused by the type checker, and its promise would otherwise be spread into nothing and the defaults used silently. With several instances, each keeps its own copy, so `onChange` must reach all of them — through the application's pub/sub, or by restarting. Who may create a contract directly in `signed` is the plugin's decision: keep that path on a system-only route.
+`parameters` is called synchronously on every transition and every sweep, so it reads memory, never the database: an `async` function is refused by the type checker, and its promise would otherwise be spread into nothing and the defaults used silently. With several instances, each keeps its own copy, so `onChange` must reach all of them — through the application's pub/sub, or by restarting. `create` is checked by every `runtime.create()`, whichever route, import or script calls it: `validate` reads the values first, then `guard` sees the values, the state asked for and the actor, and refuses as a transition's guard does, so the create form shows the same blockers and problems.
 
 ### 22. Adopt an existing table
 
@@ -854,15 +881,17 @@ Before deploying, check that every value already in `status` is a state of the d
 An operator sees the failed and dead runs across all records, retries or cancels them, and old finished runs are pruned.
 
 ```ts
-// The plugin's own route: the standard routes only list runs per record.
-router.get('/expenses/ops/runs', requireOperator, async (c) =>
-  c.json(
-    await runtime.listEffectRuns({
-      lifecycle: 'expenses',
-      status: c.req.query('status') ?? 'failed', // or 'dead', 'queued'
-      limit: 100,
-    }),
-  ),
+// The plugin's own route: the record routes only operate the runs of one record.
+router.get(
+  '/expenses/effectRuns',
+  requireOperator, // the permission first, then the declaration and the validators
+  describeRoute({ tags, summary: 'List effect runs', operationId: 'expensesListEffectRuns', responses }),
+  apiValidator('query', ListRunsQuery), // { status: 'failed' | 'dead' | 'queued', pageSize }
+  async (c) => {
+    const { status, pageSize } = c.req.valid('query');
+    const runs = await runtime.listEffectRuns({ lifecycle: 'expenses', status, limit: pageSize });
+    return c.json({ data: runs, meta: { total: runs.length } });
+  },
 );
 
 // createLifecycleJobs({ onSweep })
@@ -874,7 +903,7 @@ onSweep: async () => {
 ```tsx
 function FailedRuns() {
   const { client } = useExpenseLifecycle('expenses', undefined); // no record selected: just the client
-  const runs = useLoader(() => api.get('/expenses/ops/runs?status=failed')); // the plugin's own loader
+  const runs = useLoader(() => api.get('/expenses/effectRuns?status=failed')); // the plugin's own loader
   return runs.map((run) => (
     <Row key={run.id}>
       {run.effect} · {run.error} · {run.attempts}/{run.maxAttempts}
@@ -894,7 +923,7 @@ function FailedRuns() {
 }
 ```
 
-Retry and cancel go through the standard routes, which refuse `operate` unless `authorize` allows it ([section 26](#26-permissions-on-the-standard-routes)). A run marked `registered: false` names an effect this process does not know — usually a renamed effect — and `retryRun()` refuses it with `UNKNOWN_EFFECT`; register the old name again or cancel it. A `dead` run ended without recording an outcome on every attempt, typically because the process crashed in it: find out why before retrying. A retry grants a fresh budget of attempts and counts on from the ones before.
+Retry and cancel go through the record routes, behind the plugin's operator permission ([section 26](#26-permissions-on-the-record-routes)). A run marked `registered: false` names an effect this process does not know — usually a renamed effect — and `retryRun()` refuses it with `UNKNOWN_EFFECT`; register the old name again or cancel it. A `dead` run ended without recording an outcome on every attempt, typically because the process crashed in it: find out why before retrying. A retry grants a fresh budget of attempts and counts on from the ones before. A run whose `onFailure` already moved the record on is refused with `RUN_SETTLED`; recover through the record's transitions, or pass `{ force: true, reason }` to `client.retryRun()` when the failed attempts are known to have done nothing.
 
 ### 24. Duplicate requests and stale pages
 
@@ -910,7 +939,7 @@ await runtime.fire('expenses', expenseId, 'approve', {
 });
 ```
 
-A `CONFLICT` means the record changed since the page was loaded: reload and let the person decide again; do not retry with the newer version. A repeated `requestId` replays the earlier log entry, marked `replayed`, and returns the record as it is now. The React hook sends a fresh key and the displayed version per `fire()` call, so calling it again is a new decision. For a webhook, derive the key from the sender's delivery id, namespaced by source, as in [section 11](#11-confirm-by-webhook).
+A `CONFLICT` means the record changed since the page was loaded: reload and let the person decide again; do not retry with the newer version. A repeated `requestId` replays the earlier log entry, marked `replayed`, and returns the record as it is now; the same key sent for another transition is refused with `REQUEST_REUSED`, so a key spent on one decision cannot swallow another. The React hook sends a fresh key and the displayed version per `fire()` call, so calling it again is a new decision. For a webhook, derive the key from the sender's delivery id, namespaced by source, as in [section 11](#11-confirm-by-webhook).
 
 ### 25. A data fix as a transition
 
@@ -937,30 +966,30 @@ for (const id of stuckIds)
 
 Never update the state field directly: it bypasses the guards, the log, the effects and the version check, and leaves no record of who did it.
 
-### 26. Permissions on the standard routes
+### 26. Permissions on the record routes
 
-Guards express business rules; `authorize` on the routes is where access control goes. Map each transition to a permission and keep `operate` for operators.
+Guards express business rules; the routes' middleware is where access control goes. Check the permission ahead of `describeRoute()` and the validators, as every route does, so a caller without it is answered `403` whatever it sent, and map each transition to a permission when transitions need their own.
 
 ```ts
-createLifecycleRoutes(runtime, {
-  lifecycles: ['expenses'],
-  actor: (c) => ({ id: String(c.get('auth').user.id) }),
-  authorize: async (access, actor, c) => {
-    const acl = c.get('acl');
-    switch (access.action) {
-      case 'describe':
-      case 'read':
-        return acl.can(actor.id, `${access.lifecycle}:read`);
-      case 'fire':
-        return acl.can(actor.id, `${access.lifecycle}:${access.transition}`);
-      case 'operate':
-        return acl.can(actor.id, 'lifecycle:operate');
-    }
-  },
+// Reading a record and its lifecycle.
+router.use('/expenses/:expenseId', requirePermission('expenses', 'read'));
+// Firing: which transition is in the body, so the check reads it.
+router.post('/expenses/:expenseId/fire', async (c, next) => {
+  const { transition } = await c.req.json<{ transition?: string }>();
+  await c.var.authz.require({
+    resource: { type: 'expenses' },
+    action: `fire:${String(transition)}`,
+  });
+  await next();
 });
+// Operating runs is for operators only.
+router.use(
+  '/expenses/:expenseId/effectRuns/*',
+  requirePermission('lifecycle', 'operate'),
+);
 ```
 
-`authorize` runs before the lifecycle's own guards, so a person without the permission never learns the business reason, and a person with it still meets the guard's blockers on the page.
+The permission is checked before the lifecycle's own guards, so a person without it never learns the business reason, and a person with it still meets the guard's blockers on the page.
 
 ## Pages and tests
 
@@ -1052,11 +1081,11 @@ function LeaveActions({ id }: { id: string }) {
 }
 ```
 
-`view.available` and a refusal carry the same blockers, so the greyed-out button and the click say the same thing. A refusal from `validate` is `INVALID_INPUT` with `problems`, one per field where the definition named one; a guard refusal is `GUARD_REJECTED` with `blockers`. `meta` is whatever JSON the definition puts there — the library only passes it through `describe()`. State titles and colours come the same way from `description.description.stateInfo`. The lifecycle example's `client/lib/api.ts` is the complete version of the translation.
+`view.available` and a refusal carry the same blockers, so the greyed-out button and the click say the same thing. A refusal from `validate` is `INVALID_INPUT` with `problems`, one per field where the definition named one, and comes before any guard is asked; a guard refusal is `GUARD_REJECTED` with `blockers`. A button whose answer depends on its input, one per line of a report, asks `runtime.can(name, id, 'approveLine', actor, { input: { line } })` rather than reading `available`, which asks with no input. `meta` is whatever JSON the definition puts there — the library only passes it through `describe()`. State titles and colours come the same way from `description.description.stateInfo`. The lifecycle example's `client/lib/api.ts` is the complete version of the translation.
 
 ### 28. Testing waits, retries and refusals
 
-The test kit runs a lifecycle on a memory store with a clock to advance; `fire()` returns once every effect it caused, and every transition those fired, has finished.
+The test kit runs a lifecycle on a memory store with a clock to advance; `fire()` returns once every effect it caused, and every transition those fired, has finished. A retry with a backoff is the exception: it waits for the fake clock as it would wait for the real one, and runs on the `runDue()` after `advance()` has passed its `runAfter`. `retries: 'immediate'` runs every retry at once instead, for a test about what the attempts do rather than when.
 
 ```ts
 const kit = createLifecycleTestKit(expenseLifecycle, {
@@ -1080,13 +1109,19 @@ it('escalates to the next manager after three idle days', async () => {
   expect(await kit.history(report)).toEqual(['$create', 'submit', 'escalate']);
 });
 
-it('pays after one failed attempt', async () => {
+it('pays after one failed attempt, once its backoff has passed', async () => {
   const report = await kit.start(
     { applicantId: 'alice', amountCents: 300_000 },
     { actor: 'alice' },
   );
   kit.failEffect('expenses.requestPayment', { times: 1 });
   await kit.fire(report, 'submit', {}, { actor: 'alice' });
+  // requestPayment backs off 2 seconds before its second attempt.
+  expect(kit.get(report).status).toBe('approved');
+  kit.advance({ seconds: 1 });
+  expect(await kit.runDue()).toBe(0);
+  kit.advance({ seconds: 1 });
+  expect(await kit.runDue()).toBe(1);
   expect(kit.get(report).status).toBe('paid');
   expect(await kit.effectRuns(report)).toMatchObject([
     { effect: 'expenses.notifyApplicant', status: 'succeeded' },
@@ -1110,7 +1145,7 @@ it('refuses an approval from anyone but the approver, and says why', async () =>
 });
 ```
 
-The kit covers definitions; the Repository store, migrations, routes and sweeps need a database. A provider test against SQLite with the plugin's migration applied covers that wiring once, as `tests/provider.test.ts` does in the lifecycle example.
+The kit covers definitions; the Repository store, migrations, routes and sweeps need a database. A provider test on the test database (SQLite by default) with the plugin's migration applied covers that wiring once, as `tests/provider.test.ts` does in the lifecycle example.
 
 ## From a recipe to a working plugin
 

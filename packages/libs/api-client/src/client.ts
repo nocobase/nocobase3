@@ -172,8 +172,11 @@ function throwResponseError(
     {
       status: executed.response.status,
       payload,
-      requestId: executed.response.headers.get('x-request-id') ?? undefined,
-      code: readErrorCode(payload),
+      requestId:
+        executed.response.headers.get('x-request-id') ??
+        readErrorField(payload, 'requestId'),
+      reason: readErrorField(payload, 'reason'),
+      domain: readErrorField(payload, 'domain'),
       method: executed.method,
       url: executed.url,
     },
@@ -195,12 +198,15 @@ function readErrorMessage(payload: unknown, status: number): string {
   return `API request failed (${status})`;
 }
 
-function readErrorCode(payload: unknown): string | undefined {
-  if (!payload || typeof payload !== 'object') return undefined;
-  const record = payload as {
-    readonly code?: unknown;
-    readonly error?: { readonly code?: unknown };
-  };
-  if (typeof record.error?.code === 'string') return record.error.code;
-  return typeof record.code === 'string' ? record.code : undefined;
+function readErrorField(
+  payload: unknown,
+  field: 'reason' | 'domain' | 'requestId',
+): string | undefined {
+  if (!isRecord(payload) || !isRecord(payload.error)) return undefined;
+  const value = payload.error[field];
+  return typeof value === 'string' ? value : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

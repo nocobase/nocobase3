@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-hub",
   "displayName": "Application Hub",
   "description": "Create, configure, release, and deploy applications through a managed app host.",
-  "version": "1.0.0-beta.24",
+  "version": "2.0.0-beta.0",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -78,12 +78,13 @@
   "dependencies": {
     "@nocobase/app-host": "workspace:^",
     "@nocobase/drive": "workspace:^",
+    "@nocobase/logging": "workspace:^",
     "@sinclair/typebox": "catalog:",
+    "better-auth": "catalog:",
     "hono": "catalog:",
     "tar": "catalog:",
     "yaml": "^2.8.1",
-    "better-auth": "catalog:",
-    "@nocobase/logging": "workspace:^"
+    "zod": "catalog:"
   },
   "peerDependencies": {
     "@base-ui/react": "catalog:",
@@ -111,22 +112,22 @@
     "react-day-picker": "10.0.1"
   },
   "devDependencies": {
-    "@nocobase/db-sqlite": "workspace:*",
+    "@nocobase/app-testing": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@nocobase/hub-cli": "workspace:*",
+    "@testing-library/jest-dom": "catalog:",
+    "@testing-library/react": "catalog:",
+    "@testing-library/user-event": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "eslint": "catalog:",
+    "jsdom": "catalog:",
+    "knex": "catalog:",
     "prettier": "catalog:",
     "shadcn": "catalog:",
     "tailwindcss": "catalog:",
     "tw-animate-css": "catalog:",
     "typescript": "catalog:",
-    "@testing-library/jest-dom": "catalog:",
-    "@testing-library/react": "catalog:",
-    "@testing-library/user-event": "catalog:",
-    "knex": "catalog:",
-    "jsdom": "catalog:",
     "vitest": "catalog:"
   }
 }

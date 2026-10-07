@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-authentication",
   "displayName": "Authentication App Plugin",
   "description": "Authentication plugin for NocoBase applications.",
-  "version": "1.0.0-beta.24",
+  "version": "2.0.0-beta.0",
   "type": "module",
   "sideEffects": false,
   "prettier": "@nocobase/dev-config/prettier",
@@ -19,6 +19,10 @@
     "./server": {
       "types": "./server/index.ts",
       "import": "./server/index.ts"
+    },
+    "./testing": {
+      "types": "./server/testing.ts",
+      "import": "./server/testing.ts"
     },
     "./client": {
       "types": "./client/index.ts",
@@ -43,6 +47,10 @@
       "./server": {
         "types": "./dist/server/index.d.ts",
         "import": "./dist/server/index.js"
+      },
+      "./testing": {
+        "types": "./dist/server/testing.d.ts",
+        "import": "./dist/server/testing.js"
       },
       "./client": {
         "types": "./dist/client/index.d.ts",
@@ -99,7 +107,7 @@
     "@nocobase/app-client": "workspace:*",
     "@nocobase/app-server": "workspace:*",
     "@nocobase/db": "workspace:*",
-    "@nocobase/db-sqlite": "workspace:*",
+    "@nocobase/app-testing": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@nocobase/service-provider": "workspace:*",
     "@testing-library/jest-dom": "catalog:",
@@ -114,12 +122,12 @@
     "prettier": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
+    "react-router": "catalog:",
     "shadcn": "^4.13.1",
     "tailwind-merge": "^3.2.0",
     "tailwindcss": "catalog:",
     "tw-animate-css": "^1.2.5",
     "typescript": "catalog:",
-    "vitest": "catalog:",
-    "react-router": "catalog:"
+    "vitest": "catalog:"
   }
 }

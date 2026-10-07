@@ -5,7 +5,7 @@ import type { RecordView } from './runtime.js';
 import type { JsonObject } from './types.js';
 import type { FireView, LifecycleDescriptionView } from './views.js';
 
-export type { Blocker, InputProblem } from './errors.js';
+export type { Blocker, BlockerKind, InputProblem } from './errors.js';
 export type {
   AvailableTransition,
   RecordHistory,
@@ -34,7 +34,10 @@ export interface LifecycleTransport {
 
 export interface LifecycleClientOptions {
   readonly transport: LifecycleTransport;
-  /** Where the plugin mounted `createLifecycleRoutes()`. */
+  /**
+   * Where the plugin's lifecycle routes start: `<basePath>/<lifecycle>/…`
+   * as {@link createLifecycleClient} lists them.
+   */
   readonly basePath: string;
   /** Sent with every request, such as who a demo page acts as. */
   readonly query?: Record<string, string>;
@@ -48,7 +51,23 @@ export interface FireRequest {
   readonly expectVersion?: number | null;
 }
 
-/** Talks to the routes `createLifecycleRoutes()` mounts. */
+export interface RetryRequest {
+  /** Retry a run whose `onFailure` already moved the record on; see `runtime.retryRun()`. */
+  readonly force?: boolean;
+  /** Why it is forced, for the server's log. */
+  readonly reason?: string;
+}
+
+/**
+ * Talks to the routes a plugin serves for its lifecycles, below its
+ * `basePath`, each answering `{ data }` and refusing with the standard error
+ * body — the fields `lifecycleErrorFields()` gives:
+ *
+ * - `GET <lifecycle>/lifecycle` — `LifecycleDescriptionView`
+ * - `GET <lifecycle>/{id}` — `RecordView`
+ * - `POST <lifecycle>/{id}/fire` with `{ transition, input, requestId, expectVersion? }` — `FireView`
+ * - `POST <lifecycle>/{id}/effectRuns/{runId}/retry` with `{ force?, reason? }`, and `…/cancel` — `RecordView`
+ */
 export interface LifecycleClient {
   describe(lifecycle: string): Promise<LifecycleDescriptionView>;
   view(lifecycle: string, id: string): Promise<RecordView>;
@@ -58,15 +77,24 @@ export interface LifecycleClient {
     transition: string,
     request?: FireRequest,
   ): Promise<FireView>;
-  retryRun(lifecycle: string, id: string, runId: string): Promise<RecordView>;
+  retryRun(
+    lifecycle: string,
+    id: string,
+    runId: string,
+    request?: RetryRequest,
+  ): Promise<RecordView>;
   cancelRun(lifecycle: string, id: string, runId: string): Promise<RecordView>;
 }
 
-/** A refusal as the routes answer it, with what a page shows. */
+/**
+ * A refusal as the routes answer it, read from the standard error body:
+ * `reason` is the lifecycle's code, such as `GUARD_REJECTED`, and the
+ * blockers and problems are what a page shows.
+ */
 export class LifecycleRequestError extends Error {
   public constructor(
     message: string,
-    public readonly code: string,
+    public readonly reason: string,
     public readonly blockers: readonly Blocker[],
     public readonly problems: readonly InputProblem[],
   ) {
@@ -75,19 +103,30 @@ export class LifecycleRequestError extends Error {
   }
 }
 
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** A blocker as a route sent it; one without a `kind` is a `permission` refusal, as an unmarked guard's is. */
+function withKind(blocker: unknown): Blocker {
+  if (!isObject(blocker) || blocker.kind !== undefined)
+    return blocker as Blocker;
+  return { ...(blocker as Omit<Blocker, 'kind'>), kind: 'permission' };
+}
+
+/** `{ error: { reason, message, metadata: { blockers, problems } } }`, from the transport's error `payload`. */
 function refusalOf(cause: unknown): unknown {
-  if (typeof cause !== 'object' || cause === null) return cause;
-  const payload = (cause as { payload?: unknown }).payload;
-  if (typeof payload !== 'object' || payload === null) return cause;
-  const body = payload as Partial<
-    Record<'code' | 'message' | 'blockers' | 'problems', unknown>
-  >;
-  if (typeof body.message !== 'string') return cause;
+  if (!isObject(cause) || !isObject(cause.payload)) return cause;
+  const body = cause.payload.error;
+  if (!isObject(body) || typeof body.message !== 'string') return cause;
+  const metadata = isObject(body.metadata) ? body.metadata : {};
   return new LifecycleRequestError(
     body.message,
-    typeof body.code === 'string' ? body.code : 'ERROR',
-    Array.isArray(body.blockers) ? (body.blockers as Blocker[]) : [],
-    Array.isArray(body.problems) ? (body.problems as InputProblem[]) : [],
+    typeof body.reason === 'string' ? body.reason : 'ERROR',
+    Array.isArray(metadata.blockers) ? metadata.blockers.map(withKind) : [],
+    Array.isArray(metadata.problems)
+      ? (metadata.problems as InputProblem[])
+      : [],
   );
 }
 
@@ -120,19 +159,22 @@ export function createLifecycleClient(
 ): LifecycleClient {
   const base = options.basePath.replace(/\/+$/, '');
   const send = async <T>(request: LifecycleRequest): Promise<T> => {
+    let body: { readonly data: T };
     try {
-      return await options.transport.request<T>({
+      body = await options.transport.request<{ readonly data: T }>({
         ...request,
         ...(options.query ? { query: options.query } : {}),
       });
     } catch (cause) {
       throw refusalOf(cause);
     }
+    return body.data;
   };
   const record = (lifecycle: string, id: string): string =>
     `${base}/${segment(lifecycle)}/${segment(id)}`;
   return {
-    describe: (lifecycle) => send({ path: `${base}/${segment(lifecycle)}` }),
+    describe: (lifecycle) =>
+      send({ path: `${base}/${segment(lifecycle)}/lifecycle` }),
     view: (lifecycle, id) => send({ path: record(lifecycle, id) }),
     fire: (lifecycle, id, transition, request = {}) =>
       send({
@@ -147,15 +189,16 @@ export function createLifecycleClient(
             : { expectVersion: request.expectVersion }),
         },
       }),
-    retryRun: (lifecycle, id, runId) =>
+    retryRun: (lifecycle, id, runId, request = {}) =>
       send({
         method: 'POST',
-        path: `${record(lifecycle, id)}/runs/${segment(runId)}/retry`,
+        path: `${record(lifecycle, id)}/effectRuns/${segment(runId)}/retry`,
+        json: request,
       }),
     cancelRun: (lifecycle, id, runId) =>
       send({
         method: 'POST',
-        path: `${record(lifecycle, id)}/runs/${segment(runId)}/cancel`,
+        path: `${record(lifecycle, id)}/effectRuns/${segment(runId)}/cancel`,
       }),
   };
 }
@@ -180,7 +223,8 @@ export interface UseLifecycleResult {
    * carrying the blockers or problems.
    */
   readonly fire: (transition: string, input?: JsonObject) => Promise<FireView>;
-  readonly retryRun: (runId: string) => Promise<void>;
+  /** Rejects with `RUN_SETTLED` when the run's `onFailure` already moved the record on, unless forced. */
+  readonly retryRun: (runId: string, request?: RetryRequest) => Promise<void>;
   readonly cancelRun: (runId: string) => Promise<void>;
   readonly reload: () => Promise<void>;
 }
@@ -277,8 +321,8 @@ export function useLifecycle(
             ...(view ? { expectVersion: view.version } : {}),
           }),
         ),
-      retryRun: async (runId: string) => {
-        await act(() => client.retryRun(lifecycle, id ?? '', runId));
+      retryRun: async (runId: string, request: RetryRequest = {}) => {
+        await act(() => client.retryRun(lifecycle, id ?? '', runId, request));
       },
       cancelRun: async (runId: string) => {
         await act(() => client.cancelRun(lifecycle, id ?? '', runId));
@@ -296,7 +340,7 @@ export interface LifecycleHookOptions {
    * the rules of hooks like any other.
    */
   readonly useTransport: () => LifecycleTransport;
-  /** Where the plugin mounted `createLifecycleRoutes()`. */
+  /** Where the plugin's lifecycle routes start; see {@link createLifecycleClient}. */
   readonly basePath: string;
   /** How often an open record refreshes. Defaults to 4 s; 0 turns it off. */
   readonly refreshMs?: number;

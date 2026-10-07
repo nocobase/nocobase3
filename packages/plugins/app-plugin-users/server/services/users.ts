@@ -89,7 +89,7 @@ class DefaultUserManagementService implements UserManagementService {
           'Role filtering requires both roleScope and role',
         );
       }
-      const scope = this.requireScope(input.roleScope);
+      const scope = this.requireScope(input.roleScope, 400);
       userIds = await scope.findUserIds(input.role, connection);
     }
     const page = await this.services.users.list({
@@ -105,6 +105,18 @@ class DefaultUserManagementService implements UserManagementService {
     };
   }
 
+  /**
+   * Role scopes feed the user's permission snapshot, so its clients are told
+   * once the change has committed, and not at all if it rolls back.
+   */
+  private afterRoleScopesCommit(
+    connection: DatabaseConnection,
+    userId: string,
+  ): void {
+    const changed = this.services.onRoleScopesChanged;
+    if (changed) connection.afterCommit(() => changed(userId));
+  }
+
   async create(input: CreateManagedUserInput): Promise<ManagedUser> {
     const submitted = input.roleScopes ?? {};
     this.validateCreateRoleScopes(submitted);
@@ -113,14 +125,18 @@ class DefaultUserManagementService implements UserManagementService {
         const users = this.services.users.withConnection(connection);
         const created = await users.create(input);
         for (const [key, value] of Object.entries(submitted)) {
-          await this.requireScope(key).replace(created.id, value, connection);
+          await this.requireScope(key, 400).replace(
+            created.id,
+            value,
+            connection,
+          );
+        }
+        if (Object.keys(submitted).length > 0) {
+          this.afterRoleScopesCommit(connection, created.id);
         }
         return created;
       },
     );
-    if (Object.keys(submitted).length > 0) {
-      await this.services.onRoleScopesChanged?.(user.id);
-    }
     return this.withRoleScopes(user, this.services.database.connection());
   }
 
@@ -186,12 +202,17 @@ class DefaultUserManagementService implements UserManagementService {
         ?.withTransaction(connection)
         .assertSubjectRemovable({ type: 'user', id: userId });
       const users = this.services.users.withConnection(connection);
-      if (!(await users.get(userId))) return;
+      if (!(await users.get(userId)))
+        throw new UserManagementError(
+          'USER_NOT_FOUND',
+          `Unknown user: ${userId}`,
+          404,
+        );
       for (const scope of this.services.roleScopes.list())
         await scope.onDelete?.(userId, connection);
       await users.remove(userId, actorId);
+      this.afterRoleScopesCommit(connection, userId);
     });
-    await this.services.onRoleScopesChanged?.(userId);
   }
 
   async enable(userId: string): Promise<ManagedUser> {
@@ -223,8 +244,8 @@ class DefaultUserManagementService implements UserManagementService {
         );
       }
       await scope.replace(userId, value, connection);
+      this.afterRoleScopesCommit(connection, userId);
     });
-    await this.services.onRoleScopesChanged?.(userId);
     const user = await this.services.users.get(userId);
     if (!user) {
       throw new UserManagementError(
@@ -253,7 +274,7 @@ class DefaultUserManagementService implements UserManagementService {
     submitted: Readonly<Record<string, UserRoleValue>>,
   ): void {
     for (const [key, value] of Object.entries(submitted)) {
-      this.validateRoleScopeValue(this.requireScope(key), value);
+      this.validateRoleScopeValue(this.requireScope(key, 400), value);
     }
     for (const scope of this.services.roleScopes.list()) {
       const value = submitted[scope.key];
@@ -287,13 +308,16 @@ class DefaultUserManagementService implements UserManagementService {
     }
   }
 
-  private requireScope(key: string): UserRoleScope {
+  /**
+   * A scope named by the URL that does not exist is a `404`; one named in a request body or filter is invalid input.
+   */
+  private requireScope(key: string, status: 400 | 404 = 404): UserRoleScope {
     const scope = this.services.roleScopes.get(key);
     if (!scope) {
       throw new UserManagementError(
         'ROLE_SCOPE_NOT_FOUND',
         `Unknown user role scope: ${key}`,
-        404,
+        status,
       );
     }
     return scope;

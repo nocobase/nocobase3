@@ -1,13 +1,5 @@
-import { mkdtemp, rm } from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
-
-import sqlite from '@nocobase/db-sqlite';
-import {
-  createDatabaseManager,
-  type DatabaseConnection,
-  type DatabaseManager,
-} from '@nocobase/db';
+import type { DatabaseConnection, DatabaseManager } from '@nocobase/db';
+import { createTestDatabase, type TestDatabase } from '@nocobase/db-testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
@@ -21,8 +13,8 @@ import {
 } from '../src/index.js';
 import { ticketLifecycle, type TicketTypes } from './fixtures/ticket.js';
 
+let testDatabase: TestDatabase;
 let database: DatabaseManager;
-let directory: string;
 let store: LifecycleStore;
 let now: Date;
 let sent: string[];
@@ -54,8 +46,11 @@ async function createTables(): Promise<void> {
     table.datetimeTz('at').notNull();
     table.integer('version').notNull();
     table.string('requestId');
+    // The request id, or `$v:<version>` without one: never null, so one
+    // unique index means the same on every dialect.
+    table.string('requestKey').notNull();
     table.unique(['lifecycle', 'recordId', 'version']);
-    table.unique(['lifecycle', 'recordId', 'requestId']);
+    table.unique(['lifecycle', 'recordId', 'requestKey']);
   });
   await builder.createCollection(LIFECYCLE_COLLECTIONS.effectRuns, (table) => {
     table.bigInt('id').primary().autoIncrement().notNull();
@@ -99,17 +94,9 @@ async function createTicket(): Promise<string> {
 }
 
 beforeEach(async () => {
-  // A file, not :memory:, so the pool behaves as it does in an application.
-  directory = await mkdtemp(path.join(os.tmpdir(), 'lifecycle-store-'));
-  database = createDatabaseManager({
-    drivers: { sqlite },
-    connections: {
-      main: {
-        dialect: 'sqlite',
-        filename: path.join(directory, 'main.sqlite'),
-      },
-    },
-  });
+  // Whichever dialect the environment selects, SQLite by default.
+  testDatabase = await createTestDatabase();
+  database = testDatabase.database;
   await createTables();
   store = createRepositoryLifecycleStore(database);
   now = new Date('2026-10-01T09:00:00.000Z');
@@ -117,8 +104,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await database.destroy();
-  await rm(directory, { recursive: true, force: true });
+  await testDatabase.destroy();
 });
 
 describe('Repository lifecycle store', () => {
@@ -351,6 +337,113 @@ describe('Repository lifecycle store', () => {
     ).toMatchObject({ status: 'awaitingCustomer' });
   });
 
+  it('joins a caller’s transaction, and dispatches the effects once it commits', async () => {
+    const lifecycle = runtime();
+    const id = await database.transaction(async (tx) => {
+      const { record } = await lifecycle.create(
+        'tickets',
+        { customerEmail: 'a@example.com' },
+        { actor: { id: 'agent' }, transaction: tx },
+      );
+      const result = await lifecycle.fire(
+        'tickets',
+        record.id,
+        'replyToCustomer',
+        {
+          actor: { id: 'agent' },
+          input: { message: 'Please confirm' },
+          transaction: tx,
+        },
+      );
+      expect(result.effectRuns).toMatchObject([{ status: 'queued' }]);
+      expect(sent).toEqual([]);
+      return String(record.id);
+    });
+    expect(sent).toEqual(['a@example.com']);
+    expect(
+      (await lifecycle.history('tickets', id)).transitions.map(
+        (entry) => entry.transition,
+      ),
+    ).toEqual([CREATE_TRANSITION, 'replyToCustomer']);
+  });
+
+  it('rolls back with the caller’s transaction, and dispatches nothing', async () => {
+    const lifecycle = runtime();
+    const id = await createTicket();
+    await expect(
+      database.transaction(async (tx) => {
+        await lifecycle.fire('tickets', id, 'replyToCustomer', {
+          actor: { id: 'agent' },
+          input: { message: 'Please confirm' },
+          transaction: tx,
+        });
+        throw new Error('The caller changes its mind.');
+      }),
+    ).rejects.toThrow('changes its mind');
+    expect(
+      await database
+        .repository('tickets')
+        .findOne({ filter: { id: Number(id) } }),
+    ).toMatchObject({ status: 'open', lifecycleVersion: 0 });
+    expect(await lifecycle.history('tickets', id)).toEqual({
+      transitions: [],
+      effectRuns: [],
+    });
+    expect(sent).toEqual([]);
+  });
+
+  it('undoes only a refused transition in a savepoint, when the caller catches it', async () => {
+    interface NotedTypes {
+      record: TicketTypes['record'];
+      state: TicketTypes['state'];
+    }
+    const noted = new LifecycleRuntime({ store, clock: () => now });
+    noted.register(
+      defineLifecycle<NotedTypes>({
+        name: 'notedTickets',
+        collection: 'tickets',
+        initial: 'open',
+        states: ['open', { name: 'closed', final: true }],
+        transitions: {
+          close: {
+            from: 'open',
+            to: 'closed',
+            // Writes, then refuses: the savepoint has something to undo.
+            onTransition: async ({ record, transactionHandle }) => {
+              await (transactionHandle as DatabaseConnection)
+                .repository('notes')
+                .createOne({
+                  values: { ticketId: String(record.id), text: 'closing' },
+                });
+              throw new Error('Closing is not allowed today.');
+            },
+          },
+        },
+      }),
+    );
+    const id = await createTicket();
+    await database.transaction(async (tx) => {
+      await tx.repository('notes').createOne({
+        values: { ticketId: id, text: 'asked to close' },
+      });
+      await expect(
+        noted.fire('notedTickets', id, 'close', {
+          actor: { id: 'agent' },
+          transaction: tx,
+        }),
+      ).rejects.toThrow('Closing is not allowed today.');
+    });
+    expect(
+      (await database.repository('notes').findMany({})).map((row) => row.text),
+    ).toEqual(['asked to close']);
+    expect(
+      await database
+        .repository('tickets')
+        .findOne({ filter: { id: Number(id) } }),
+    ).toMatchObject({ status: 'open' });
+    expect((await noted.history('notedTickets', id)).transitions).toEqual([]);
+  });
+
   it('writes a record only at the version it was read at', async () => {
     const id = await createTicket();
     const condition = {
@@ -552,5 +645,147 @@ describe('Repository lifecycle store', () => {
         .repository('tickets')
         .findOne({ filter: { id: Number(first) } }),
     ).toMatchObject({ status: 'awaitingCustomer', lifecycleVersion: 1 });
+  });
+});
+
+describe('the request key of a log entry', () => {
+  const entry = {
+    lifecycle: 'tickets',
+    recordId: '1',
+    transition: 'close',
+    from: 'open',
+    to: 'closed',
+    actorId: 'agent',
+    input: {},
+    at: '2026-10-01T09:00:00.000Z',
+  };
+
+  it('logs every transition without a request id, each under its version', async () => {
+    const id = await createTicket();
+    // Two entries on one record with no request id: a unique index over a
+    // nullable request id would count them as duplicates on some dialects.
+    await runtime().fire('tickets', id, 'replyToCustomer', {
+      actor: { id: 'agent' },
+      input: { message: 'Please confirm' },
+    });
+    await runtime().fire('tickets', id, 'customerReplied', {
+      actor: { id: 'customer' },
+    });
+    await runtime().fire('tickets', id, 'close', {
+      actor: { id: 'agent' },
+      requestId: 'close-1',
+    });
+    const rows = await database
+      .repository(LIFECYCLE_COLLECTIONS.transitions)
+      .findMany({ sort: (sort) => sort.field('version').asc() });
+    expect(
+      rows.map((row) => ({
+        version: Number(row.version),
+        requestId: row.requestId ?? null,
+        requestKey: row.requestKey,
+      })),
+    ).toEqual([
+      { version: 1, requestId: null, requestKey: '$v:1' },
+      { version: 2, requestId: null, requestKey: '$v:2' },
+      { version: 3, requestId: 'close-1', requestKey: 'close-1' },
+    ]);
+    expect(
+      (await runtime().history('tickets', id)).transitions.map(
+        (transition) => transition.requestId,
+      ),
+    ).toEqual([null, null, 'close-1']);
+  });
+
+  it('refuses a second entry under a request id already spent on the record', async () => {
+    await store.appendTransition({ ...entry, version: 1, requestId: 'r-1' });
+    await expect(
+      store.appendTransition({ ...entry, version: 2, requestId: 'r-1' }),
+    ).rejects.toThrow();
+    // Another record may use the same key.
+    await store.appendTransition({
+      ...entry,
+      recordId: '2',
+      version: 1,
+      requestId: 'r-1',
+    });
+    expect(
+      await store.findTransitionByRequest('tickets', '1', 'r-1'),
+    ).toMatchObject({ version: 1, requestId: 'r-1' });
+    expect(
+      await store.findTransitionByRequest('tickets', '1', '$v:1'),
+    ).toBeUndefined();
+  });
+});
+
+describe('joining a caller’s transaction', () => {
+  async function ticketOf(id: string): Promise<unknown> {
+    return database
+      .repository('tickets')
+      .findOne({ filter: { id: Number(id) } });
+  }
+
+  it('refuses the root connection instead of committing outside the caller’s transaction', async () => {
+    const lifecycle = runtime();
+    const id = await createTicket();
+    await expect(
+      database.transaction(async () => {
+        await lifecycle.fire('tickets', id, 'replyToCustomer', {
+          actor: { id: 'agent' },
+          input: { message: 'Please confirm' },
+          transaction: database.connection(),
+        });
+      }),
+    ).rejects.toThrow(/itself is not a transaction/);
+    expect(await ticketOf(id)).toMatchObject({ status: 'open' });
+    expect((await lifecycle.history('tickets', id)).transitions).toEqual([]);
+    expect(sent).toEqual([]);
+  });
+
+  it('refuses a policy-bound root connection, which is no transaction either', async () => {
+    const id = await createTicket();
+    await expect(
+      runtime().fire('tickets', id, 'replyToCustomer', {
+        actor: { id: 'agent' },
+        input: { message: 'Please confirm' },
+        transaction: database.connection().withPolicies({}, null),
+      }),
+    ).rejects.toThrow(/not a transaction/);
+    expect(await ticketOf(id)).toMatchObject({ status: 'open' });
+  });
+
+  it('refuses a transaction on another connection', async () => {
+    const id = await createTicket();
+    await expect(
+      database.transaction(async (tx) => {
+        // A transaction connection as another connection's would carry it.
+        const elsewhere = Object.create(tx, {
+          name: { value: 'reporting' },
+        }) as DatabaseConnection;
+        await runtime().fire('tickets', id, 'replyToCustomer', {
+          actor: { id: 'agent' },
+          input: { message: 'Please confirm' },
+          transaction: elsewhere,
+        });
+      }),
+    ).rejects.toThrow(/runs on connection "reporting"/);
+    expect(await ticketOf(id)).toMatchObject({ status: 'open' });
+  });
+
+  it('refuses a transaction that has already committed', async () => {
+    const id = await createTicket();
+    let escaped: DatabaseConnection | undefined;
+    await database.transaction((tx) => {
+      escaped = tx;
+      return Promise.resolve();
+    });
+    await expect(
+      runtime().fire('tickets', id, 'replyToCustomer', {
+        actor: { id: 'agent' },
+        input: { message: 'Please confirm' },
+        transaction: escaped,
+      }),
+    ).rejects.toThrow(/already complete/);
+    expect(await ticketOf(id)).toMatchObject({ status: 'open' });
+    expect(sent).toEqual([]);
   });
 });

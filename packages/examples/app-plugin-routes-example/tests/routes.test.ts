@@ -4,6 +4,10 @@ import {
 } from '@nocobase/app-plugin-authentication';
 import { createAppPaths } from '@nocobase/app-server/config';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
+import {
+  findUndeclaredApiRoutes,
+  generateApiDocument,
+} from '@nocobase/app-server/router';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
@@ -33,14 +37,16 @@ describe('routes example plugin', () => {
       createApplication(allowAuthentication),
     );
 
-    const apiResponse = await apiRouter.request('/routes-example');
+    const apiResponse = await apiRouter.request('/routesExample');
     const rootResponse = await rootRouter.request('/routes-example/root');
 
     expect(apiResponse.status).toBe(200);
     await expect(apiResponse.json()).resolves.toEqual({
-      scope: 'api',
-      plugin: '@nocobase/app-plugin-routes-example',
-      message: 'Hello from the routes example API route',
+      data: {
+        scope: 'api',
+        plugin: '@nocobase/app-plugin-routes-example',
+        message: 'Hello from the routes example API route',
+      },
     });
     expect(rootResponse.status).toBe(200);
     await expect(rootResponse.json()).resolves.toEqual({
@@ -59,7 +65,7 @@ describe('routes example plugin', () => {
     );
 
     for (const [router, path] of [
-      [apiRouter, '/routes-example'],
+      [apiRouter, '/routesExample'],
       [rootRouter, '/routes-example/root'],
     ] as const) {
       const response = await router.request(path);
@@ -89,7 +95,7 @@ describe('routes example plugin', () => {
     application.get('/api/later-plugin', (context) => context.text('api'));
     application.get('/later-plugin', (context) => context.text('root'));
 
-    expect((await application.request('/api/routes-example')).status).toBe(401);
+    expect((await application.request('/api/routesExample')).status).toBe(401);
     expect((await application.request('/routes-example/root')).status).toBe(
       401,
     );
@@ -99,6 +105,24 @@ describe('routes example plugin', () => {
     await expect(
       (await application.request('/later-plugin')).text(),
     ).resolves.toBe('root');
+  });
+
+  it('declares the API Route for the API document', async () => {
+    const apiRouter = await apiRoutes.createRouter(
+      createApplication(allowAuthentication),
+    );
+
+    expect(findUndeclaredApiRoutes(apiRouter)).toEqual([]);
+    const document = await generateApiDocument(apiRouter, {
+      info: { title: 'Routes example', version: '0.0.0' },
+    });
+    expect(document.paths?.['/api/routesExample']?.get).toMatchObject({
+      tags: ['RoutesExample'],
+      operationId: 'routesExampleGetGreeting',
+    });
+    expect(document.components?.schemas).toHaveProperty(
+      'RoutesExampleGreeting',
+    );
   });
 });
 

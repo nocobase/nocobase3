@@ -25,15 +25,15 @@ The process vocabulary — field names, options, states and steps — is Chinese
 
 ## Patterns worth copying
 
-| Problem                                                   | Pattern                                                                                                                        | Where                                               |
-| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------- |
-| A parent waits for its children                           | Children are records with their own lifecycle; the parent's guard counts them through the transition's transaction             | `complete` in `server/lifecycles/data-request.ts`   |
-| Creating children cannot race the parent's decision       | The child's insert runs in a transaction that bumps the parent's `lifecycleVersion` while it is still in the right state       | `OfficeStore.createExtraction()`                    |
-| Dispatching several times from one state                  | A self-transition with an effect; the effect claims each row and writes children under unique keys, so a retry repeats nothing | `dispatchClerks` in `server/lifecycles/incoming.ts` |
-| A countersign: everyone agrees, or one objection ends it  | A self-transition whose `route` stays in `signing` until every assignee has signed and leaves on the first objection           | `sign` in `server/lifecycles/tasks.ts`              |
-| One approve button across several levels                  | `from` lists every level, `route` picks the next by the current state, `set` changes the approver                              | `approve` in both root lifecycles                   |
-| Something created on entering a state                     | `onEnter`                                                                                                                      | `onEnter.accepting: [createOneTimeExtraction]`      |
-| An external action that may run twice but must count once | The effect's `idempotencyKey` as the unique key of a ledger or trace row                                                       | `OfficeStore.trace()`, `OfficeStore.notify()`       |
+| Problem                                                   | Pattern                                                                                                                                                                                        | Where                                               |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| A parent waits for its children                           | Children are records with their own lifecycle; the parent's guard counts them through the transition's transaction and refuses with `kind: 'precondition'`, answered `400 FAILED_PRECONDITION` | `complete` in `server/lifecycles/data-request.ts`   |
+| Creating children cannot race the parent's decision       | The child's insert runs in a transaction that bumps the parent's `lifecycleVersion` while it is still in the right state                                                                       | `OfficeStore.createExtraction()`                    |
+| Dispatching several times from one state                  | A self-transition with an effect; the effect claims each row and writes children under unique keys, so a retry repeats nothing                                                                 | `dispatchClerks` in `server/lifecycles/incoming.ts` |
+| A countersign: everyone agrees, or one objection ends it  | A self-transition whose `route` stays in `signing` until every assignee has signed and leaves on the first objection                                                                           | `sign` in `server/lifecycles/tasks.ts`              |
+| One approve button across several levels                  | `from` lists every level, `route` picks the next by the current state, `set` changes the approver                                                                                              | `approve` in both root lifecycles                   |
+| Something created on entering a state                     | `onEnter`                                                                                                                                                                                      | `onEnter.accepting: [createOneTimeExtraction]`      |
+| An external action that may run twice but must count once | The effect's `idempotencyKey` as the unique key of a ledger or trace row                                                                                                                       | `OfficeStore.trace()`, `OfficeStore.notify()`       |
 
 ## Assumptions
 
@@ -41,7 +41,7 @@ The source requirements leave these open; the example takes the first reading an
 
 ## Testing
 
-`tests/calendar.test.ts` and `tests/data-request-form.test.ts` cover the scheduling and the form rules as plain functions. `tests/flows.test.ts` runs both processes on SQLite with the migration and seed applied, and `tests/routes.test.ts` covers the HTTP boundary.
+`tests/calendar.test.ts` and `tests/data-request-form.test.ts` cover the scheduling and the form rules as plain functions. `tests/flows.test.ts` runs both processes on the test database (SQLite by default) with the migration and seed applied, and their routes on the real service; `tests/routes.test.ts` covers the HTTP boundary.
 
 ```bash
 pnpm --filter @nocobase/app-plugin-office-flows-example lint

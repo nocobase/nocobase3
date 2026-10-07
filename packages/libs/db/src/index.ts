@@ -28,6 +28,28 @@ export type {
   DirectoryCollectionMetadataStoreConfig,
 } from './database/config.js';
 export type { DatabaseConnection } from './database/connection.js';
+export type { TransactionCallbackPhase } from './database/internal/transaction-callbacks.js';
+export { defineRepositoryEventMeta } from './repository/events/meta.js';
+export type {
+  ExplainRepositoryEventsOptions,
+  RepositoryEventErrorContext,
+  RepositoryEventMeta,
+  RepositoryEventMetaBag,
+  RepositoryEventMetaEntry,
+  RepositoryEventPhase,
+  RepositoryEventStrategy,
+  RepositoryEventSubscriptionDescription,
+  RepositoryEventsExplanation,
+  RepositoryMutationCount,
+  RepositoryMutationEvent,
+  RepositoryMutationEventBase,
+  RepositoryMutationListeners,
+  RepositoryMutationOperation,
+  RepositoryMutationRows,
+  RepositoryMutationSubscriptionOptions,
+  RowChange,
+  RowChangeKind,
+} from './repository/events/types.js';
 export type { DatabaseManager } from './database/manager.js';
 export type {
   DatabaseDriverRuntime,
@@ -212,7 +234,10 @@ export type {
 
 export { UnsupportedCapabilityError } from './schema/capabilities.js';
 
-export { RepositoryError } from './repository/errors.js';
+export {
+  RepositoryError,
+  repositoryErrorStatuses,
+} from './repository/errors.js';
 export type { JsonResultForm, JsonValue } from './json.js';
 export {
   isTemporalType,
@@ -373,6 +398,7 @@ export type {
 export type {
   RepositoryErrorCode,
   RepositoryErrorOptions,
+  RepositoryErrorStatus,
 } from './repository/errors.js';
 
 export { buildRepositoryPolicy } from './repository/policy/build.js';
@@ -437,5 +463,18 @@ export {
   type UpsertWritePolicyBuilder,
   type RelationWriteOperation,
 } from './repository/write-policy.js';
+
+export {
+  filterOperatorsForFieldType,
+  isSortableFieldType,
+  supportsFilterShorthand,
+} from './repository/repository.js';
+
+export {
+  isManagedField,
+  writableFields,
+  writePolicyProblems,
+  type WritePolicyProblem,
+} from './repository/writable-fields.js';
 
 export type { DatabaseTaskConfig } from './task-config.js';

@@ -32,7 +32,7 @@ pnpm test
 pnpm lint
 ```
 
-Run the checks that the project actually defines; do not invent a test or lint command when it is absent. Build for the destination platform:
+Run the checks that the project actually defines; do not invent a test or lint command when it is absent. Build for the destination platform, unless the destination is a Hub reached with `pnpm nocobase hub deploy`, which builds for the platform the Hub reports:
 
 ```bash
 pnpm build --target linux-x64 --node-version 24 --tar
@@ -68,6 +68,7 @@ Prepare the complete runtime configuration before starting the service. At minim
 - Persistent storage paths, file permissions, service identity, and any external database, object storage, mail, or callback settings.
 - The `jobs` backend, which runs background tasks — Notification deliveries, Workflow runs, plugin jobs — and scheduled jobs, Scheduler's included. Without `jobs.default` they run on the built-in memory adapter, which keeps its state in the process, reads it from `storage/jobs` at startup and writes it back when the service stops: it serves one process, every other process or instance would fire its own copy, and a process that is killed rather than stopped loses what changed since it started. For more than one instance set `jobs.default` to the `redis` configuration and its `connection`; that Redis must persist its data (AOF or RDB) and use `maxmemory-policy noeviction`, and it opens connections per scheduling plugin. Set `jobs.default: memory` to keep a single-instance deployment on memory without the startup warning.
 - The `queue` backend, when the application or a plugin uses `@nocobase/queue`. Without `queue.default` queues run on the built-in memory configuration, one process, with pending jobs written under `storage/queue` when the service stops. For more than one instance set `queue.default` to the `redis` configuration, under the same Redis requirements; `queue.default: memory` keeps a single instance on memory without the warning.
+- The optional `api` limits for every `/api` request: `api.bodyLimit` (such as `10mb`), `api.timeout` (such as `30s`) and `api.rateLimit` with `max` and `window` (such as `600` per `1m`), all off by default; `API_BODY_LIMIT` and `API_TIMEOUT` set the first two. The rate limit counts per client connection address in each process, so behind a reverse proxy every request shares the proxy's address and one budget, and each instance of a multi-instance deployment counts on its own; size `max` for that, or leave it off and limit at the proxy.
 
 The reverse proxy must preserve the public `Host` and protocol headers, forward cookies, and support WebSocket `Upgrade` and `Connection` headers. For Hub, proxy the entire site to Hub; do not expose a separate Host port or proxy only `/hub`.
 
@@ -100,9 +101,9 @@ A Hub project created from the Hub template, whose source changes, deploys like 
 
 ### Publish an App to an existing Hub
 
-Publishing to a Hub uses `pnpm nocobase hub deploy` and `hub upload`, which an application has for as long as its `package.json` lists `@nocobase/hub-cli`. The Default template declares it; any other application gets the commands with `pnpm add -D @nocobase/hub-cli`. They run in the source checkout or in CI, never in a built `dist/`, because what they send is the archive `pnpm build --tar` writes beside the sources.
+Publishing to a Hub uses the `pnpm nocobase hub` commands, which an application has for as long as its `package.json` lists `@nocobase/hub-cli`. The Default template declares it; any other application gets them with `pnpm add -D @nocobase/hub-cli`. They run in the source checkout or in CI, never in a built `dist/`. `hub deploy` builds the archive for the platform the Hub reports, uploads it and deploys it, so do not run `pnpm build --tar` or choose a `--target` first.
 
-Read `.agents/skills/nocobase-hub-cli/SKILL.md`, which that package ships, before publishing: it covers the API key, the build, `--config`, waiting, exit codes and retries. `HUB_API_KEY` is created in Hub, not in the application; tell the user to create the key before the first upload rather than guessing its value. Never print an API key or put it in committed configuration.
+Read `.agents/skills/nocobase-hub-cli/SKILL.md`, which that package ships, before publishing: it covers the remote committed in `.nocobase/hub.json`, saving the API key with `hub auth login`, the build, `--config`, waiting, exit codes and retries. The API key is created in Hub, not in the application, and the user saves it with `hub auth login` themselves. Never ask for the key, print it, or put it in `.env` or committed configuration; hub-cli reads no key or Hub address from the environment.
 
 ## Handle workflow artifacts after production build
 
@@ -124,6 +125,12 @@ Collect evidence for each item:
 8. In Hub mode, verify every hosted App separately; Hub readiness does not mean every eager App is ready.
 
 Record the exact artifact or image digest, configuration revision, database migration result, workflow artifact hashes, logs checked, and verification time.
+
+## API documentation in production
+
+A deployed application serves its OpenAPI document at `<APP_BASE_PATH>/api/swagger` and Swagger UI at `<APP_BASE_PATH>/api/swagger/docs`, with the Swagger UI files bundled in the application; nothing is fetched from a CDN, so it works without outbound network access. Only a signed-in session or a valid API key may read them, and anything else gets `401` with reason `API_DOCS_UNAUTHENTICATED`; an application without the authentication plugin registers no access check and answers `404`. Verify with `curl -H "x-api-key: <key>" https://<host><APP_BASE_PATH>/api/swagger` using a key the user supplies, and expect `401` without it.
+
+There is no setting that makes the documentation public, and none that turns it off. It describes the endpoints' shape, not data, and every reader is already someone who can call those endpoints. Where policy requires that only some users see it, block `<APP_BASE_PATH>/api/swagger` and everything below it at the reverse proxy for the users or networks that should not reach it; do not change the application or its plugins for this.
 
 ## Update, rollback, and recovery
 

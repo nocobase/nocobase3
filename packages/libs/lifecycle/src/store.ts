@@ -63,6 +63,22 @@ export interface EffectRun {
 }
 
 export type NewTransitionEntry = Omit<TransitionEntry, 'id'>;
+
+/**
+ * The key a store deduplicates log entries by: the entry's `requestId`, or
+ * `$v:<version>` when it has none. It is never null, so one unique index on
+ * `(lifecycle, recordId, requestKey)` behaves the same on every dialect,
+ * whether that dialect lets a unique index hold several NULLs, counts NULL
+ * as a value, or treats rows whose other columns match as duplicates.
+ * Request ids starting with `$` are reserved — the runtime refuses them from
+ * callers and itself uses only `$run:` — so the derived key never collides
+ * with one.
+ */
+export function transitionRequestKey(
+  entry: Pick<NewTransitionEntry, 'requestId' | 'version'>,
+): string {
+  return entry.requestId ?? `$v:${String(entry.version)}`;
+}
 export type NewEffectRun = Omit<EffectRun, 'id'>;
 export type EffectRunChanges = Partial<
   Omit<EffectRun, 'id' | 'transitionId' | 'lifecycle' | 'recordId' | 'effect'>
@@ -129,6 +145,18 @@ export interface IdleRecordCursor {
   readonly id: RecordId;
 }
 
+export interface TransactionOptions {
+  /**
+   * The `transactionHandle` of a transaction still running, such as the
+   * `@nocobase/db` connection a caller's own transaction received, to nest
+   * this one in. It must belong to the same store, or be a transaction on
+   * the same database connection the store writes to; a root connection, a
+   * connection of another name, or a transaction that has already committed
+   * or rolled back is refused rather than silently written outside it.
+   */
+  readonly within?: unknown;
+}
+
 /**
  * Everything the runtime persists. Two implementations ship: one over
  * `@nocobase/db` Repositories and one in memory for tests. Each method is a
@@ -138,12 +166,28 @@ export interface IdleRecordCursor {
 export interface LifecycleStore {
   /**
    * What a transaction runs on, such as a `@nocobase/db` connection, for
-   * services that read other collections from a guard. Absent outside a
-   * transaction and in stores that have none.
+   * services that read other collections from a guard, and for a lifecycle
+   * call that joins this transaction. Absent outside a transaction.
    */
   readonly transactionHandle?: unknown;
-  /** Runs `work` in one transaction; inside it, `store` is that transaction. */
-  transaction<R>(work: (store: LifecycleStore) => Promise<R>): Promise<R>;
+  /**
+   * Runs `work` in one transaction; inside it, `store` is that transaction.
+   * With `within`, the work is nested in a transaction the caller already
+   * holds, as a savepoint: a failure undoes only what the work wrote, and
+   * nothing it registered with `afterCommit` runs before the outermost
+   * transaction commits.
+   */
+  transaction<R>(
+    work: (store: LifecycleStore) => Promise<R>,
+    options?: TransactionOptions,
+  ): Promise<R>;
+  /**
+   * Only on the store a transaction's work receives: runs `callback` once
+   * the outermost transaction has committed, and never if it rolls back.
+   * The transaction `transaction()` was called for resolves once its
+   * callbacks have finished.
+   */
+  afterCommit(callback: () => void | Promise<void>): void;
 
   findRecord(
     collection: string,

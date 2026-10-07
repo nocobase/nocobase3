@@ -1,4 +1,5 @@
 import type {
+  CreateContext,
   EffectDefinition,
   GuardVerdict,
   Lifecycle,
@@ -36,11 +37,25 @@ export interface PlanContext<T extends LifecycleTypes> {
 function blockerOf(verdict: GuardVerdict, fallback: string): Blocker | null {
   if (verdict === true) return null;
   if (verdict === false)
-    return { source: 'guard', code: 'GUARD_REJECTED', message: fallback };
+    return {
+      source: 'guard',
+      kind: 'permission',
+      code: 'GUARD_REJECTED',
+      message: fallback,
+    };
   if (typeof verdict === 'string')
-    return { source: 'guard', code: 'GUARD_REJECTED', message: verdict };
+    return {
+      source: 'guard',
+      kind: 'permission',
+      code: 'GUARD_REJECTED',
+      message: verdict,
+    };
   return {
     source: 'guard',
+    // Unmarked, a refusal is about who asks: reporting a missing permission
+    // as a precondition would tell the person to wait for something that
+    // never comes.
+    kind: verdict.kind === 'precondition' ? 'precondition' : 'permission',
     code: verdict.code ?? 'GUARD_REJECTED',
     message: verdict.message,
   };
@@ -73,6 +88,42 @@ function problemsOf(
 ): readonly InputProblem[] {
   if (answer === null || answer === undefined) return [];
   return typeof answer === 'string' ? [{ message: answer }] : answer;
+}
+
+/** What the transition's `validate` finds wrong with `input`; empty when nothing is. */
+export function inputProblems<T extends LifecycleTypes>(
+  transition: LifecycleTransition<T>,
+  input: JsonObject,
+): readonly InputProblem[] {
+  return problemsOf(transition.definition.validate?.(input));
+}
+
+/**
+ * Checks a creation against the definition's `create`: the values first,
+ * then the guard, so a guard reads only values that passed. Throws the
+ * refusal; returns when the record may be written.
+ */
+export async function checkCreation<T extends LifecycleTypes>(
+  lifecycle: Lifecycle<T>,
+  context: CreateContext<T>,
+): Promise<void> {
+  const checks = lifecycle.create;
+  const problems = problemsOf(checks.validate?.(context.values));
+  if (problems.length)
+    throw new LifecycleError(
+      'INVALID_INPUT',
+      problems.map((problem) => problem.message).join('; '),
+      { problems },
+    );
+  if (!checks.guard) return;
+  const blocker = blockerOf(
+    await checks.guard(context),
+    `"${context.actor.id}" may not create a ${lifecycle.name} record in "${context.state}".`,
+  );
+  if (blocker)
+    throw new LifecycleError('GUARD_REJECTED', blocker.message, {
+      blockers: [blocker],
+    });
 }
 
 /** What a transition will write and run, decided without touching any store. */
@@ -119,7 +170,7 @@ export function transitionsFrom<T extends LifecycleTypes>(
 }
 
 /**
- * Decides one transition: state, guard, input, route and extra fields, in
+ * Decides one transition: state, input, guard, route and extra fields, in
  * that order. The function is pure apart from what `guard`, `route` and `set`
  * do, so a lifecycle can be tested by calling it directly.
  */
@@ -152,18 +203,22 @@ export async function planTransition<T extends LifecycleTypes>(
     now: context.now,
   });
   const definition = transition.definition;
-  const blockers = await guardBlockers(transition, base, context.guards);
-  if (blockers.length)
-    throw new LifecycleError('GUARD_REJECTED', blockers[0].message, {
-      blockers,
-    });
-  const problems = problemsOf(definition.validate?.(input));
+  // The input first, so a guard asked by fire() reads only input that
+  // passed: judging "may this actor approve line 3" need not defend against
+  // a malformed line. available(), view() and can() without input still ask
+  // it with {}, which it has to answer as well.
+  const problems = inputProblems(transition, input);
   if (problems.length)
     throw new LifecycleError(
       'INVALID_INPUT',
       problems.map((problem) => problem.message).join('; '),
       { problems },
     );
+  const blockers = await guardBlockers(transition, base, context.guards);
+  if (blockers.length)
+    throw new LifecycleError('GUARD_REJECTED', blockers[0].message, {
+      blockers,
+    });
 
   const to = definition.route ? definition.route(base) : transition.to[0];
   if (!transition.to.includes(to))

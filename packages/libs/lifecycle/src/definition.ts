@@ -1,4 +1,8 @@
-import { LifecycleError, type InputProblem } from './errors.js';
+import {
+  LifecycleError,
+  type BlockerKind,
+  type InputProblem,
+} from './errors.js';
 import type { LifecycleTransaction } from './runtime.js';
 import type { TransitionEntry } from './store.js';
 import type {
@@ -96,7 +100,12 @@ export interface EffectContext<T extends LifecycleTypes> {
   readonly to: T['state'];
   /** 1 on the first try; an operator's retry counts on from the attempts before it. */
   readonly attempt: number;
-  /** The same on every attempt of this effect run: key external calls by it. */
+  /**
+   * The same on every attempt of this effect run, and only of this run: a
+   * record that enters the state again owes a new run with a new key. Key a
+   * call that must happen once per business fact — a payment — by that fact,
+   * such as a payment instruction's id, rather than by this.
+   */
   readonly idempotencyKey: string;
   readonly parameters: ParametersOf<T>;
   readonly services: ServicesOf<T>;
@@ -126,14 +135,23 @@ export interface EffectDefinition<T extends LifecycleTypes> {
   readonly retry?: EffectRetry;
   /** Transition fired as the system once the effect succeeds; its input is the effect's result when that is an object. */
   readonly onSuccess?: string;
-  /** Transition fired as the system once the last attempt fails; its input is `{ error }`. */
+  /**
+   * Transition fired as the system once the last attempt fails. Its input is
+   * `{ error }`, plus `errorCode` and `details` when the effect threw an
+   * `EffectFailure`. Once it has moved the record on, `retryRun()` refuses
+   * the run unless forced.
+   */
   readonly onFailure?: string;
   /**
    * How long one attempt may take. The attempt's signal is aborted and the
    * attempt fails then, whether or not `run` notices.
    */
   readonly timeoutMs?: number;
-  /** Returns a JSON value to keep with the run, or nothing. Throw to fail. */
+  /**
+   * Returns a JSON value to keep with the run, or nothing. Throw to fail;
+   * throw an `EffectFailure` to fail with a code and details the `onFailure`
+   * transition can branch on.
+   */
   run(context: EffectContext<T>): unknown;
 }
 
@@ -169,9 +187,22 @@ export interface StateDefinition<
 export type FromStates<S extends string> =
   OneOrMany<S> | '*' | { readonly except: readonly S[] };
 
-/** What a guard answers: `true` to allow, anything else to refuse and say why. */
+/**
+ * What a guard answers: `true` to allow, anything else to refuse and say why.
+ * A refusal is a `permission` refusal — this actor may not — unless the
+ * object form says `kind: 'precondition'`: nobody may until something
+ * changes, such as an open subtask, which a route answers as a failed
+ * precondition rather than as a denied permission.
+ */
 export type GuardVerdict =
-  boolean | string | { readonly code?: string; readonly message: string };
+  | boolean
+  | string
+  | {
+      readonly code?: string;
+      readonly message: string;
+      /** Defaults to `permission`. */
+      readonly kind?: BlockerKind;
+    };
 
 export interface TransitionDefinition<T extends LifecycleTypes> {
   readonly title?: string;
@@ -182,8 +213,11 @@ export interface TransitionDefinition<T extends LifecycleTypes> {
   route?(context: TransitionContext<T>): T['state'];
   /**
    * Whether this actor may fire it now. `true` allows it; `false`, a
-   * message, or `{ code, message }` refuses it, and the message is what
-   * `available()` and the refusal tell the person.
+   * message, or `{ code, message, kind }` refuses it, and the message is what
+   * `available()` and the refusal tell the person. In `fire()` and in a
+   * `can()` given input, the guard sees input `validate` accepted; in
+   * `available()`, `view()` and a `can()` without input it sees `{}`, and
+   * must answer for that too.
    */
   guard?(context: TransitionContext<T>): GuardVerdict | Promise<GuardVerdict>;
   /** Returns what is wrong with the input: a message, a list of problems, or nothing. */
@@ -221,6 +255,42 @@ export interface TransitionDefinition<T extends LifecycleTypes> {
 }
 
 /**
+ * What a creation's `guard` sees: the values about to be written, the
+ * initial state asked for, and who asks. There is no record yet.
+ */
+export interface CreateContext<T extends LifecycleTypes> {
+  readonly values: Readonly<Record<string, unknown>>;
+  readonly state: T['state'];
+  readonly actor: LifecycleActor;
+  /** What `runtime.create()` keeps on the creation's log entry. */
+  readonly input: JsonObject;
+  readonly parameters: ParametersOf<T>;
+  /** Built from the transaction's handle, as a transition guard's are. */
+  readonly services: ServicesOf<T>;
+  readonly now: Date;
+}
+
+/**
+ * Who may create a record and what it must hold, checked by
+ * `runtime.create()` inside its transaction before anything is written, so
+ * every caller — a route, an import, a script — meets the same rule. A
+ * refusal is the same `GUARD_REJECTED` with blockers, or `INVALID_INPUT` with
+ * problems, as a transition's.
+ */
+export interface CreateDefinition<T extends LifecycleTypes> {
+  /** Returns what is wrong with the values: a message, a list of problems, or nothing. Runs before the guard. */
+  validate?(
+    values: Readonly<Record<string, unknown>>,
+  ): string | readonly InputProblem[] | null;
+  /**
+   * Whether this actor may create this record in this state. It answers as
+   * a transition's guard does; being allowed to create a draft says nothing
+   * about who may submit it, which is the submitting transition's guard.
+   */
+  guard?(context: CreateContext<T>): GuardVerdict | Promise<GuardVerdict>;
+}
+
+/**
  * Fires `transition` on records that have stayed in one of `when` for longer
  * than `after` milliseconds. Records are found by a query, not by a timer per
  * record, so nothing is lost when a process restarts.
@@ -252,6 +322,8 @@ export interface LifecycleDefinition<T extends LifecycleTypes> {
    * first is the default and the others must be asked for.
    */
   readonly initial: OneOrMany<T['state']>;
+  /** What `runtime.create()` checks before it writes a record. */
+  readonly create?: CreateDefinition<T>;
   /** Names, or definitions with a title, `final`, `meta` and hooks of their own. */
   readonly states: readonly (T['state'] | StateDefinition<T['state'], T>)[];
   /** Defaults an administrator may override. They do not change the shape of the lifecycle. */
@@ -319,6 +391,7 @@ export interface Lifecycle<T extends LifecycleTypes> {
   readonly initial: T['state'];
   /** Every state a record may be created in, the default first. */
   readonly initialStates: readonly T['state'][];
+  readonly create: CreateDefinition<T>;
   readonly states: readonly T['state'][];
   /** Each state's title, whether it is final, and its metadata. */
   readonly stateInfo: ReadonlyMap<T['state'], LifecycleState<T['state']>>;
@@ -637,6 +710,7 @@ export function defineLifecycle<T extends LifecycleTypes>(
     versionField,
     initial: initialStates[0],
     initialStates,
+    create: definition.create ?? {},
     states: [...states],
     stateInfo,
     parameters: Object.freeze({

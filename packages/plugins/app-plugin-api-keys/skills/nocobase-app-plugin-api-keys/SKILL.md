@@ -38,7 +38,7 @@ are Better Auth's, and Better Auth's documentation applies unchanged.
   `POST /api/auth/api-key/delete`. All five act only on the caller's own keys.
 
 The plugin contributes no NocoBase route of its own. The endpoints above are
-Better Auth's, mounted by Authentication's `/api/auth/*` handler.
+Better Auth's, mounted by Authentication's `/api/auth/*` handler. Its server registers one thing: the access check that lets a valid key read the App's API document.
 
 ## Register it
 
@@ -89,6 +89,8 @@ roles. Read `context.get('auth')` exactly as for a cookie Session.
 Pass `apiKeyHeaders: ['x-api-key', 'authorization-key']` to accept a different
 header.
 
+To find out what the App's API offers, read its OpenAPI document with the same key: `GET /api/swagger` returns the JSON document and `GET /api/swagger/docs` the Swagger UI page. A signed-in session or a valid key may read it; anything else gets `401` with `error.reason` `API_DOCS_UNAUTHENTICATED`. The API key endpoints are listed there under `/api/auth/api-key/...`, tagged `Authentication`.
+
 ## What a key can reach, and what it cannot
 
 A key is its owner, so it reaches the Better Auth endpoints a Session reaches.
@@ -120,9 +122,7 @@ own, or the Session is minted and returned first.
 
 ## Other constraints
 
-- **A rejected key is answered with Better Auth's own status and code**, so a
-  guarded route tells the caller why: `401 KEY_EXPIRED`, `401 KEY_NOT_FOUND`,
-  `429 USAGE_EXCEEDED`. `getSession()` throws Better Auth's `APIError` for a
+- **A rejected key is answered with Better Auth's own status, and its code as `error.reason`** (domain `authentication`) in the standard error body, so a guarded route tells the caller why: `401 KEY_EXPIRED`, `401 KEY_NOT_FOUND`, `429 USAGE_EXCEEDED`. `getSession()` throws Better Auth's `APIError` for a
   refused key, as Better Auth itself does; a caller that only asks who is
   signed in catches it.
 - **Disabling a user disables that user's keys immediately**, because

@@ -178,10 +178,40 @@ describe('support ticket', () => {
         { message: '又坏了' },
         { actor: 'customer-li' },
       ),
-    ).rejects.toMatchObject({ code: 'GUARD_REJECTED' });
+    ).rejects.toMatchObject({
+      code: 'GUARD_REJECTED',
+      // The customer may reopen it; it is the time since it closed that refuses.
+      blockers: [{ code: 'reopenExpired', kind: 'precondition' }],
+    });
   });
 
-  it('retries a failing email and keeps the reply', async () => {
+  it('lets only a customer file a ticket, for themselves, with every field', async () => {
+    const { tickets } = kit();
+    const values = { ...ticket, requesterId: 'customer-li' };
+    await expect(
+      tickets.start(values, { actor: 'agent-zhou' }),
+    ).rejects.toMatchObject({
+      code: 'GUARD_REJECTED',
+      blockers: [{ code: 'customersOnly' }],
+    });
+    await expect(
+      tickets.start(values, { actor: 'customer-wang' }),
+    ).rejects.toMatchObject({ code: 'GUARD_REJECTED' });
+    await expect(
+      tickets.start(
+        { ...values, subject: ' ', category: 'gossip' },
+        { actor: 'customer-li' },
+      ),
+    ).rejects.toMatchObject({
+      code: 'INVALID_INPUT',
+      problems: [{ field: 'subject' }, { field: 'category' }],
+    });
+    expect(await tickets.start(values, { actor: 'customer-li' })).toMatchObject(
+      { status: 'new', requesterId: 'customer-li' },
+    );
+  });
+
+  it('retries a failing email after its backoff and keeps the reply', async () => {
     const { tickets } = kit();
     const created = tickets.create({ ...ticket, failNotifications: 2 });
     await tickets.fire(
@@ -190,6 +220,16 @@ describe('support ticket', () => {
       { message: '请重试' },
       { actor: 'agent-zhou' },
     );
+    expect(await tickets.effectRuns(created)).toMatchObject([
+      { status: 'queued', attempts: 1, runAfter: '2026-10-01T09:00:02.000Z' },
+    ]);
+    // The second attempt waits two seconds, the third four.
+    tickets.advance({ seconds: 1 });
+    expect(await tickets.runDue()).toBe(0);
+    tickets.advance({ seconds: 1 });
+    expect(await tickets.runDue()).toBe(1);
+    tickets.advance({ seconds: 4 });
+    expect(await tickets.runDue()).toBe(1);
     expect(await tickets.effectRuns(created)).toMatchObject([
       { status: 'succeeded', attempts: 3 },
     ]);
@@ -229,10 +269,11 @@ describe('expense report', () => {
   it('refuses to submit a report without items', async () => {
     const { expenses } = kit();
     const created = expenses.create({ ...report(0), items: [] });
+    // The request is fine; the report is not ready, which is its state.
     await expect(
       expenses.fire(created, 'submit', {}, { actor: 'lin' }),
     ).rejects.toMatchObject({
-      code: 'INVALID_INPUT',
+      code: 'INVALID_STATE',
       message: expect.stringContaining('at least one expense line'),
     });
   });
@@ -330,10 +371,28 @@ describe('expense report', () => {
     expect(await expenses.runTriggers()).toBe(0);
   });
 
+  it('lets only an employee file a report, for themselves', async () => {
+    const { expenses } = kit();
+    const values = { ...report(300_000), applicantId: 'lin' };
+    await expect(
+      expenses.start(values, { actor: 'chen' }),
+    ).rejects.toMatchObject({
+      code: 'GUARD_REJECTED',
+      blockers: [{ code: 'applicantsOnly' }],
+    });
+    expect(await expenses.start(values, { actor: 'lin' })).toMatchObject({
+      status: 'draft',
+    });
+  });
+
   it('stays approved when every payment attempt fails', async () => {
     const { expenses } = kit();
     const created = expenses.create(report(300_000, 5));
     await expenses.fire(created, 'submit', {}, { actor: 'lin' });
+    expenses.advance({ seconds: 2 });
+    await expenses.runDue();
+    expenses.advance({ seconds: 4 });
+    await expenses.runDue();
     expect(expenses.get(created).status).toBe('approved');
     const payment = (await expenses.effectRuns(created)).find(
       (run) => run.effect === 'expenses.requestPayment',
@@ -346,11 +405,18 @@ describe('expense report', () => {
     // Four failures: the three attempts, then the first retry's first try.
     const created = expenses.create(report(300_000, 4));
     await expenses.fire(created, 'submit', {}, { actor: 'lin' });
+    expenses.advance({ seconds: 2 });
+    await expenses.runDue();
+    expenses.advance({ seconds: 4 });
+    await expenses.runDue();
     const failed = (await expenses.effectRuns(created)).find(
       (run) => run.effect === 'expenses.requestPayment',
     );
     expect(failed?.status).toBe('failed');
     await expenses.runtime.retryRun(failed!.id);
+    // The retry's first try fails too, and its second waits out the capped backoff.
+    expenses.advance({ seconds: 10 });
+    await expenses.runDue();
     expect(expenses.get(created)).toMatchObject({
       status: 'paid',
       paymentRef: 'PAY-1',

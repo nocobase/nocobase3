@@ -8,6 +8,10 @@ import { numericExamplesRoutes } from '../../server/routes/numeric-examples.ts';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  createTestAppConfig,
+  type TestAppConfig,
+} from '@nocobase/app-testing/server';
+import {
   mkdirSync,
   mkdtempSync,
   rmSync,
@@ -122,6 +126,8 @@ interface RegisteredTestDisposer {
 const apps: CloseableResource[] = [];
 const servers: Server[] = [];
 const tempDirs: string[] = [];
+/** Test databases the applications above ran on, dropped once those applications have closed. */
+const testConfigs: TestAppConfig[] = [];
 const TEST_REALTIME_TOPIC = 'test:realtime';
 const require = createRequire(import.meta.url);
 
@@ -138,6 +144,7 @@ function requestApp(
 afterEach(async () => {
   vi.unstubAllEnvs();
   await Promise.all(apps.splice(0).map((app) => app.close()));
+  await Promise.all(testConfigs.splice(0).map((config) => config.dispose()));
 
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
@@ -242,7 +249,7 @@ describe('app server', () => {
       expect(ready).not.toHaveBeenCalled();
 
       await createEmbeddedServer(
-        createEmbeddedTestScope({
+        await createEmbeddedTestScope({
           id: 'provider-lifecycle-app',
           basePath: '/provider-lifecycle-app',
         }),
@@ -274,7 +281,7 @@ describe('app server', () => {
 
   it('creates embedded apps from a scope', async () => {
     const app = await createEmbeddedServer(
-      createEmbeddedTestScope({
+      await createEmbeddedTestScope({
         id: 'app-template-examples',
         basePath: '/embedded-app-template-examples',
       }),
@@ -323,7 +330,7 @@ describe('app server', () => {
         providerCalls.push(this.app.container.resolve(pluginServiceToken));
       }
     }
-    const scope = createEmbeddedTestScope({
+    const scope = await createEmbeddedTestScope({
       id: 'app-template-examples',
       basePath: '/embedded-app-template-examples',
     });
@@ -371,8 +378,7 @@ describe('app server', () => {
 
     expect(apiResponse.status).toBe(200);
     await expect(apiResponse.json()).resolves.toEqual({
-      scope: 'api',
-      message: 'Hello from the application provider',
+      data: { scope: 'api', message: 'Hello from the application provider' },
     });
     expect(rootResponse.status).toBe(200);
     expect(rootResponse.headers.get('content-type')).toContain('text/html');
@@ -390,7 +396,7 @@ describe('app server', () => {
     writeFileSync(configPath, 'heartbeat:\n  enabled: false\n');
     const runtime = await resolveAppRuntime(
       appRuntime,
-      createEmbeddedTestScope({
+      await createEmbeddedTestScope({
         id: 'app-template-examples',
         basePath: '/embedded-app-template-examples',
         configPath,
@@ -412,7 +418,7 @@ describe('app server', () => {
 
   it('does not leak plugin authentication into application-owned API routes', async () => {
     const app = await createEmbeddedServer(
-      createEmbeddedTestScope({
+      await createEmbeddedTestScope({
         id: 'app-template-examples',
         basePath: '/embedded-app-template-examples',
       }),
@@ -422,8 +428,7 @@ describe('app server', () => {
 
     expect(apiResponse.status).toBe(200);
     await expect(apiResponse.json()).resolves.toEqual({
-      scope: 'api',
-      message: 'Hello from the application provider',
+      data: { scope: 'api', message: 'Hello from the application provider' },
     });
   });
 
@@ -534,7 +539,7 @@ describe('app server', () => {
   it('registers embedded app resources with the scope', async () => {
     const registeredDisposers: RegisteredTestDisposer[] = [];
     const app = await createEmbeddedServer(
-      createEmbeddedTestScope(
+      await createEmbeddedTestScope(
         {
           id: 'app-template-examples',
           basePath: '/embedded-app-template-examples',
@@ -565,7 +570,7 @@ describe('app server', () => {
     );
 
     const app = await createEmbeddedServer(
-      createEmbeddedTestScope({
+      await createEmbeddedTestScope({
         id: 'app-template-examples',
         basePath: '/app-template-examples',
         clientDir: root,
@@ -607,7 +612,7 @@ describe('app server', () => {
     );
 
     const app = await createEmbeddedServer(
-      createEmbeddedTestScope({
+      await createEmbeddedTestScope({
         id: 'app-template-examples',
         basePath: '/app-template-examples',
         rootDir: appRoot,
@@ -651,7 +656,7 @@ describe('app server', () => {
     );
 
     const app = await createEmbeddedServer(
-      createEmbeddedTestScope({
+      await createEmbeddedTestScope({
         id: 'app-template-examples',
         basePath: '/app-template-examples',
         rootDir: appRoot,
@@ -705,7 +710,7 @@ describe('app server', () => {
       await createInstalledStandaloneServer({ viteDevUrl: false }),
     );
     const baseUrl = `http://localhost${app.application.publicBasePath}`;
-    const anonymous = await requestApp(app, `${baseUrl}/api/routes-example`);
+    const anonymous = await requestApp(app, `${baseUrl}/api/routesExample`);
     const anonymousRoot = await requestApp(
       app,
       `${baseUrl}/routes-example/root`,
@@ -725,7 +730,7 @@ describe('app server', () => {
     );
     const cookie = signIn.headers.get('set-cookie');
     expect(signIn.status).toBe(200);
-    const response = await requestApp(app, `${baseUrl}/api/routes-example`, {
+    const response = await requestApp(app, `${baseUrl}/api/routesExample`, {
       headers: { cookie: cookie ?? '' },
     });
     const rootResponse = await requestApp(
@@ -736,8 +741,7 @@ describe('app server', () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
-      plugin: '@nocobase/app-plugin-routes-example',
-      scope: 'api',
+      data: { plugin: '@nocobase/app-plugin-routes-example', scope: 'api' },
     });
     expect(rootResponse.status).toBe(200);
     await expect(rootResponse.json()).resolves.toMatchObject({
@@ -753,7 +757,7 @@ describe('app server', () => {
     const baseUrl = `http://localhost${app.application.publicBasePath}`;
     const anonymous = await requestApp(
       app,
-      `${baseUrl}/api/skills-example/notice`,
+      `${baseUrl}/api/skillsExample/notice`,
     );
 
     expect(anonymous.status).toBe(401);
@@ -771,15 +775,17 @@ describe('app server', () => {
     expect(signIn.status).toBe(200);
     const response = await requestApp(
       app,
-      `${baseUrl}/api/skills-example/notice`,
+      `${baseUrl}/api/skillsExample/notice`,
       { headers: { cookie: cookie ?? '' } },
     );
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
-      description: 'This notice was provided by a NocoBase plugin.',
-      title: 'Plugin Skills are working',
-      tone: 'success',
+      data: {
+        description: 'This notice was provided by a NocoBase plugin.',
+        title: 'Plugin Skills are working',
+        tone: 'success',
+      },
     });
   });
 
@@ -845,10 +851,7 @@ describe('app server', () => {
       await createInstalledStandaloneServer({ viteDevUrl: false }),
     );
     const baseUrl = `http://localhost${app.application.publicBasePath}`;
-    const anonymous = await requestApp(
-      app,
-      `${baseUrl}/api/jobs-example/schedule`,
-    );
+    const anonymous = await requestApp(app, `${baseUrl}/api/jobsExample/rules`);
     expect(anonymous.status).toBe(401);
 
     const signIn = await requestApp(
@@ -867,13 +870,12 @@ describe('app server', () => {
       async () => {
         const response = await requestApp(
           app,
-          `${baseUrl}/api/jobs-example/schedule`,
+          `${baseUrl}/api/jobsExample/rules`,
           { headers: { cookie } },
         );
         expect(response.status).toBe(200);
         await expect(response.json()).resolves.toMatchObject({
-          scope: '@nocobase/app-plugin-jobs-example',
-          rules: expect.arrayContaining([
+          data: expect.arrayContaining([
             expect.objectContaining({
               name: 'heartbeat',
               state: 'active',
@@ -896,7 +898,7 @@ describe('app server', () => {
       }),
     );
     const baseUrl = `http://localhost${app.application.publicBasePath}`;
-    const anonymous = await requestApp(app, `${baseUrl}/api/jobs-example/job`);
+    const anonymous = await requestApp(app, `${baseUrl}/api/jobsExample/tasks`);
     expect(anonymous.status).toBe(401);
 
     const signIn = await requestApp(
@@ -911,12 +913,18 @@ describe('app server', () => {
     expect(signIn.status).toBe(200);
     const cookie = signIn.headers.get('set-cookie') ?? '';
 
-    const submitted = await requestApp(app, `${baseUrl}/api/jobs-example/job`, {
-      method: 'POST',
-      headers: { cookie, origin: 'http://localhost' },
-    });
+    const submitted = await requestApp(
+      app,
+      `${baseUrl}/api/jobsExample/tasks`,
+      {
+        method: 'POST',
+        headers: { cookie, origin: 'http://localhost' },
+      },
+    );
     expect(submitted.status).toBe(202);
-    const task = (await submitted.json()) as { jobId: string };
+    const { data: task } = (await submitted.json()) as {
+      data: { jobId: string };
+    };
 
     // A task takes ten seconds; its first reported step is proof enough that it
     // runs on the jobs service. The plugin's own tests follow it to the end.
@@ -924,19 +932,17 @@ describe('app server', () => {
       async () => {
         const response = await requestApp(
           app,
-          `${baseUrl}/api/jobs-example/job`,
+          `${baseUrl}/api/jobsExample/tasks`,
           { headers: { cookie } },
         );
         expect(response.status).toBe(200);
         const body = (await response.json()) as {
-          scope: string;
-          tasks: { jobId: string; status: string; progress: number }[];
+          data: { jobId: string; status: string; progress: number }[];
         };
-        expect(body.scope).toBe('@nocobase/app-plugin-jobs-example');
-        expect(body.tasks).toEqual([
+        expect(body.data).toEqual([
           expect.objectContaining({ jobId: task.jobId, status: 'running' }),
         ]);
-        expect(body.tasks[0]!.progress).toBeGreaterThanOrEqual(10);
+        expect(body.data[0]!.progress).toBeGreaterThanOrEqual(10);
       },
       { timeout: 5000, interval: 100 },
     );
@@ -944,10 +950,24 @@ describe('app server', () => {
 
   it('publishes to and consumes queues from enabled app plugins', async () => {
     const app = trackCloseable(
-      await createInstalledStandaloneServer({ viteDevUrl: false }),
+      await createInstalledStandaloneServer({
+        viteDevUrl: false,
+        // The origin a cookie-bearing write is checked against.
+        env: { APP_PUBLIC_ORIGIN: 'http://localhost' },
+      }),
     );
     const baseUrl = `http://localhost${app.application.publicBasePath}`;
-    const anonymous = await requestApp(app, `${baseUrl}/api/queue-example`);
+    const greet = (cookie?: string): Promise<Response> =>
+      requestApp(app, `${baseUrl}/api/queueExample/greet`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          origin: 'http://localhost',
+          ...(cookie ? { cookie } : {}),
+        },
+        body: '{}',
+      });
+    const anonymous = await greet();
     expect(anonymous.status).toBe(401);
 
     const signIn = await requestApp(
@@ -959,32 +979,31 @@ describe('app server', () => {
         body: JSON.stringify({ username: 'nocobase', password: 'admin123' }),
       },
     );
-    const cookie = signIn.headers.get('set-cookie');
+    const cookie = signIn.headers.get('set-cookie') ?? '';
     expect(signIn.status).toBe(200);
-    const response = await requestApp(app, `${baseUrl}/api/queue-example`, {
-      headers: { cookie: cookie ?? '' },
-    });
+    const response = await greet(cookie);
 
     expect(response.status).toBe(202);
     await expect(response.json()).resolves.toMatchObject({
-      jobId: expect.any(String),
-      queue: 'queue-example',
-      channel: 'greeting',
+      data: {
+        jobId: expect.any(String),
+        queue: 'queue-example',
+        channel: 'greeting',
+      },
     });
     await vi.waitFor(
       async () => {
-        const deliveries = await requestApp(
+        const status = await requestApp(
           app,
-          `${baseUrl}/api/queue-example/deliveries`,
-          { headers: { cookie: cookie ?? '' } },
+          `${baseUrl}/api/queueExample/status`,
+          { headers: { cookie } },
         );
-        const body = (await deliveries.json()) as {
-          deliveries: Array<{ handler: string }>;
+        const body = (await status.json()) as {
+          data: { deliveries: Array<{ handler: string }> };
         };
-        expect(body.deliveries.map(({ handler }) => handler).sort()).toEqual([
-          'audit',
-          'greeting',
-        ]);
+        expect(
+          body.data.deliveries.map(({ handler }) => handler).sort(),
+        ).toEqual(['audit', 'greeting']);
       },
       { timeout: 5000, interval: 100 },
     );
@@ -996,14 +1015,16 @@ describe('app server', () => {
     );
     const response = await requestApp(
       app,
-      `http://localhost${app.application.publicBasePath}/api/service-provider-example/status`,
+      `http://localhost${app.application.publicBasePath}/api/serviceProviderExample/status`,
     );
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
-      service: '@nocobase/app-plugin-service-provider-example',
-      status: 'ready',
-      startedAt: expect.any(String),
+      data: {
+        service: '@nocobase/app-plugin-service-provider-example',
+        status: 'ready',
+        startedAt: expect.any(String),
+      },
     });
   });
 
@@ -1594,10 +1615,10 @@ function createTestConfig(
   };
 }
 
-function createEmbeddedTestScope(
+async function createEmbeddedTestScope(
   options: Omit<AppScope, 'registerDisposer'>,
   registeredDisposers: RegisteredTestDisposer[] = [],
-): AppScope {
+): Promise<AppScope> {
   const lifecycle = createAppDisposerRegistry();
   const sourceRoot = path.resolve(import.meta.dirname, '../..');
   const databaseDir = mkdtempSync(
@@ -1611,12 +1632,11 @@ function createEmbeddedTestScope(
   return {
     ...options,
     env: {
-      DB_DIALECT: 'sqlite',
       DB_MIGRATIONS_AUTO_RUN: 'true',
       ...options.env,
       APP_CONFIG_FILE: options.rootDir
         ? undefined
-        : writeRuntimeTestConfig(databaseDir, options.env),
+        : await writeRuntimeTestConfig(databaseDir, options.env),
     },
     paths:
       options.paths ??
@@ -1649,10 +1669,9 @@ async function createIsolatedStandaloneServer(
   return createStandaloneServer({
     ...options,
     env: {
-      DB_DIALECT: 'sqlite',
       DB_MIGRATIONS_AUTO_RUN: 'true',
       ...options.env,
-      APP_CONFIG_FILE: writeRuntimeTestConfig(databaseDir, options.env),
+      APP_CONFIG_FILE: await writeRuntimeTestConfig(databaseDir, options.env),
     },
     paths: {
       rootDir: sourceRoot,
@@ -1791,14 +1810,18 @@ function createMockQuery(
   } as unknown as QueryAdapter;
 }
 
-function writeRuntimeTestConfig(
+/**
+ * The configuration the application under test loads instead of config.yml: test databases of its own, on the dialect
+ * NOCOBASE_TEST_DB_DIALECT selects, dropped once the test's applications have closed.
+ */
+async function writeRuntimeTestConfig(
   directory: string,
   env: Readonly<Record<string, string | undefined>> = {},
-): string {
-  const file = path.join(directory, 'config.json');
-  writeFileSync(
-    file,
-    JSON.stringify({
+): Promise<string> {
+  const config = await createTestAppConfig({
+    connections: ['main', 'analytics'],
+    install: env.DB_MIGRATIONS_AUTO_RUN !== 'false',
+    config: {
       auth: { secret: 'test-auth-secret-at-least-32-characters' },
       // Scheduled jobs keep their state beside the test database, not in the template's storage/, which
       // another suite may be using at the same time.
@@ -1818,20 +1841,20 @@ function writeRuntimeTestConfig(
         },
       },
       database: {
-        default: 'main',
         connections: {
-          main: {
-            dialect: 'sqlite',
-            filename: path.join(directory, 'database.sqlite'),
+          main: { seeds: { autoRun: env.DB_SEEDS_AUTO_RUN === 'true' } },
+          // The template's own setting for its analytics connection, which installs itself on start.
+          analytics: {
+            migrations: { autoRun: true },
+            seeds: { autoRun: true },
           },
         },
-        migrations: { autoRun: env.DB_MIGRATIONS_AUTO_RUN !== 'false' },
-        seeds: { autoRun: env.DB_SEEDS_AUTO_RUN === 'true' },
       },
       hub: { host: { enabled: false } },
-    }),
-  );
-  return file;
+    },
+  });
+  testConfigs.push(config);
+  return config.path;
 }
 
 function readRuntimeConfig(html: string): {

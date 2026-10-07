@@ -60,6 +60,8 @@ HTTP: every Better Auth endpoint is served under `/api/auth/*` by the plugin's
 own route. A Better Auth plugin's endpoints appear there automatically. There
 is no other authentication REST surface.
 
+API document: the plugin lets a signed-in session read the App's OpenAPI document at `GET /api/swagger` and its Swagger UI at `GET /api/swagger/docs`; an anonymous request gets `401` with `error.reason` `API_DOCS_UNAUTHENTICATED`, and `@nocobase/app-plugin-api-keys` adds API keys as a second way in. The plugin also merges Better Auth's endpoints into that document from Better Auth's own OpenAPI generator, at their full `/api/auth/...` paths and tagged `Authentication`, so a Better Auth plugin added to `auth.plugins` is documented without further work. Browser-only steps are left out: `/sign-in/social`, `/link-social`, `/callback/{id}`, `/verify-email`, `/reset-password/{token}`, `/delete-user/callback` and `/error`. Do not add Better Auth's `openAPI()` plugin: it would publish its own unauthenticated `/api/auth/reference` page and schema route.
+
 ## Choose the task path
 
 | The task is                                                                                  | Read                                                                         |
@@ -79,7 +81,7 @@ Read only the reference the task needs.
   guards, the headless actions, and the `/api/auth/*` route.
 - The application owns `server/config/auth.ts`, `client/config/auth.ts`, the
   four guest routes in `client/routes.ts`, the pages in `client/pages/auth/`,
-  the UI in `client/extensions/nocobase-auth-ui/`, its own migrations for any
+  the authentication UI in `client/extensions/nocobase-auth-*/`, its own migrations for any
   schema a sign-in method adds, and every environment variable and secret.
 - Authorization owns permissions. Users owns the administration page. The
   application's own code decides which roles exist.
@@ -88,7 +90,7 @@ Read only the reference the task needs.
 
 ## Reversible UI customization
 
-Prefer props and page composition, then new application components outside `client/extensions/nocobase-auth-ui/`, over editing the original extension files. Reuse the headless authentication actions in custom forms. Disabling registration or another feature should preserve its pages and components, conditionally disable the route, and hide its entry points so it can be restored. The server must still reject the disabled operation. Read [client session and pages](references/client-session-and-pages.md) for the implementation and verification rules.
+Prefer props and page composition in `client/pages/auth/`, then new application components, over editing the UI Library blocks in `client/extensions/nocobase-auth-*/`. Reuse the headless authentication actions in custom forms. Disabling registration or another feature should preserve its pages and components, conditionally disable the route, and hide its entry points so it can be restored. The server must still reject the disabled operation. Read [client session and pages](references/client-session-and-pages.md) for the implementation and verification rules.
 
 ## Constraints
 
@@ -115,9 +117,7 @@ Prefer props and page composition, then new application components outside `clie
 
 ## Verification
 
-- Anonymous requests to a protected route return `401` with
-  `{ code: 'UNAUTHORIZED' }`; the same request with a session returns the
-  route's own response.
+- Anonymous requests to a protected route return `401` with the standard error body, `error.reason` `AUTHENTICATION_REQUIRED`; the same request with a session returns the route's own response.
 - An authenticated request that lacks permission returns `403` from
   authorization, not `401`.
 - A `required` route redirects an anonymous browser to `/login`; a `guest`

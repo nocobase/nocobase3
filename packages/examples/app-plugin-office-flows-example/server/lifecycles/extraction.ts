@@ -66,9 +66,10 @@ export const extractionLifecycle: Lifecycle<ExtractionTypes> =
               record[field] === undefined ||
               record[field] === '',
           ).map(([, label]) => label);
+          // Unfilled fields are the task's state: 400 FAILED_PRECONDITION.
           if (missing.length)
             throw new LifecycleError(
-              'INVALID_INPUT',
+              'INVALID_STATE',
               `Fill in before submitting: ${missing.join(', ')}.`,
             );
           return {};

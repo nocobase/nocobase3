@@ -1,73 +1,82 @@
 // The migration against a real database: up creates the example records and
 // the lifecycle log with their metadata, and down removes all of them.
-import path from 'node:path';
+import { describeMigration } from '@nocobase/app-testing/server';
+import type { DatabaseConnection } from '@nocobase/db';
+import { expect } from 'vitest';
 
-import { createDatabaseManager } from '@nocobase/db';
-import sqlite from '@nocobase/db-sqlite';
-import { expect, it } from 'vitest';
+import { migrations } from './fixtures.js';
 
-interface SchemaClient {
-  readonly schema: {
-    hasTable(name: string): Promise<boolean>;
-    hasColumn(table: string, column: string): Promise<boolean>;
-  };
-  raw(sql: string): Promise<readonly { readonly sql: string | null }[]>;
+const COLLECTIONS = [
+  'lifecycleExampleTickets',
+  'lifecycleExampleExpenses',
+  'lifecycleExampleTransitions',
+  'lifecycleExampleEffectRuns',
+];
+
+const TRANSITIONS = 'lifecycleExampleTransitions';
+
+/**
+ * Writes log entries for one record as the lifecycle store does: the request
+ * id as the caller sent it, and a request key that is never null.
+ */
+async function expectRequestKeysUnique(
+  connection: DatabaseConnection,
+): Promise<void> {
+  const log = connection.repository(TRANSITIONS);
+  const entry = (
+    version: number,
+    requestId: string | null,
+    requestKey: string,
+  ) => ({
+    values: {
+      lifecycle: 'expenses',
+      recordId: '1',
+      transition: 'submit',
+      from: 'draft',
+      to: 'awaitingManager',
+      actorId: 'lin',
+      input: {},
+      at: new Date(Date.UTC(2026, 9, 1, 9, version)).toISOString(),
+      version,
+      requestId,
+      requestKey,
+    },
+  });
+  // Two transitions without a request id, and one with: keys differ, so all fit.
+  await log.createOne(entry(1, null, '$v:1'));
+  await log.createOne(entry(2, null, '$v:2'));
+  await log.createOne(entry(3, 'click-1', 'click-1'));
+  // The same key on the same record is the same request, and is refused.
+  await expect(log.createOne(entry(4, 'click-1', 'click-1'))).rejects.toThrow();
+  // The same key on another record is another request.
+  await log.createOne({
+    values: { ...entry(4, 'click-1', 'click-1').values, recordId: '2' },
+  });
+  expect(await log.count({ filter: { recordId: '1' } })).toBe(3);
 }
 
-const COLLECTIONS: Readonly<Record<string, string>> = {
-  lifecycleExampleTickets: 'lifecycle_example_tickets',
-  lifecycleExampleExpenses: 'lifecycle_example_expenses',
-  lifecycleExampleTransitions: 'lifecycle_example_transitions',
-  lifecycleExampleEffectRuns: 'lifecycle_example_effect_runs',
-};
-
-it('creates the collections on up and removes them on down', async () => {
-  const database = createDatabaseManager({
-    default: 'main',
-    drivers: { sqlite },
-    connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
-  });
-  try {
-    const migrator = database.createMigrator({
-      connection: 'main',
-      directory: path.resolve(import.meta.dirname, '../database/migrations'),
-      packageName: '@nocobase/app-plugin-lifecycle-example',
+describeMigration('202610010001_lifecycle_example_create_collections', {
+  sources: migrations,
+  up: async ({ connection, expectCollection }) => {
+    for (const name of COLLECTIONS) await expectCollection(name).toExist();
+    for (const name of ['lifecycleExampleTickets', 'lifecycleExampleExpenses'])
+      await expectCollection(name).toHaveField('lifecycleVersion', {
+        nullable: false,
+      });
+    await expectCollection(TRANSITIONS).toHaveIndex(
+      ['lifecycle', 'recordId', 'version'],
+      { unique: true },
+    );
+    await expectCollection(TRANSITIONS).toHaveField('requestKey', {
+      nullable: false,
     });
-    await migrator.latest();
-    const connection = database.connection('main');
-    const client = await connection.client<SchemaClient>();
-    for (const [name, physical] of Object.entries(COLLECTIONS)) {
-      expect(await client.schema.hasTable(physical)).toBe(true);
-      expect(await connection.collectionMetadata.get(name)).toBeDefined();
-    }
-    for (const physical of [
-      'lifecycle_example_tickets',
-      'lifecycle_example_expenses',
-    ])
-      expect(await client.schema.hasColumn(physical, 'lifecycle_version')).toBe(
-        true,
-      );
-    const unique = (
-      await client.raw(
-        "select sql from sqlite_master where type = 'index' and sql like '%UNIQUE%'",
-      )
-    )
-      .map((row) => row.sql ?? '')
-      .join('\n');
-    expect(unique).toMatch(
-      /lifecycle_example_transitions.*lifecycle.*record_id.*version/,
+    await expectCollection(TRANSITIONS).toHaveIndex(
+      ['lifecycle', 'recordId', 'requestKey'],
+      { unique: true },
     );
-    // The request key is unique only where there is one.
-    expect(unique).toMatch(
-      /lifecycle_example_transitions.*request_id[^\n]*where[^\n]*request_id[^\n]*is not null/i,
-    );
-
-    await migrator.rollback();
-    for (const [name, physical] of Object.entries(COLLECTIONS)) {
-      expect(await client.schema.hasTable(physical)).toBe(false);
-      expect(await connection.collectionMetadata.get(name)).toBeUndefined();
-    }
-  } finally {
-    await database.destroy();
-  }
+    await expectRequestKeysUnique(connection);
+  },
+  down: async ({ expectCollection }) => {
+    for (const name of COLLECTIONS) await expectCollection(name).not.toExist();
+  },
 });

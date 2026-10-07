@@ -36,6 +36,7 @@ import { stateLabel, TASK_LIFECYCLE } from '../lib/labels.js';
 import { cn } from '../lib/utils.js';
 import { useLoader } from '../lib/use-loader.js';
 import { text } from '../../shared/text.js';
+import { pickEditable, TASK_FIELDS } from '../../shared/fields.js';
 
 interface TaskDetail extends RecordView {
   readonly kind: TaskKind;
@@ -122,7 +123,10 @@ function TaskPanel({
   }
 
   const save = (): Promise<void> =>
-    client.put(`tasks/${kind}/${id}`, { actAs: actor, values: draft });
+    client.patch(`tasks/${kind}/${id}`, {
+      actAs: actor,
+      values: pickEditable(draft, TASK_FIELDS[kind]),
+    });
   const fire = (transition: string, input: Plain = {}): Promise<void> =>
     act(async () => {
       if (Object.keys(draft).length) await save();
@@ -342,15 +346,11 @@ export default function TasksPage(): ReactElement {
   const [tick, setTick] = useState(0);
   const config = useLoader(() => client.get<Config>('config'), 'config');
   const tasks = useLoader(
-    () =>
-      client.get<{ tasks: Plain[] }>('tasks', actor).then((body) => body.tasks),
+    () => client.list('tasks', actor),
     `tasks:${actor}:${tick}`,
   );
   const notices = useLoader(
-    () =>
-      client
-        .get<{ notices: Plain[] }>('notices', actor)
-        .then((body) => body.notices),
+    () => client.list('notices', actor),
     `notices:${actor}:${tick}`,
   );
   return (

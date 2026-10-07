@@ -19,10 +19,8 @@ import {
   AuthorizationProvider,
   authorizationToken,
 } from '../../server/index.js';
-import {
-  createSqliteDatabase,
-  migratePlugins,
-} from '../helpers/database-fixture.js';
+import { createTestDatabase } from '@nocobase/app-testing/server';
+import { migratePlugins } from '../helpers/database-fixture.js';
 import { mountedRouter } from '../helpers/mounted-router.js';
 import { testRulePlugin } from '../helpers/rule-plugin.js';
 
@@ -145,9 +143,9 @@ describe('what an application configures about its own authorization', () => {
     );
 
     const [installed, rule, missing] = await Promise.all([
-      router.request('/portal/api/authz/permission-sets/options'),
-      router.request('/portal/api/authz/restriction-rules/options'),
-      router.request('/portal/api/authz/sharing-rules'),
+      router.request('/portal/api/authorization/permissionSets/options'),
+      router.request('/portal/api/authorization/restrictionRules/options'),
+      router.request('/portal/api/authorization/sharingRules'),
     ]);
 
     expect([installed.status, rule.status, missing.status]).toEqual([
@@ -172,7 +170,8 @@ describe('what an application configures about its own authorization', () => {
 
 describe('the authorization provider', () => {
   it('resolves a database-backed authorization and publishes targeted and global permission invalidations', async () => {
-    const database = createSqliteDatabase();
+    const testDatabase = await createTestDatabase();
+    const { database } = testDatabase;
     await migratePlugins(database, 'app-plugin-authorization');
     const container = new ServiceContainer();
     container.instance(databaseManagerToken, database);
@@ -227,12 +226,13 @@ describe('the authorization provider', () => {
       expect(closeUser).toHaveBeenCalledOnce();
       expect(closeGlobal).toHaveBeenCalledOnce();
     } finally {
-      await database.destroy();
+      await testDatabase.destroy();
     }
   });
 
   it('reports a stored grant that no longer applies at startup: throws in development and warns in production', async () => {
-    const database = createSqliteDatabase();
+    const testDatabase = await createTestDatabase();
+    const { database } = testDatabase;
     await migratePlugins(database, 'app-plugin-authorization');
     const container = new ServiceContainer();
     container.instance(databaseManagerToken, database);
@@ -300,7 +300,101 @@ describe('the authorization provider', () => {
     } finally {
       vi.unstubAllEnvs();
       warn.mockRestore();
-      await database.destroy();
+      await testDatabase.destroy();
+    }
+  });
+});
+
+describe('stored write grants at startup', () => {
+  it('reports a create or update grant naming a field a write can no longer use', async () => {
+    const testDatabase = await createTestDatabase();
+    const { database } = testDatabase;
+    await migratePlugins(database, 'app-plugin-authorization');
+    await database
+      .connection()
+      .builder.createCollection('counters', (counters) => {
+        counters.increments('id').primary();
+        counters.string('title', { length: 120 });
+      });
+    const container = new ServiceContainer();
+    container.instance(databaseManagerToken, database);
+    const provider = new AuthorizationProvider({
+      container,
+      config: { get: () => undefined },
+    } as unknown as AppPluginApplication);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      provider.register();
+      await provider.boot();
+      const authorization = container.resolve(authorizationToken);
+      authorization.compositeResources.define({
+        name: 'test.counters',
+        title: 'Counters',
+        actions: [
+          {
+            name: 'edit',
+            title: 'Edit',
+            grants: [
+              {
+                resource: { type: 'database.collection', id: 'counters' },
+                actions: [
+                  {
+                    action: 'update',
+                    policy: { type: 'database', fields: ['title', 'gone'] },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      });
+      // Saved before `amount` was dropped from `counters`, or written by a seed the routes never saw.
+      const now = new Date();
+      await database
+        .connection()
+        .query.insertInto('authorizationPermissionSets')
+        .values({
+          id: 'stale-set',
+          key: 'stale',
+          title: JSON.stringify('Stale'),
+          grants: JSON.stringify([
+            {
+              resource: { type: 'database.collection', id: 'counters' },
+              actions: [
+                {
+                  action: 'read',
+                  policy: { type: 'database', fields: ['amount'] },
+                },
+                {
+                  action: 'update',
+                  policy: { type: 'database', fields: ['title', 'amount'] },
+                },
+              ],
+            },
+            {
+              resource: { type: 'composite', id: 'test.counters' },
+              actions: [{ action: 'edit' }],
+            },
+          ]),
+          createdAt: now,
+          updatedAt: now,
+        })
+        .execute();
+
+      vi.stubEnv('NODE_ENV', 'production');
+      await expect(provider.start()).resolves.toBeUndefined();
+      expect(
+        warn.mock.calls
+          .map(([message]) => String(message))
+          .filter((message) => message.includes('Permission set')),
+      ).toEqual([
+        'Authorization: Permission set stale grants composite:test.counters.edit, whose database grants name what a write cannot use: Field "gone" is not a writable scalar field of "counters".',
+        'Authorization: Permission set stale has a write grant that no longer applies at grants.0.actions.1.policy.fields.1: Field "amount" is not a writable scalar field of "counters".',
+      ]);
+    } finally {
+      vi.unstubAllEnvs();
+      warn.mockRestore();
+      await testDatabase.destroy();
     }
   });
 });

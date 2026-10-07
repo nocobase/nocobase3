@@ -1,16 +1,23 @@
-// Both processes end to end on SQLite, with the plugin's migration and seed
-// applied. Effects run in process, so every assertion follows the action
-// that caused it.
-import { mkdtemp, rm } from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
-
-import { createDatabaseManager, type DatabaseManager } from '@nocobase/db';
-import sqlite from '@nocobase/db-sqlite';
+// Both processes end to end on a test database, with the plugin's migration
+// and seed applied. Effects run in process, so every assertion follows the
+// action that caused it.
+import {
+  authenticationToken,
+  type Auth,
+} from '@nocobase/app-plugin-authentication';
+import {
+  createTestDatabase,
+  type TestDatabase,
+} from '@nocobase/app-testing/server';
+import { createAppPaths } from '@nocobase/app-server/config';
+import type { AppPluginApplication } from '@nocobase/app-server/plugins';
+import type { DatabaseManager } from '@nocobase/db';
 import {
   createRepositoryLifecycleStore,
   LifecycleRuntime,
 } from '@nocobase/lifecycle';
+import { ServiceContainer } from '@nocobase/service-provider';
+import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
@@ -18,38 +25,22 @@ import {
   type DataRequestForm,
 } from '../shared/data-request.js';
 import { registerLifecycles } from '../server/lifecycles/index.js';
+import { apiRoutes } from '../server/routes/index.js';
 import { COLLECTIONS } from '../server/scope.js';
 import { OfficeFlowsService } from '../server/services/office-flows.js';
 import { OfficeStore, people, type Plain } from '../server/services/store.js';
+import { officeFlowsServiceToken } from '../server/tokens.js';
+import { migrations, seeds } from './fixtures.js';
 
-const root = path.resolve(import.meta.dirname, '..');
-let directory: string;
+let testDatabase: TestDatabase;
 let database: DatabaseManager;
 let service: OfficeFlowsService;
 let store: OfficeStore;
 let runtime: LifecycleRuntime;
 
 beforeEach(async () => {
-  directory = await mkdtemp(path.join(os.tmpdir(), 'office-flows-'));
-  database = createDatabaseManager({
-    drivers: { sqlite },
-    connections: {
-      main: {
-        dialect: 'sqlite',
-        filename: path.join(directory, 'main.sqlite'),
-      },
-    },
-  });
-  const packageName = '@nocobase/app-plugin-office-flows-example';
-  await database
-    .createMigrator({
-      directory: path.join(root, 'database/migrations'),
-      packageName,
-    })
-    .latest();
-  await database
-    .createSeeder({ directory: path.join(root, 'database/seeds'), packageName })
-    .run();
+  testDatabase = await createTestDatabase({ migrations, seeds });
+  database = testDatabase.database;
   runtime = new LifecycleRuntime({
     store: createRepositoryLifecycleStore(database, {
       collections: {
@@ -64,8 +55,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await database.destroy();
-  await rm(directory, { recursive: true, force: true });
+  await testDatabase.destroy();
 });
 
 function today(offset = 0): string {
@@ -94,7 +84,7 @@ async function approveToAcceptance(id: string): Promise<void> {
 }
 
 async function noticesOf(person: string): Promise<Plain[]> {
-  return service.notices(person);
+  return (await service.notices(person, { page: 1, pageSize: 100 })).records;
 }
 
 describe('data usage request', () => {
@@ -112,7 +102,8 @@ describe('data usage request', () => {
         'zhangwei',
       ),
     ).rejects.toMatchObject({
-      code: 'INVALID_INPUT',
+      // The request to submit is fine; the form is not complete yet.
+      code: 'INVALID_STATE',
       message: expect.stringContaining('授权人员范围'),
     });
     const detail = await service.dataRequestDetail(
@@ -171,7 +162,7 @@ describe('data usage request', () => {
     await expect(
       service.fire('extractions', taskId, 'submit', {}, 'liuyang'),
     ).rejects.toMatchObject({
-      code: 'INVALID_INPUT',
+      code: 'INVALID_STATE',
     });
     await service.updateExtraction(
       taskId,
@@ -193,6 +184,50 @@ describe('data usage request', () => {
       ((await service.dataRequestDetail(id, 'chenjing')).record as Plain)
         .status,
     ).toBe('completed');
+  });
+
+  it('edits only the fields an edit sends, and clears the answers they hide', async () => {
+    const created = await service.createDataRequest(
+      requestForm({ consumers: ['内部合规风险审计', '内部管理及分析'] }),
+      'zhangwei',
+    );
+    const id = String(created.id);
+    await service.updateDataRequest(
+      id,
+      { subject: '客户分群数据' },
+      'zhangwei',
+    );
+    let form = (await service.dataRequestDetail(id, 'zhangwei'))
+      .form as DataRequestForm;
+    expect(form).toMatchObject({
+      subject: '客户分群数据',
+      reason: '季度经营分析',
+      volume: '50≤x<2万',
+      frequency: 'once',
+      deliveryDate: today(5),
+      scope: 'internal',
+      consumers: ['内部合规风险审计', '内部管理及分析'],
+    });
+    // The change is merged into the stored form before it is normalized, so
+    // a new frequency alone drops the delivery date it no longer asks for.
+    await service.updateDataRequest(
+      id,
+      {
+        frequency: 'daily',
+        firstUseDate: today(1),
+        lastDeliveryDate: today(9),
+      },
+      'zhangwei',
+    );
+    form = (await service.dataRequestDetail(id, 'zhangwei'))
+      .form as DataRequestForm;
+    expect(form).toMatchObject({
+      subject: '客户分群数据',
+      frequency: 'daily',
+      deliveryDate: '',
+      firstUseDate: today(1),
+      consumers: ['内部合规风险审计', '内部管理及分析'],
+    });
   });
 
   it('creates the due tasks of a periodic request once, however often it sweeps', async () => {
@@ -315,7 +350,7 @@ describe('incoming document', () => {
       'zhoujie',
     );
     await service.fireIncoming(id, 'dispatchClerks', {}, 'zhoujie');
-    const [clerk] = await service.myTasks('gaoyan');
+    const [clerk] = (await service.myTasks('gaoyan')).records;
     const clerkId = String(clerk!.id);
 
     // Both of 财务部's clerks countersign before it moves on.
@@ -373,7 +408,7 @@ describe('incoming document', () => {
       expect.arrayContaining(['财务部派发执行团队', '财务部派发其他部门协助']),
     );
 
-    const [team] = await service.myTasks('luoxin');
+    const [team] = (await service.myTasks('luoxin')).records;
     const teamId = String(team!.id);
     expect(team!.kind).toBe('team');
     await service.addRow(
@@ -383,7 +418,7 @@ describe('incoming document', () => {
       'luoxin',
     );
     await service.fireTask('team', teamId, 'dispatchExecutors', {}, 'luoxin');
-    const [executor] = await service.myTasks('tangjun');
+    const [executor] = (await service.myTasks('tangjun')).records;
     expect(executor!.kind).toBe('executor');
 
     const executorView = await service.taskDetail(
@@ -433,7 +468,7 @@ describe('incoming document', () => {
       'zhoujie',
     );
     await service.fireIncoming(id, 'dispatchClerks', {}, 'zhoujie');
-    const [clerk] = await service.myTasks('luoxin');
+    const [clerk] = (await service.myTasks('luoxin')).records;
     await service.fireTask(
       'clerk',
       String(clerk!.id),
@@ -613,5 +648,217 @@ describe('office store under retries and races', () => {
     expect(retry.notified).toEqual([]);
     expect(retry.skipped).toEqual(['clerk-a']);
     expect(await database.repository(COLLECTIONS.clerkTasks).count({})).toBe(1);
+  });
+});
+
+describe('routes on the real service', () => {
+  const signedIn = {
+    required: () => async (context, next) => {
+      context.set('auth', { user: { id: 'user-1' } });
+      await next();
+    },
+  } as unknown as Auth;
+
+  async function router(): Promise<Hono> {
+    const container = new ServiceContainer();
+    container.instance(authenticationToken, signedIn);
+    container.instance(officeFlowsServiceToken, service);
+    const app: AppPluginApplication = {
+      appName: 'main',
+      publicBasePath: '',
+      config: {} as never,
+      paths: createAppPaths({ rootDir: '/missing' }),
+      router: new Hono(),
+      container,
+    };
+    return (await apiRoutes.createRouter(app)) as Hono;
+  }
+
+  function send(path: string, body: unknown, method = 'POST'): Request {
+    return new Request(`http://localhost/officeFlowsExample/${path}`, {
+      method,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  it('answers an open task as a failed precondition to the acceptor, and anyone else as forbidden', async () => {
+    const routes = await router();
+    const created = await service.createDataRequest(
+      requestForm({}),
+      'zhangwei',
+    );
+    const id = String(created.id);
+    await approveToAcceptance(id);
+    // The one-time extraction task is open: the acceptor has to wait for it.
+    const waiting = await routes.request(
+      send(`dataRequests/${id}/fire?actAs=chenjing`, {
+        transition: 'complete',
+      }),
+    );
+    expect(waiting.status).toBe(400);
+    await expect(waiting.json()).resolves.toMatchObject({
+      error: {
+        status: 'FAILED_PRECONDITION',
+        reason: 'GUARD_REJECTED',
+        domain: 'officeFlowsExample',
+        metadata: {
+          blockers: [{ code: 'extractionsOpen', kind: 'precondition' }],
+        },
+      },
+    });
+    const returned = await routes.request(
+      send(`dataRequests/${id}/fire?actAs=chenjing`, {
+        transition: 'acceptanceReturn',
+        input: { reason: '需要补充' },
+      }),
+    );
+    expect(returned.status).toBe(400);
+    await expect(returned.json()).resolves.toMatchObject({
+      error: { metadata: { blockers: [{ code: 'extractionsExist' }] } },
+    });
+    // The applicant may not complete it, open task or not.
+    const applicant = await routes.request(
+      send(`dataRequests/${id}/fire?actAs=zhangwei`, {
+        transition: 'complete',
+      }),
+    );
+    expect(applicant.status).toBe(403);
+    await expect(applicant.json()).resolves.toMatchObject({
+      error: {
+        status: 'PERMISSION_DENIED',
+        metadata: { blockers: [{ kind: 'permission' }] },
+      },
+    });
+  });
+
+  it('answers an incomplete form on submit as a failed precondition', async () => {
+    const routes = await router();
+    const created = await service.createDataRequest(
+      requestForm({ reason: '' }),
+      'zhangwei',
+    );
+    const submitted = await routes.request(
+      send(`dataRequests/${String(created.id)}/fire?actAs=zhangwei`, {
+        transition: 'submit',
+      }),
+    );
+    expect(submitted.status).toBe(400);
+    await expect(submitted.json()).resolves.toMatchObject({
+      error: { status: 'FAILED_PRECONDITION', reason: 'INVALID_STATE' },
+    });
+  });
+
+  it('patches only the form fields sent', async () => {
+    const routes = await router();
+    const created = await service.createDataRequest(
+      requestForm({}),
+      'zhangwei',
+    );
+    const id = String(created.id);
+    const patched = await routes.request(
+      send(
+        `dataRequests/${id}?actAs=zhangwei`,
+        { form: { reason: '年度审计' } },
+        'PATCH',
+      ),
+    );
+    expect(patched.status).toBe(200);
+    await expect(patched.json()).resolves.toMatchObject({
+      data: {
+        form: {
+          subject: '客户画像数据',
+          reason: '年度审计',
+          volume: '50≤x<2万',
+          consumers: ['内部合规风险审计'],
+          deliveryDate: today(5),
+        },
+      },
+    });
+  });
+
+  it('names the body field a refusal is about', async () => {
+    const routes = await router();
+    const created = await service.createIncoming(
+      {
+        title: '关于加强数据安全管理的通知',
+        code: 'SW-2026-0101',
+        sender: '监管机构',
+        senderRef: '监管〔2026〕12号',
+        summary: '要求各部门开展数据安全自查。',
+        officeOpinion: '财务部统筹。',
+        distributionType: 'review',
+      },
+      'zhoujie',
+    );
+    const id = String(created.id);
+    await service.fireIncoming(id, 'submit', {}, 'zhoujie');
+    await service.fireIncoming(id, 'approve', {}, 'wuhua');
+    await service.fireIncoming(id, 'approve', {}, 'zhengkai');
+
+    // A group the body names that does not exist: a bad request, not a 404.
+    const unknownGroup = await routes.request(
+      send(`incoming/${id}/managementRows?actAs=zhoujie`, { groupId: '999' }),
+    );
+    expect(unknownGroup.status).toBe(400);
+    await expect(unknownGroup.json()).resolves.toMatchObject({
+      error: {
+        status: 'INVALID_ARGUMENT',
+        reason: 'MANAGEMENT_GROUP_NOT_FOUND',
+        fieldViolations: [expect.objectContaining({ field: 'groupId' })],
+      },
+    });
+    const unnamed = await routes.request(
+      send(`incoming/${id}/managementRows?actAs=zhoujie`, {
+        members: ['caobin'],
+      }),
+    );
+    await expect(unnamed.json()).resolves.toMatchObject({
+      error: {
+        reason: 'MANAGEMENT_GROUP_REQUIRED',
+        fieldViolations: [expect.objectContaining({ field: 'groupName' })],
+      },
+    });
+    const noDepartment = await routes.request(
+      send(`incoming/${id}/rows?actAs=zhoujie`, { departmentName: '不存在' }),
+    );
+    expect(noDepartment.status).toBe(400);
+    await expect(noDepartment.json()).resolves.toMatchObject({
+      error: {
+        reason: 'DEPARTMENT_REQUIRED',
+        fieldViolations: [expect.objectContaining({ field: 'departmentName' })],
+      },
+    });
+    // The document the URL names still answers 404 when it is missing.
+    const missing = await routes.request(
+      send('incoming/999/managementRows?actAs=zhoujie', { groupId: '1' }),
+    );
+    expect(missing.status).toBe(404);
+  });
+
+  it('names both fields of a manual extraction task left empty', async () => {
+    const routes = await router();
+    const created = await service.createDataRequest(
+      requestForm({}),
+      'zhangwei',
+    );
+    const id = String(created.id);
+    await approveToAcceptance(id);
+    const empty = await routes.request(
+      send(`dataRequests/${id}/extractions?actAs=chenjing`, {
+        topic: ' ',
+        scheduledDate: 'soon',
+      }),
+    );
+    expect(empty.status).toBe(400);
+    await expect(empty.json()).resolves.toMatchObject({
+      error: {
+        reason: 'EXTRACTION_FIELDS_REQUIRED',
+        fieldViolations: [
+          expect.objectContaining({ field: 'topic' }),
+          expect.objectContaining({ field: 'scheduledDate' }),
+        ],
+      },
+    });
   });
 });

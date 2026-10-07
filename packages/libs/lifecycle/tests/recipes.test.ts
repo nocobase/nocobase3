@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   defineEffect,
+  EffectFailure,
   defineLifecycle,
   LifecycleError,
   LifecycleRuntime,
@@ -556,11 +557,11 @@ describe('9. A background process in steps', () => {
 });
 
 describe('10 and 11. Payment, its keys, and the webhook', () => {
-  type State = 'approved' | 'paid' | 'needsAttention';
+  type State = 'approved' | 'paid' | 'needsAttention' | 'needsNewAccount';
   class PaymentDeclined extends Error {}
   interface Services {
     readonly payments: {
-      outcomes: ('timeout' | 'declined' | 'ok')[];
+      outcomes: ('timeout' | 'declined' | 'frozen' | 'ok')[];
       businessKeys: string[];
       runKeys: string[];
     };
@@ -584,6 +585,11 @@ describe('10 and 11. Payment, its keys, and the webhook', () => {
       payments.businessKeys.push(`expense-payment:${String(record.id)}`);
       const outcome = payments.outcomes.shift() ?? 'ok';
       if (outcome === 'declined') throw new PaymentDeclined('Declined.');
+      // An answer the next transition branches on, by code rather than by wording.
+      if (outcome === 'frozen')
+        throw new EffectFailure('payeeFrozen', 'The payee account is frozen.', {
+          details: { payeeId: 'lin' },
+        });
       if (outcome === 'timeout') throw new Error('Timed out.');
       return { paymentRef: 'PAY-1' };
     },
@@ -591,7 +597,12 @@ describe('10 and 11. Payment, its keys, and the webhook', () => {
   const expenses = defineLifecycle<Types>({
     name: 'r10',
     initial: 'approved',
-    states: ['approved', { name: 'paid', final: true }, 'needsAttention'],
+    states: [
+      'approved',
+      { name: 'paid', final: true },
+      'needsAttention',
+      'needsNewAccount',
+    ],
     transitions: {
       paid: {
         from: 'approved',
@@ -601,11 +612,16 @@ describe('10 and 11. Payment, its keys, and the webhook', () => {
       },
       paymentFailed: {
         from: 'approved',
-        to: 'needsAttention',
+        to: ['needsAttention', 'needsNewAccount'],
         guard: systemOnly,
+        route: ({ input }) =>
+          input.errorCode === 'payeeFrozen'
+            ? 'needsNewAccount'
+            : 'needsAttention',
         accept: ['error'],
       },
       retryPayment: { from: 'needsAttention', to: 'approved' },
+      accountChanged: { from: 'needsNewAccount', to: 'approved' },
     },
     onEnter: { approved: [requestPayment] },
   });
@@ -631,15 +647,60 @@ describe('10 and 11. Payment, its keys, and the webhook', () => {
     ]);
   });
 
+  it('routes a structured failure by its code, without retrying it', async () => {
+    const { kit, payments } = setup(['frozen']);
+    const expense = await kit.start();
+    expect(kit.get(expense).status).toBe('needsNewAccount');
+    expect(payments.runKeys).toHaveLength(1);
+    expect((await kit.transitions(expense)).at(-1)).toMatchObject({
+      transition: 'paymentFailed',
+      input: {
+        error: 'The payee account is frozen.',
+        errorCode: 'payeeFrozen',
+        details: { payeeId: 'lin' },
+      },
+    });
+  });
+
+  it('retries a settled run only by force, and its late success still cannot reach paid', async () => {
+    const { kit, payments } = setup(['timeout', 'timeout']);
+    const expense = await kit.start();
+    const [failed] = await kit.effectRuns(expense);
+    expect(
+      await kit.runtime.retryRun(failed!.id, {
+        force: true,
+        reason: 'The provider confirms nothing was paid.',
+      }),
+    ).toMatchObject({ status: 'succeeded', attempts: 3 });
+    expect(payments.runKeys).toHaveLength(3);
+    // paid cannot start from needsAttention: the success is recorded and leads nowhere.
+    expect(kit.get(expense).status).toBe('needsAttention');
+    expect(await kit.history(expense)).toEqual(['$create', 'paymentFailed']);
+  });
+
+  it('continues a run once per outcome, even when a forced retry fails again', async () => {
+    const { kit } = setup(['timeout', 'timeout', 'timeout', 'timeout']);
+    const expense = await kit.start();
+    const [failed] = await kit.effectRuns(expense);
+    expect(
+      await kit.runtime.retryRun(failed!.id, { force: true }),
+    ).toMatchObject({ status: 'failed', attempts: 4 });
+    expect(await kit.history(expense)).toEqual(['$create', 'paymentFailed']);
+  });
+
   it('cannot reach paid by retrying the run, and keeps one business key across runs', async () => {
     const { kit, payments } = setup(['timeout', 'timeout']);
     const expense = await kit.start();
     expect(kit.get(expense).status).toBe('needsAttention');
     const [failed] = await kit.effectRuns(expense);
 
-    // The run now succeeds, but onFailure already moved the report on.
-    await kit.runtime.retryRun(failed!.id);
-    expect(kit.get(expense).status).toBe('needsAttention');
+    // onFailure already moved the report on: paying now would leave it
+    // waiting for attention with the money gone.
+    await expect(kit.runtime.retryRun(failed!.id)).rejects.toMatchObject({
+      code: 'RUN_SETTLED',
+      message: expect.stringContaining('"paymentFailed"'),
+    });
+    expect(payments.runKeys).toHaveLength(2);
 
     // The explicit recovery path re-enters approved: a new run, a new run key.
     await kit.fire(expense, 'retryPayment');

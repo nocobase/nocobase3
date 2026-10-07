@@ -1,5 +1,7 @@
 import type { ApiClient } from '@nocobase/app-client';
 
+import { OFFICE_FLOWS_ROUTES } from '../../shared/routes.js';
+
 export type Plain = Record<string, unknown>;
 
 /** Mirrors the server's `LifecycleDescription`; the client imports no server code. */
@@ -71,14 +73,14 @@ export type TaskKind = 'clerk' | 'team' | 'executor';
 
 export interface Config {
   readonly departments: readonly {
-    readonly id: number;
+    readonly id: string;
     readonly name: string;
     readonly clerks: readonly string[];
     readonly heads: readonly string[];
     readonly leaders: readonly string[];
   }[];
   readonly managementGroups: readonly {
-    readonly id: number;
+    readonly id: string;
     readonly name: string;
     readonly members: readonly string[];
   }[];
@@ -92,25 +94,61 @@ export interface Config {
 /** The transition name of the log entry that records a creation. */
 export const CREATE_TRANSITION = '$create';
 
-const base = 'office-flows';
+const base = OFFICE_FLOWS_ROUTES;
 
-/** One place that knows the paths, so pages read as what they do. */
+/** Lists show at most this many records; the routes page by it. */
+const PAGE_SIZE = '100';
+
+/** `actAs` travels in the query string; the rest of `json` is the body. */
+function split(json: Plain): { query?: Record<string, string>; json: Plain } {
+  const { actAs, ...body } = json;
+  return {
+    ...(typeof actAs === 'string' ? { query: { actAs } } : {}),
+    json: body,
+  };
+}
+
+/** One place that knows the paths and the response shape, so pages read as what they do. */
 export function api(client: ApiClient): {
   get<T>(path: string, actAs?: string): Promise<T>;
+  list<T = Plain>(path: string, actAs?: string): Promise<T[]>;
   post<T = void>(path: string, json: Plain): Promise<T>;
-  put(path: string, json: Plain): Promise<void>;
+  patch(path: string, json: Plain): Promise<void>;
   remove(path: string, actAs: string): Promise<void>;
 } {
+  const query = (actAs?: string): Record<string, string> | undefined =>
+    actAs ? { actAs } : undefined;
   return {
-    get: <T>(path: string, actAs?: string): Promise<T> =>
-      client.request<T>({
+    get: async <T>(path: string, actAs?: string): Promise<T> => {
+      const actor = query(actAs);
+      return (
+        await client.request<{ readonly data: T }>({
+          path: `${base}/${path}`,
+          ...(actor ? { query: actor } : {}),
+        })
+      ).data;
+    },
+    list: async <T = Plain>(path: string, actAs?: string): Promise<T[]> =>
+      (
+        await client.request<{ readonly data: T[] }>({
+          path: `${base}/${path}`,
+          query: { ...query(actAs), pageSize: PAGE_SIZE },
+        })
+      ).data,
+    post: async <T = void>(path: string, json: Plain): Promise<T> => {
+      const body = await client.request<{ readonly data?: T } | undefined>({
+        method: 'POST',
         path: `${base}/${path}`,
-        ...(actAs ? { query: { actAs } } : {}),
-      }),
-    post: <T = void>(path: string, json: Plain): Promise<T> =>
-      client.request<T>({ method: 'POST', path: `${base}/${path}`, json }),
-    put: async (path: string, json: Plain): Promise<void> => {
-      await client.request({ method: 'PUT', path: `${base}/${path}`, json });
+        ...split(json),
+      });
+      return body?.data as T;
+    },
+    patch: async (path: string, json: Plain): Promise<void> => {
+      await client.request({
+        method: 'PATCH',
+        path: `${base}/${path}`,
+        ...split(json),
+      });
     },
     remove: async (path: string, actAs: string): Promise<void> => {
       await client.request({
@@ -126,11 +164,13 @@ export function list(value: unknown): string[] {
   return Array.isArray(value) ? value.map(String) : [];
 }
 
+/** The standard error body's message, or the error's own. */
 export function errorMessage(cause: unknown): string {
   if (typeof cause === 'object' && cause !== null) {
-    const payload = (cause as { payload?: unknown }).payload;
-    if (typeof payload === 'object' && payload !== null && 'message' in payload)
-      return String(payload.message);
+    const payload = (cause as { payload?: { error?: { message?: unknown } } })
+      .payload;
+    if (typeof payload?.error?.message === 'string')
+      return payload.error.message;
   }
   return cause instanceof Error ? cause.message : String(cause);
 }

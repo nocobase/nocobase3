@@ -9,19 +9,40 @@ import {
 } from '@nocobase/app-plugin-authorization/server';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import {
+  ApiError,
+  apiErrorHandler,
+  apiErrorResponse,
+  apiErrorResponses,
+  apiValidator,
+  dataResponse,
   defineApiRoutes,
+  describeRoute,
+  emptyResponse,
+  listResponse,
+  type ApiErrorStatus,
   type AppApiRouteContribution,
 } from '@nocobase/app-server/router';
-import { Hono, type Context } from 'hono';
-import type { ContentfulStatusCode } from 'hono/utils/http-status';
+import { Hono, type Context, type MiddlewareHandler } from 'hono';
 
 import { DEPARTMENTS_SETTINGS } from '../resources.js';
 import {
   OrganizationError,
   organizationServiceToken,
   type Department,
+  type DirectMember,
   type OrganizationErrorCode,
 } from '../tokens.js';
+import {
+  AddMemberInput,
+  CreateDepartmentInput,
+  Department as DepartmentSchema,
+  DepartmentMember,
+  DepartmentParams,
+  MemberCandidatesQuery,
+  MemberParams,
+  UpdateDepartmentInput,
+  UserOption,
+} from './schemas.js';
 
 /** A department as the API answers it: the head's display name travels with its id. */
 interface DepartmentView extends Department {
@@ -32,118 +53,91 @@ interface DepartmentView extends Department {
   } | null;
 }
 
-type RouteContext = Context<AuthorizationEnv>;
+/** The plugin's URL namespace, which is also the domain of every error it reports. */
+export const DEPARTMENTS_EXAMPLE_DOMAIN = 'departmentsExample';
 
-class InputError extends Error {}
-
-const STATUS: Record<OrganizationErrorCode, ContentfulStatusCode> = {
-  DEPARTMENT_NOT_FOUND: 404,
-  MEMBER_NOT_FOUND: 404,
-  DEPARTMENT_EXISTS: 409,
-  PARENT_NOT_FOUND: 400,
-  PARENT_CYCLE: 400,
-  USER_NOT_FOUND: 400,
-  INVALID_INPUT: 400,
+const STATUS: Record<OrganizationErrorCode, ApiErrorStatus> = {
+  DEPARTMENT_NOT_FOUND: 'NOT_FOUND',
+  MEMBER_NOT_FOUND: 'NOT_FOUND',
+  DEPARTMENT_EXISTS: 'ALREADY_EXISTS',
+  PARENT_NOT_FOUND: 'INVALID_ARGUMENT',
+  PARENT_CYCLE: 'INVALID_ARGUMENT',
+  USER_NOT_FOUND: 'INVALID_ARGUMENT',
+  INVALID_INPUT: 'INVALID_ARGUMENT',
 };
 
-async function requireSettings(
-  c: RouteContext,
-  action: 'read' | 'update',
-): Promise<void> {
-  await c.get('authz').require({
-    resource: { type: 'settings', id: DEPARTMENTS_SETTINGS },
-    action,
+/**
+ * The body field an error refers to, when it names a record the body referenced rather than the one in the path.
+ * A missing user is the new member's `userId` when adding a member, and the head's `managerId` everywhere else.
+ */
+function violatedField(
+  code: OrganizationErrorCode,
+  c: Context,
+): string | undefined {
+  if (code === 'PARENT_NOT_FOUND' || code === 'PARENT_CYCLE') return 'parentId';
+  if (code === 'USER_NOT_FOUND')
+    return c.req.method === 'POST' && c.req.path.endsWith('/members')
+      ? 'userId'
+      : 'managerId';
+  return undefined;
+}
+
+function toDepartmentsApiError(error: OrganizationError, c: Context): ApiError {
+  const field = violatedField(error.code, c);
+  return new ApiError({
+    status: STATUS[error.code],
+    reason: error.code,
+    domain: DEPARTMENTS_EXAMPLE_DOMAIN,
+    message: error.message,
+    ...(field
+      ? { fieldViolations: [{ field, description: error.message }] }
+      : {}),
+    cause: error,
   });
 }
 
-async function readObject(c: RouteContext): Promise<Record<string, unknown>> {
-  let body: unknown;
-  try {
-    body = await c.req.json();
-  } catch {
-    throw new InputError('The request body must be JSON.');
-  }
-  if (!body || typeof body !== 'object' || Array.isArray(body))
-    throw new InputError('The request body must be an object.');
-  return body as Record<string, unknown>;
+/**
+ * Require the Departments settings action before anything about the request is looked at. Mounted ahead of
+ * `validator()`, so a caller without it is answered 403 whatever its input holds and whether or not the department
+ * exists.
+ */
+function requireSettings(
+  action: 'read' | 'update',
+): MiddlewareHandler<AuthorizationEnv> {
+  return async (c, next) => {
+    await c.get('authz').require({
+      resource: { type: 'settings', id: DEPARTMENTS_SETTINGS },
+      action,
+    });
+    await next();
+  };
 }
 
-function optionalString(
-  body: Record<string, unknown>,
-  key: string,
-): string | undefined {
-  const value = body[key];
-  if (value === undefined) return undefined;
-  if (typeof value !== 'string' || !value)
-    throw new InputError(`\`${key}\` must be a non-empty string.`);
-  return value;
-}
+/** Every route of this plugin is listed under one tag in the API document at `/api/swagger/docs`. */
+const tags = ['DepartmentsExample'];
+const READ = 'Requires `settings:departments` `read`.';
+const UPDATE = 'Requires `settings:departments` `update`.';
+const departmentNotFound = apiErrorResponse(
+  404,
+  'The department does not exist (`DEPARTMENT_NOT_FOUND`).',
+);
+const memberNotFound = apiErrorResponse(
+  404,
+  'The department does not exist (`DEPARTMENT_NOT_FOUND`), or the user is not its member (`MEMBER_NOT_FOUND`).',
+);
 
-function optionalParent(
-  body: Record<string, unknown>,
-): string | null | undefined {
-  if (body.parentId === null) return null;
-  return optionalString(body, 'parentId');
-}
-
-function optionalRegion(
-  body: Record<string, unknown>,
-): string | null | undefined {
-  if (body.region === null) return null;
-  return optionalString(body, 'region');
-}
-
-function optionalManager(
-  body: Record<string, unknown>,
-): string | null | undefined {
-  if (body.managerId === null) return null;
-  return optionalString(body, 'managerId');
-}
-
-function optionalInteger(
-  body: Record<string, unknown>,
-  key: string,
-): number | undefined {
-  const value = body[key];
-  if (value === undefined) return undefined;
-  if (!Number.isInteger(value))
-    throw new InputError(`\`${key}\` must be an integer.`);
-  return value as number;
-}
-
-function optionalBoolean(
-  body: Record<string, unknown>,
-  key: string,
-): boolean | undefined {
-  const value = body[key];
-  if (value === undefined) return undefined;
-  if (typeof value !== 'boolean')
-    throw new InputError(`\`${key}\` must be a boolean.`);
-  return value;
-}
-
-function pageQuery(c: RouteContext): {
-  search?: string;
-  page: number;
-  pageSize: number;
-} {
-  const page = Number(c.req.query('page') ?? '1');
-  const pageSize = Number(c.req.query('pageSize') ?? '30');
-  const search = c.req.query('search');
-  if (
-    !Number.isInteger(page) ||
-    page < 1 ||
-    !Number.isInteger(pageSize) ||
-    pageSize < 1 ||
-    pageSize > 100
-  )
-    throw new InputError('Invalid pagination.');
-  return { page, pageSize, ...(search ? { search } : {}) };
+/** Drops the keys a client omitted, so an omitted field and an explicit `null` stay different. */
+function defined<T extends object>(
+  value: T,
+): { [K in keyof T]: Exclude<T[K], undefined> } {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, entry]) => entry !== undefined),
+  ) as { [K in keyof T]: Exclude<T[K], undefined> };
 }
 
 /**
- * The Departments settings API under `/api/departments-example`. Every route authenticates and authorizes on its
- * own sub-router. Errors answer a `code` the client translates; `message` is for logs and API callers.
+ * The Departments settings API under `/api/departmentsExample`. Every route authenticates and authorizes on its
+ * own sub-router. Errors are `ApiError`s in the `departmentsExample` domain; the client translates their `reason`.
  */
 export function createOrganizationRoutes(
   app: AppPluginApplication,
@@ -199,148 +193,329 @@ export function createOrganizationRoutes(
     });
   }
 
+  async function memberView(
+    departmentId: string,
+    userId: string,
+  ): Promise<DirectMember> {
+    const member = (await organization.directMembers(departmentId)).find(
+      (entry) => entry.userId === userId,
+    );
+    if (!member)
+      throw new OrganizationError(
+        'MEMBER_NOT_FOUND',
+        `User "${userId}" is not a member of "${departmentId}".`,
+      );
+    return member;
+  }
+
+  async function departmentView(id: string): Promise<DepartmentView> {
+    const department = await organization.getDepartment(id);
+    if (!department)
+      throw new OrganizationError(
+        'DEPARTMENT_NOT_FOUND',
+        `Department "${id}" does not exist.`,
+      );
+    const [view] = await withManagers([department]);
+    return view;
+  }
+
   const routes = new Hono<AuthorizationEnv>();
   routes.use('*', auth.required(), authz.middleware());
-  // A denied `require` answers 403 on its own; only this plugin's errors need mapping.
-  routes.onError((error, c) => {
-    if (error instanceof InputError)
-      return c.json({ code: 'INVALID_INPUT', message: error.message }, 400);
-    if (error instanceof OrganizationError)
-      return c.json(
-        { code: error.code, message: error.message },
-        STATUS[error.code],
+  // A denied `require` answers 403 on its own; only this plugin's errors need translating.
+  routes.onError((error, c) =>
+    apiErrorHandler(
+      error instanceof OrganizationError
+        ? toDepartmentsApiError(error, c)
+        : error,
+      c,
+    ),
+  );
+
+  const departmentParams = apiValidator('param', DepartmentParams);
+  const memberParams = apiValidator('param', MemberParams);
+
+  const read = requireSettings('read');
+  const update = requireSettings('update');
+
+  // Each route declares itself after its permission check and before its validators, which document its input.
+  routes.get(
+    '/departments',
+    read,
+    describeRoute({
+      tags,
+      summary: 'List departments',
+      operationId: 'departmentsExampleListDepartments',
+      description: `Every department, ordered by \`sortOrder\` and then title. A bounded list: it is not paged and answers \`meta.total\`. ${READ}`,
+      responses: {
+        200: listResponse(DepartmentSchema),
+        401: apiErrorResponse(401),
+        403: apiErrorResponse(403),
+        500: apiErrorResponse(500),
+      },
+    }),
+    async (c) => {
+      const departments = await withManagers(await organization.listTree());
+      return c.json({
+        data: departments,
+        meta: { total: departments.length },
+      });
+    },
+  );
+
+  routes.post(
+    '/departments',
+    update,
+    describeRoute({
+      tags,
+      summary: 'Create a department',
+      operationId: 'departmentsExampleCreateDepartment',
+      description: `A head appointed with the department gains its scope. ${UPDATE}`,
+      responses: {
+        201: dataResponse(DepartmentSchema, 'The created department.'),
+        ...apiErrorResponses,
+        400: apiErrorResponse(
+          400,
+          'The parent does not exist (`PARENT_NOT_FOUND`), or the head is not an enabled user (`USER_NOT_FOUND`).',
+        ),
+        409: apiErrorResponse(
+          409,
+          'A department with this id already exists (`DEPARTMENT_EXISTS`).',
+        ),
+      },
+    }),
+    apiValidator('json', CreateDepartmentInput),
+    async (c) => {
+      const department = await organization.createDepartment(
+        defined(c.req.valid('json')),
       );
-    throw error;
-  });
-
-  routes.get('/departments', async (c) => {
-    await requireSettings(c, 'read');
-    return c.json({ data: await withManagers(await organization.listTree()) });
-  });
-
-  routes.post('/departments', async (c) => {
-    await requireSettings(c, 'update');
-    const body = await readObject(c);
-    const id = optionalString(body, 'id');
-    const parentId = optionalParent(body);
-    const region = optionalRegion(body);
-    const managerId = optionalManager(body);
-    const sortOrder = optionalInteger(body, 'sortOrder');
-    const department = await organization.createDepartment({
-      title: typeof body.title === 'string' ? body.title : '',
-      ...(id === undefined ? {} : { id }),
-      ...(parentId === undefined ? {} : { parentId }),
-      ...(region === undefined ? {} : { region }),
-      ...(managerId === undefined ? {} : { managerId }),
-      ...(sortOrder === undefined ? {} : { sortOrder }),
-    });
-    // A head appointed with the department gains its scope.
-    if (department.managerId !== null)
-      await refreshUsers([department.managerId]);
-    const [view] = await withManagers([department]);
-    return c.json({ data: view }, 201);
-  });
-
-  routes.get('/departments/:id', async (c) => {
-    await requireSettings(c, 'read');
-    const department = await organization.getDepartment(c.req.param('id'));
-    if (!department)
-      return c.json(
-        { code: 'DEPARTMENT_NOT_FOUND', message: 'Department not found' },
-        404,
-      );
-    const [view] = await withManagers([department]);
-    return c.json({ data: view });
-  });
-
-  routes.patch('/departments/:id', async (c) => {
-    await requireSettings(c, 'update');
-    const body = await readObject(c);
-    const title = optionalString(body, 'title');
-    const parentId = optionalParent(body);
-    const region = optionalRegion(body);
-    const managerId = optionalManager(body);
-    const sortOrder = optionalInteger(body, 'sortOrder');
-    const result = await organization.updateDepartment(c.req.param('id'), {
-      ...(title === undefined ? {} : { title }),
-      ...(parentId === undefined ? {} : { parentId }),
-      ...(region === undefined ? {} : { region }),
-      ...(managerId === undefined ? {} : { managerId }),
-      ...(sortOrder === undefined ? {} : { sortOrder }),
-    });
-    // Members whose inheritance moved, and the old and new heads.
-    await refreshUsers(result.changed);
-    const [view] = await withManagers([result.department]);
-    return c.json({ data: view });
-  });
-
-  routes.put('/departments/:id/active', async (c) => {
-    await requireSettings(c, 'update');
-    const active = optionalBoolean(await readObject(c), 'active');
-    if (active === undefined) throw new InputError('`active` is required.');
-    const changed = await organization.setActive(c.req.param('id'), active);
-    await refreshUsers(changed);
-    return c.json({ data: { changed } });
-  });
-
-  routes.get('/departments/:id/members', async (c) => {
-    await requireSettings(c, 'read');
-    return c.json({
-      data: await organization.directMembers(c.req.param('id')),
-    });
-  });
-
-  routes.post('/departments/:id/members', async (c) => {
-    await requireSettings(c, 'update');
-    const body = await readObject(c);
-    const userId = optionalString(body, 'userId');
-    if (userId === undefined) throw new InputError('`userId` is required.');
-    const primary = optionalBoolean(body, 'primary');
-    const changed = await organization.addMember({
-      departmentId: c.req.param('id'),
-      userId,
-      ...(primary === undefined ? {} : { primary }),
-    });
-    await refreshUsers(changed);
-    return c.json({ data: { changed } }, 201);
-  });
-
-  routes.delete('/departments/:id/members/:userId', async (c) => {
-    await requireSettings(c, 'update');
-    const changed = await organization.removeMember(
-      c.req.param('id'),
-      c.req.param('userId'),
-    );
-    await refreshUsers(changed);
-    return c.json({ data: { changed } });
-  });
-
-  routes.put('/departments/:id/members/:userId/primary', async (c) => {
-    await requireSettings(c, 'update');
-    const changed = await organization.setPrimary(
-      c.req.param('id'),
-      c.req.param('userId'),
-    );
-    await refreshUsers(changed);
-    return c.json({ data: { changed } });
-  });
+      // A head appointed with the department gains its scope.
+      if (department.managerId !== null)
+        await refreshUsers([department.managerId]);
+      const [view] = await withManagers([department]);
+      return c.json({ data: view }, 201);
+    },
+  );
 
   // Candidates for a new membership: enabled users, searched and paged by the user directory.
-  routes.get('/users', async (c) => {
-    await requireSettings(c, 'update');
-    const query = pageQuery(c);
-    const page = await users.list({ ...query, status: 'enabled' });
-    return c.json({
-      data: {
-        items: page.items.map((user) => ({
+  routes.get(
+    '/memberCandidates',
+    update,
+    describeRoute({
+      tags,
+      summary: 'List member candidates',
+      operationId: 'departmentsExampleListMemberCandidates',
+      description: `Enabled users a department may take as members, searched by \`q\` and paged by \`page\` and \`pageSize\`. ${UPDATE}`,
+      responses: {
+        200: listResponse(UserOption),
+        ...apiErrorResponses,
+      },
+    }),
+    apiValidator('query', MemberCandidatesQuery),
+    async (c) => {
+      const { q, page, pageSize } = c.req.valid('query');
+      const result = await users.list({
+        page,
+        pageSize,
+        status: 'enabled',
+        ...(q ? { search: q } : {}),
+      });
+      return c.json({
+        data: result.items.map((user) => ({
           id: user.id,
           title: user.name,
           description: user.email,
         })),
-        total: page.total,
+        meta: { page, pageSize, total: result.total },
+      });
+    },
+  );
+
+  routes.get(
+    '/departments/:departmentId',
+    read,
+    describeRoute({
+      tags,
+      summary: 'Get a department',
+      operationId: 'departmentsExampleGetDepartment',
+      description: READ,
+      responses: {
+        200: dataResponse(DepartmentSchema),
+        ...apiErrorResponses,
+        404: departmentNotFound,
       },
-    });
-  });
+    }),
+    departmentParams,
+    async (c) => {
+      return c.json({
+        data: await departmentView(c.req.valid('param').departmentId),
+      });
+    },
+  );
+
+  routes.patch(
+    '/departments/:departmentId',
+    update,
+    describeRoute({
+      tags,
+      summary: 'Update a department',
+      operationId: 'departmentsExampleUpdateDepartment',
+      description: `Changes only the fields the body names; \`null\` clears a parent, region or head. Members whose inherited scope moved, and the old and new heads, are told to refresh their permissions. ${UPDATE}`,
+      responses: {
+        200: dataResponse(DepartmentSchema),
+        ...apiErrorResponses,
+        400: apiErrorResponse(
+          400,
+          'The parent does not exist (`PARENT_NOT_FOUND`) or lies below the department (`PARENT_CYCLE`), or the head is not an enabled user (`USER_NOT_FOUND`).',
+        ),
+        404: departmentNotFound,
+      },
+    }),
+    departmentParams,
+    apiValidator('json', UpdateDepartmentInput),
+    async (c) => {
+      const result = await organization.updateDepartment(
+        c.req.valid('param').departmentId,
+        defined(c.req.valid('json')),
+      );
+      // Members whose inheritance moved, and the old and new heads.
+      await refreshUsers(result.changed);
+      const [view] = await withManagers([result.department]);
+      return c.json({ data: view });
+    },
+  );
+
+  // Activation is a custom method rather than a field update: it changes whose inherited scope applies across the
+  // whole subtree.
+  for (const [verb, active, name] of [
+    ['activate', true, 'Activate'],
+    ['deactivate', false, 'Deactivate'],
+  ] as const) {
+    routes.post(
+      `/departments/:departmentId/${verb}`,
+      update,
+      describeRoute({
+        tags,
+        summary: `${name} a department`,
+        operationId: `departmentsExample${name}Department`,
+        description: `${
+          active
+            ? 'Its members and subtree inherit its scope again.'
+            : 'Its members and subtree stop inheriting its scope.'
+        } ${UPDATE}`,
+        responses: {
+          200: dataResponse(DepartmentSchema),
+          ...apiErrorResponses,
+          404: departmentNotFound,
+        },
+      }),
+      departmentParams,
+      async (c) => {
+        const { departmentId } = c.req.valid('param');
+        await refreshUsers(await organization.setActive(departmentId, active));
+        return c.json({ data: await departmentView(departmentId) });
+      },
+    );
+  }
+
+  routes.get(
+    '/departments/:departmentId/members',
+    read,
+    describeRoute({
+      tags,
+      summary: 'List department members',
+      operationId: 'departmentsExampleListMembers',
+      description: `The department's direct members, by name. A bounded list: it is not paged and answers \`meta.total\`. ${READ}`,
+      responses: {
+        200: listResponse(DepartmentMember),
+        ...apiErrorResponses,
+        404: departmentNotFound,
+      },
+    }),
+    departmentParams,
+    async (c) => {
+      const members = await organization.directMembers(
+        c.req.valid('param').departmentId,
+      );
+      return c.json({ data: members, meta: { total: members.length } });
+    },
+  );
+
+  routes.post(
+    '/departments/:departmentId/members',
+    update,
+    describeRoute({
+      tags,
+      summary: 'Add a department member',
+      operationId: 'departmentsExampleAddMember',
+      description: `Adds the user, or updates an existing membership. Without \`primary\`, the department becomes the user's primary one only when the user has none. ${UPDATE}`,
+      responses: {
+        201: dataResponse(DepartmentMember, 'The membership.'),
+        ...apiErrorResponses,
+        400: apiErrorResponse(
+          400,
+          'The user is not an enabled user (`USER_NOT_FOUND`).',
+        ),
+        404: departmentNotFound,
+      },
+    }),
+    departmentParams,
+    apiValidator('json', AddMemberInput),
+    async (c) => {
+      const { departmentId } = c.req.valid('param');
+      const input = c.req.valid('json');
+      await refreshUsers(
+        await organization.addMember({ departmentId, ...defined(input) }),
+      );
+      return c.json(
+        { data: await memberView(departmentId, input.userId) },
+        201,
+      );
+    },
+  );
+
+  routes.delete(
+    '/departments/:departmentId/members/:userId',
+    update,
+    describeRoute({
+      tags,
+      summary: 'Remove a department member',
+      operationId: 'departmentsExampleRemoveMember',
+      description: UPDATE,
+      responses: {
+        204: emptyResponse('The member was removed.'),
+        ...apiErrorResponses,
+        404: memberNotFound,
+      },
+    }),
+    memberParams,
+    async (c) => {
+      const { departmentId, userId } = c.req.valid('param');
+      await refreshUsers(await organization.removeMember(departmentId, userId));
+      return c.body(null, 204);
+    },
+  );
+
+  routes.post(
+    '/departments/:departmentId/members/:userId/makePrimary',
+    update,
+    describeRoute({
+      tags,
+      summary: "Make a member's primary department",
+      operationId: 'departmentsExampleMakeMemberPrimary',
+      description: `Makes this department the user's primary one, replacing any other. ${UPDATE}`,
+      responses: {
+        200: dataResponse(DepartmentMember),
+        ...apiErrorResponses,
+        404: memberNotFound,
+      },
+    }),
+    memberParams,
+    async (c) => {
+      const { departmentId, userId } = c.req.valid('param');
+      await refreshUsers(await organization.setPrimary(departmentId, userId));
+      return c.json({ data: await memberView(departmentId, userId) });
+    },
+  );
 
   return routes;
 }
@@ -348,6 +523,6 @@ export function createOrganizationRoutes(
 export const organizationRoutes: AppApiRouteContribution<AppPluginApplication> =
   defineApiRoutes((app) => {
     const router = new Hono();
-    router.route('/departments-example', createOrganizationRoutes(app));
+    router.route('/departmentsExample', createOrganizationRoutes(app));
     return router;
   });
