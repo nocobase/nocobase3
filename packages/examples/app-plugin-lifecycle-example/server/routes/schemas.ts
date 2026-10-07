@@ -248,7 +248,7 @@ export const TriggersRun: z.ZodType<{ readonly fired: number }> = z.object({
 
 const BlockerSchema: z.ZodType<Blocker> = z
   .object({
-    source: z.enum(['state', 'guard']),
+    source: z.enum(['state', 'guard', 'manual']),
     kind: z.enum(['permission', 'precondition']).meta({
       description:
         '`permission` when this persona may not, `precondition` when the record has to change first.',
@@ -359,6 +359,7 @@ export const DescriptionViewSchema: z.ZodType<LifecycleDescriptionView> = z
           to: z.array(z.string()),
           effects: z.array(z.string()),
           accept: z.array(z.string()),
+          manual: z.boolean(),
           meta: jsonObject,
         }),
       ),

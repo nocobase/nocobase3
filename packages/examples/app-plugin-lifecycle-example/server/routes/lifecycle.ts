@@ -145,6 +145,7 @@ export function lifecycleRoutes(
           body.transition,
           {
             actor,
+            manual: true,
             input: body.input,
             requestId: body.requestId,
             ...(body.expectVersion === undefined
