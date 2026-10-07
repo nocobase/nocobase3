@@ -30,6 +30,12 @@ export class ExampleError extends Error {
   }
 }
 
+/**
+ * How often an edit reads the report again after a concurrent change wrote
+ * first, before it answers `EXPENSE_CHANGED`.
+ */
+const EDIT_ATTEMPTS = 3;
+
 function plain(row: Record<string, unknown>): Plain {
   const values: Plain = {};
   for (const [field, value] of Object.entries(row))
@@ -151,6 +157,17 @@ export class LifecycleExampleService {
   /**
    * A report is edited only by its applicant, while it is a draft or sent
    * back. Only the fields in `changes` are written.
+   *
+   * The edit is checked against the report as read and written only while
+   * the report is still at that version, and every edit moves
+   * `lifecycleVersion` on. A transition writes on the version it decided on,
+   * so a `submit` that read the report before this edit landed — and routed
+   * on its old amount, or found its old lines ready — is refused with
+   * `CONFLICT` instead of committing over values it never saw. Of two edits
+   * read at the same version only one applies at once; the other reads the
+   * report again and is applied to what the first left, so neither loses
+   * the other's fields. After `EDIT_ATTEMPTS` lost races it gives up with
+   * `EXPENSE_CHANGED`.
    */
   public async updateExpense(
     id: string,
@@ -158,45 +175,54 @@ export class LifecycleExampleService {
     actor: string,
   ): Promise<Plain> {
     const repository = this.database.repository(expenseLifecycle.collection);
-    const current = await repository.findOne({ filter: { id: Number(id) } });
-    if (!current)
-      throw new ExampleError(
-        'NOT_FOUND',
-        'EXPENSE_NOT_FOUND',
-        'The expense report does not exist.',
-      );
-    if (current.applicantId !== actor)
-      throw new ExampleError(
-        'FORBIDDEN',
-        'OWN_EXPENSE_ONLY',
-        'Only the applicant can edit this report.',
-      );
-    if (current.status !== 'draft' && current.status !== 'needsInfo')
-      throw new ExampleError(
-        'LOCKED',
-        'EXPENSE_LOCKED',
-        'A report under review cannot be edited; withdraw it first.',
-      );
-    const values = this.expenseChanges(changes);
-    if (!Object.keys(values).length) return plain(current);
-    const { updatedCount } = await repository.updateMany({
-      // The state and version as read: a concurrent submit wins, and this
-      // edit is refused.
-      filter: {
-        id: Number(id),
-        status: String(current.status),
-        lifecycleVersion: Number(current.lifecycleVersion ?? 0),
-      },
-      values: values as RepositoryRecord,
-    });
-    if (updatedCount === 0)
-      throw new ExampleError(
-        'CONFLICT',
-        'EXPENSE_CHANGED',
-        'The report changed while it was being edited; reload it and try again.',
-      );
-    const updated = await repository.findOne({ filter: { id: Number(id) } });
-    return plain(updated ?? current);
+    for (let attempt = 1; attempt <= EDIT_ATTEMPTS; attempt += 1) {
+      const current = await repository.findOne({ filter: { id: Number(id) } });
+      if (!current)
+        throw new ExampleError(
+          'NOT_FOUND',
+          'EXPENSE_NOT_FOUND',
+          'The expense report does not exist.',
+        );
+      if (current.applicantId !== actor)
+        throw new ExampleError(
+          'FORBIDDEN',
+          'OWN_EXPENSE_ONLY',
+          'Only the applicant can edit this report.',
+        );
+      if (current.status !== 'draft' && current.status !== 'needsInfo')
+        throw new ExampleError(
+          'LOCKED',
+          'EXPENSE_LOCKED',
+          'A report under review cannot be edited; withdraw it first.',
+        );
+      const values = this.expenseChanges(changes);
+      if (!Object.keys(values).length) return plain(current);
+      // The state and version as read. The status and its timestamp are
+      // never written here, only by fire(); the version is moved on so a
+      // transition decided on what this edit replaces does not commit.
+      const { updatedCount } = await repository.updateMany({
+        filter: {
+          id: Number(id),
+          status: String(current.status),
+          lifecycleVersion: Number(current.lifecycleVersion ?? 0),
+        },
+        values: {
+          ...values,
+          lifecycleVersion: { increment: 1 },
+        } as RepositoryRecord,
+      });
+      if (updatedCount > 0) {
+        const updated = await repository.findOne({
+          filter: { id: Number(id) },
+        });
+        return plain(updated ?? current);
+      }
+    }
+    throw new ExampleError(
+      'CONFLICT',
+      'EXPENSE_CHANGED',
+      'The report kept changing while it was being edited; reload it and try again.',
+    );
   }
 
   /** The parameters the lifecycle runs with, which pages quote to their users. */
