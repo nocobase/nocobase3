@@ -207,7 +207,6 @@
     "@nocobase/jobs": "workspace:^",
     "@nocobase/lifecycle": "workspace:^",
     "@nocobase/i18n": "workspace:^",
-    "@nocobase/lifecycle": "workspace:^",
     "@nocobase/caching": "workspace:^",
     "@nocobase/ai-employee": "workspace:^",
     "@nocobase/app-cli": "workspace:^"

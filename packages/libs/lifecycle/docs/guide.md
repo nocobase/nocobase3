@@ -420,9 +420,7 @@ Register the services as a factory, `(handle) => services`, so the services a gu
 
 ### Draw the state diagram
 
-`toMermaid(runtime.describe('leaves'))` produces a Mermaid state diagram: ⏱ marks a trigger, ✓ and ✗ mark an effect's `onSuccess` and `onFailure`. `lifecycleDescriptionView(runtime, name)` includes it as `diagram`, for the `GET <lifecycle>/lifecycle` route.
-
-`toMermaid(runtime.describe('leaves'))` produces a Mermaid state diagram: ⏱ marks a trigger, ✓ and ✗ mark an effect's `onSuccess` and `onFailure`, and ⚙ a transition only server code fires. `GET /:lifecycle` on the standard routes already includes it as `diagram`.
+`toMermaid(runtime.describe('leaves'))` produces a Mermaid state diagram: ⏱ marks a trigger, ✓ and ✗ mark an effect's `onSuccess` and `onFailure`, and ⚙ a transition only server code fires. `lifecycleDescriptionView(runtime, name)` includes it as `diagram`, for the `GET <lifecycle>/lifecycle` route.
 
 ## Before going live
 
