@@ -213,10 +213,12 @@ export class OfficeFlowsService {
     transition: string,
     input: JsonObject,
     actor: string,
+    manual: boolean = true,
   ): Promise<void> {
     await this.runtime.fire(name, id, transition, {
       actor: { id: actor },
       input,
+      manual,
     });
   }
 

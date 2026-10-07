@@ -361,7 +361,14 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         const { actAs } = context.req.valid('query');
         const { transition, input } = context.req.valid('json');
         await fire(() =>
-          service.fire('dataRequests', requestId, transition, input, actAs),
+          service.fire(
+            'dataRequests',
+            requestId,
+            transition,
+            input,
+            actAs,
+            true,
+          ),
         );
         return context.body(null, 204);
       },
@@ -481,7 +488,14 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         const { actAs } = context.req.valid('query');
         const { transition, input } = context.req.valid('json');
         await fire(() =>
-          service.fire('extractions', extractionId, transition, input, actAs),
+          service.fire(
+            'extractions',
+            extractionId,
+            transition,
+            input,
+            actAs,
+            true,
+          ),
         );
         return context.body(null, 204);
       },
