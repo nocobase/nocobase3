@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import { Button } from '../../shared/ui/button.js';
 import {
   Tooltip,
@@ -5,7 +6,6 @@ import {
   TooltipTrigger,
 } from '../../shared/ui/tooltip.js';
 import { Maximize2, PanelRight, X } from 'lucide-react';
-import { useAITranslate } from '../../locales/use-ai-translate.js';
 
 export function ChatSurfaceActions({
   expanded,
@@ -16,7 +16,7 @@ export function ChatSurfaceActions({
   onExpandedChange: (expanded: boolean) => void;
   onClose: () => void;
 }) {
-  const t = useAITranslate();
+  const { t } = useTranslation('@nocobase/app-plugin-ai-employee');
   const resizeLabel = expanded
     ? t('surface.collapse', 'Collapse to side panel')
     : t('surface.expand', 'Expand panel');

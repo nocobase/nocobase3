@@ -1,17 +1,17 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import { Button } from '../../shared/ui/button.js';
 import { cn } from '../../shared/utils.js';
 import { useState } from 'react';
 import { getNocoBaseToolCallMetadata } from '../chat/tool-call-utils.js';
 import type { AIToolRendererProps } from './tool-renderer-provider.js';
 import { asRecord, parseArray } from './tool-renderer-utils.js';
-import { useAITranslate } from '../../locales/use-ai-translate.js';
 
 export function SuggestionsRenderer({
   part,
   disabled,
   onEdit,
 }: AIToolRendererProps) {
-  const t = useAITranslate();
+  const { t } = useTranslation('@nocobase/app-plugin-ai-employee');
   const input = asRecord(part.input);
   const metadata = getNocoBaseToolCallMetadata(part);
   const options = parseArray(input.options).filter(

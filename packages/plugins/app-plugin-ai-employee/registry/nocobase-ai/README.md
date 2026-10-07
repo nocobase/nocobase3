@@ -50,4 +50,4 @@ export function CustomerAssistant() {
 - Form filling and frontend tool registries
 - Tool approval, editing, resume, sub-agent, chart, workflow, suggestion, and
   report renderers
-- English and Simplified Chinese UI copy
+- English and Simplified Chinese UI copy, translated in the `@nocobase/app-plugin-ai-employee` namespace from the plugin's `client/locales`, which the registered plugin loads; the item ships no locale files of its own, and an application rewords a string with an `overrides` block for that namespace in its own locale files

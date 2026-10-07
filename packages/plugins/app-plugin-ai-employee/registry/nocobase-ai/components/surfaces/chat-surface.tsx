@@ -1,9 +1,9 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import { Button } from '../../shared/ui/button.js';
 import { cn } from '../../shared/utils.js';
 import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
 import { PanelLeftClose, PanelRightClose } from 'lucide-react';
 import type { CSSProperties, PropsWithChildren } from 'react';
-import { useAITranslate } from '../../locales/use-ai-translate.js';
 
 export type ChatSurfaceVariant = 'side-panel' | 'dialog';
 
@@ -27,7 +27,7 @@ export function ChatSurface({
   showCloseHandle = false,
   children,
 }: ChatSurfaceProps) {
-  const t = useAITranslate();
+  const { t } = useTranslation('@nocobase/app-plugin-ai-employee');
   const expanded = variant === 'dialog';
   const panelWidth = typeof width === 'number' ? `${width}px` : width;
 

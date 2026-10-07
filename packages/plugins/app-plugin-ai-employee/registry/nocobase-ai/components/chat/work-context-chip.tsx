@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import { Button } from '../../shared/ui/button.js';
 import {
   Dialog,
@@ -10,7 +11,6 @@ import { cn } from '../../shared/utils.js';
 import { MousePointer2, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { AIWorkContextItem } from '../../providers/index.js';
-import { useAITranslate } from '../../locales/use-ai-translate.js';
 import { toText } from '../../shared/text.js';
 
 const formatContextContent = (content: unknown, emptyText: string) => {
@@ -32,7 +32,7 @@ export function WorkContextChip({
   onRemove?: () => void;
   className?: string;
 }) {
-  const t = useAITranslate();
+  const { t } = useTranslation('@nocobase/app-plugin-ai-employee');
   const [open, setOpen] = useState(false);
   const title = item.title ?? t('chat.context.defaultTitle', 'Page element');
   const kind = typeof item.kind === 'string' ? item.kind : undefined;

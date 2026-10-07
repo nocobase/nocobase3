@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import {
   Collapsible,
   CollapsibleContent,
@@ -15,7 +16,6 @@ import {
 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { useAIToolRenderer } from '../tools/tool-renderer-context.js';
-import { useAITranslate } from '../../locales/use-ai-translate.js';
 import { getToolCallName, type ToolCallPart } from './tool-call-utils.js';
 
 const toolLabel = (part: ToolCallPart) =>
@@ -35,7 +35,7 @@ const formatValue = (value: unknown) => {
 
 const getStatus = (
   part: ToolCallPart,
-  t: ReturnType<typeof useAITranslate>,
+  t: (key: string, defaultValue: string) => string,
 ) => {
   switch (part.state) {
     case 'input-streaming':
@@ -100,7 +100,7 @@ export function ToolCallCard({
   disabled = false,
   readOnly = false,
 }: ToolCallCardProps) {
-  const t = useAITranslate();
+  const { t } = useTranslation('@nocobase/app-plugin-ai-employee');
   const resolvedApproval = approval ?? approvalFromPart(part);
   const [approvalStatus, setApprovalStatus] = useState(
     resolvedApproval?.status ?? 'pending',

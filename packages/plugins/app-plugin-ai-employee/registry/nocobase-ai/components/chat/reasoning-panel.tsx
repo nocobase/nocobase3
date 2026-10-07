@@ -1,10 +1,10 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from '../../shared/ui/collapsible.js';
 import { Brain, ChevronDown } from 'lucide-react';
-import { useAITranslate } from '../../locales/use-ai-translate.js';
 
 export function ReasoningPanel({
   children,
@@ -13,7 +13,7 @@ export function ReasoningPanel({
   children: string;
   streaming?: boolean;
 }) {
-  const t = useAITranslate();
+  const { t } = useTranslation('@nocobase/app-plugin-ai-employee');
   if (!children) return null;
 
   return (

@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import {
   InputGroup,
   InputGroupAddon,
@@ -34,7 +35,6 @@ import {
 } from '../../shared/ui/tooltip.js';
 import { AIModelSelectOptions } from './model-select-options.js';
 import { ChatAttachment } from './chat-attachment.js';
-import { useAITranslate } from '../../locales/use-ai-translate.js';
 
 export type AIChatComposerAction = {
   key: string;
@@ -65,7 +65,7 @@ export function ChatComposer({
   placeholder?: string;
   disclaimer?: ReactNode | false;
 }) {
-  const t = useAITranslate();
+  const { t } = useTranslation('@nocobase/app-plugin-ai-employee');
   const {
     draft,
     setDraft,

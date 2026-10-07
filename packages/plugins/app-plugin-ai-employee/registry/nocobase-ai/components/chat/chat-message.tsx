@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import { Button } from '../../shared/ui/button.js';
 import {
   type AIChatMessage as AIChatMessageType,
@@ -13,7 +14,6 @@ import { ChatAttachment } from './chat-attachment.js';
 import { useAIToolRenderer } from '../tools/tool-renderer-context.js';
 import { SubAgentConversation } from './sub-agent-conversation.js';
 import { WorkContextChip } from './work-context-chip.js';
-import { useAITranslate } from '../../locales/use-ai-translate.js';
 import { withStableKeys } from '../../shared/keys.js';
 
 const getPartKey = (part: AIChatMessageType['parts'][number]) => {
@@ -45,7 +45,7 @@ function ChatMessageComponent({
   startEditingMessage,
   focusComposer,
 }: ChatMessageProps) {
-  const t = useAITranslate();
+  const { t } = useTranslation('@nocobase/app-plugin-ai-employee');
   const interactionPending = status === 'streaming' || status === 'submitted';
   const [copied, setCopied] = useState(false);
   const copyText = async () => {

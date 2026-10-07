@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import { MarkdownMessage } from '../chat/markdown-message.js';
 import { LoadingState } from '../../shared/loading-state.js';
 import { Button } from '../../shared/ui/button.js';
@@ -34,7 +35,6 @@ import {
   splitBusinessReportMarkdown,
   type BusinessReportData,
 } from './business-report-utils.js';
-import { useAITranslate } from '../../locales/use-ai-translate.js';
 import { BusinessReportDialogContext } from './business-report-dialog-context.js';
 import { withStableKeys } from '../../shared/keys.js';
 
@@ -181,7 +181,7 @@ function BusinessReportDialogHost({
   onChartError: () => void;
   onOpenChange: (open: boolean) => void;
 }) {
-  const t = useAITranslate();
+  const { t } = useTranslation('@nocobase/app-plugin-ai-employee');
   const report = state.report;
   const [activeTab, setActiveTab] = useState('preview');
   const [htmlPreview, setHtmlPreview] = useState('');

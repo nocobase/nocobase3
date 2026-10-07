@@ -1,7 +1,7 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import { cn } from '../../shared/utils.js';
 import { getAIEmployeeAvatar, type AIEmployee } from '../../providers/index.js';
 import type { CSSProperties } from 'react';
-import { useAITranslate } from '../../locales/use-ai-translate.js';
 
 export function AIEmployeeAvatar({
   employee,
@@ -14,7 +14,7 @@ export function AIEmployeeAvatar({
   className?: string;
   style?: CSSProperties;
 }) {
-  const t = useAITranslate();
+  const { t } = useTranslation('@nocobase/app-plugin-ai-employee');
   return (
     <span
       className={cn(

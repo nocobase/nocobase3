@@ -1,12 +1,12 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import { Button } from '../../shared/ui/button.js';
 import { useAIChatBase } from '../../providers/index.js';
 import { ArrowUpRight, Send, TextCursorInput } from 'lucide-react';
 import { AIEmployeeAvatar } from './ai-employee-avatar.js';
-import { useAITranslate } from '../../locales/use-ai-translate.js';
 import { withStableKeys } from '../../shared/keys.js';
 
 export function ChatEmptyState() {
-  const t = useAITranslate();
+  const { t } = useTranslation('@nocobase/app-plugin-ai-employee');
   const { currentEmployee, availableTasks, runTask } = useAIChatBase();
 
   return (

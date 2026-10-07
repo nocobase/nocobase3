@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import { Button } from '../../shared/ui/button.js';
 import {
   Tooltip,
@@ -8,7 +9,6 @@ import { useAIChatBase } from '../../providers/index.js';
 import { Menu, PanelLeftClose, PlusCircle } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { UserPromptEditor } from './user-prompt-editor.js';
-import { useAITranslate } from '../../locales/use-ai-translate.js';
 
 export function ChatHeader({
   actions,
@@ -21,7 +21,7 @@ export function ChatHeader({
   showNewConversation?: boolean;
   showUserPrompt?: boolean;
 }) {
-  const t = useAITranslate();
+  const { t } = useTranslation('@nocobase/app-plugin-ai-employee');
   const {
     activeConversation,
     conversations,

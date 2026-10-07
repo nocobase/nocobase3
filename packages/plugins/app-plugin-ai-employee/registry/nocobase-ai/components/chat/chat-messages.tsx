@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import { Button } from '../../shared/ui/button.js';
 import { LoadingState } from '../../shared/loading-state.js';
 import {
@@ -19,7 +20,6 @@ import {
 } from 'react';
 import { ChatEmptyState } from './chat-empty-state.js';
 import { ChatMessage } from './chat-message.js';
-import { useAITranslate } from '../../locales/use-ai-translate.js';
 
 export function ChatMessages({
   onToolCallDecision,
@@ -104,7 +104,7 @@ export function AIChatMessageList({
   startEditingMessage,
   focusComposer,
 }: AIChatMessageListProps) {
-  const t = useAITranslate();
+  const { t } = useTranslation('@nocobase/app-plugin-ai-employee');
   const viewportRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const messageListRef = useRef<HTMLDivElement>(null);

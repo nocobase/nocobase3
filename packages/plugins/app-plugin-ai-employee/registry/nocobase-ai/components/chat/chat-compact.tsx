@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import { Button } from '../../shared/ui/button.js';
 import { cn } from '../../shared/utils.js';
 import { History, LoaderCircle } from 'lucide-react';
@@ -10,7 +11,6 @@ import {
 import { ChatComposer, type AIChatComposerAction } from './chat-composer.js';
 import { AIChatHistoryDialog } from './chat-history-dialog.js';
 import { ChatHeader } from './chat-header.js';
-import { useAITranslate } from '../../locales/use-ai-translate.js';
 
 export type AIChatCompactProps = {
   className?: string;
@@ -39,7 +39,7 @@ export function AIChatCompact({
   disclaimer,
   onToolCallDecision,
 }: AIChatCompactProps) {
-  const t = useAITranslate();
+  const { t } = useTranslation('@nocobase/app-plugin-ai-employee');
   const { currentEmployee } = useAIChatBase();
   const { status } = useAIChatStatus();
   const [historyOpen, setHistoryOpen] = useState(false);

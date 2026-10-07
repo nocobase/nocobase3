@@ -1,10 +1,10 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import { LoadingState } from '../../shared/loading-state.js';
 import { NocoBaseErrorBoundary } from '../../shared/error-boundary.js';
 import { LoaderCircle } from 'lucide-react';
 import { lazy, Suspense } from 'react';
 import type { AIToolRendererProps } from './tool-renderer-provider.js';
 import { asRecord } from './tool-renderer-utils.js';
-import { useAITranslate } from '../../locales/use-ai-translate.js';
 
 const EChartsPreview = lazy(() => import('./echarts-preview.js'));
 
@@ -21,7 +21,7 @@ export function ChartPreview({
 }
 
 export function ChartRenderer({ part }: AIToolRendererProps) {
-  const t = useAITranslate();
+  const { t } = useTranslation('@nocobase/app-plugin-ai-employee');
   const input = asRecord(part.input);
   const options = asRecord(input.options);
   if (!Object.keys(options).length) {

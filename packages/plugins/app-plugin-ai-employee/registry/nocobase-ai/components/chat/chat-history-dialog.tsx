@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import { Button } from '../../shared/ui/button.js';
 import {
   Dialog,
@@ -10,7 +11,6 @@ import { useState, type ReactNode } from 'react';
 import type { AIToolCallDecision } from '../../providers/index.js';
 import { ChatMessages } from './chat-messages.js';
 import { ConversationList } from './conversation-list.js';
-import { useAITranslate } from '../../locales/use-ai-translate.js';
 
 export function AIChatHistoryDialog({
   open: controlledOpen,
@@ -23,7 +23,7 @@ export function AIChatHistoryDialog({
   trigger?: ReactNode;
   onToolCallDecision?: (decision: AIToolCallDecision) => void | Promise<void>;
 }) {
-  const t = useAITranslate();
+  const { t } = useTranslation('@nocobase/app-plugin-ai-employee');
   const [internalOpen, setInternalOpen] = useState(false);
   const open = controlledOpen ?? internalOpen;
   const setOpen = onOpenChange ?? setInternalOpen;

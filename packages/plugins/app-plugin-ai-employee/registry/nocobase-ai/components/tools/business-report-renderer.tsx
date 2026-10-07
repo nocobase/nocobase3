@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import { Badge } from '../../shared/ui/badge.js';
 import { cn } from '../../shared/utils.js';
 import { FileText, LoaderCircle } from 'lucide-react';
@@ -9,10 +10,9 @@ import {
   type BusinessReportData,
 } from './business-report-utils.js';
 import { useBusinessReportDialog } from './business-report-dialog-context.js';
-import { useAITranslate } from '../../locales/use-ai-translate.js';
 
 function ReportGeneratingProgress() {
-  const t = useAITranslate();
+  const { t } = useTranslation('@nocobase/app-plugin-ai-employee');
   return (
     <div
       role='progressbar'
@@ -50,7 +50,7 @@ function ReportGeneratingProgress() {
 }
 
 export function BusinessReportRenderer({ part }: AIToolRendererProps) {
-  const t = useAITranslate();
+  const { t } = useTranslation('@nocobase/app-plugin-ai-employee');
   const reportDialog = useBusinessReportDialog();
   const output = 'output' in part ? part.output : undefined;
   const validatedReport = useMemo(

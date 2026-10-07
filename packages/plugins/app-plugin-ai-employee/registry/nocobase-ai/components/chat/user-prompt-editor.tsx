@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import { Button } from '../../shared/ui/button.js';
 import {
   Popover,
@@ -16,10 +17,9 @@ import {
 import { MessageSquareText } from 'lucide-react';
 import { useState } from 'react';
 import { useAIChatBase } from '../../providers/index.js';
-import { useAITranslate } from '../../locales/use-ai-translate.js';
 
 export function UserPromptEditor() {
-  const t = useAITranslate();
+  const { t } = useTranslation('@nocobase/app-plugin-ai-employee');
   const { currentEmployee, saveUserPrompt } = useAIChatBase();
   const [open, setOpen] = useState(false);
   const [prompt, setPrompt] = useState('');

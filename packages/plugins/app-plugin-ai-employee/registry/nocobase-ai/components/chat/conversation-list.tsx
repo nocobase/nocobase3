@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import { Button } from '../../shared/ui/button.js';
 import { Alert, AlertDescription, AlertTitle } from '../../shared/ui/alert.js';
 import {
@@ -37,7 +38,6 @@ import {
   LoaderCircle,
 } from 'lucide-react';
 import { useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { useAITranslate } from '../../locales/use-ai-translate.js';
 
 export function ConversationList({
   onClose,
@@ -46,7 +46,7 @@ export function ConversationList({
   onClose?: () => void;
   showCloseButton?: boolean;
 } = {}) {
-  const t = useAITranslate();
+  const { t } = useTranslation('@nocobase/app-plugin-ai-employee');
   const {
     conversations,
     activeConversationId,
@@ -351,7 +351,7 @@ export function AIConversationList<T extends AIConversationListItem>({
   footer,
   className,
 }: AIConversationListProps<T>) {
-  const t = useAITranslate();
+  const { t } = useTranslation('@nocobase/app-plugin-ai-employee');
   const searchInputRef = useRef<HTMLInputElement>(null);
   return (
     <div

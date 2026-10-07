@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import { Button } from '../../shared/ui/button.js';
 import { cn } from '../../shared/utils.js';
 import { ChevronDown, ChevronRight, LoaderCircle } from 'lucide-react';
@@ -13,7 +14,6 @@ import { MarkdownMessage } from './markdown-message.js';
 import { ReasoningPanel } from './reasoning-panel.js';
 import { ToolCallCard } from './tool-call-card.js';
 import { getToolCallName, isToolCallPart } from './tool-call-utils.js';
-import { useAITranslate } from '../../locales/use-ai-translate.js';
 import { withStableKeys } from '../../shared/keys.js';
 
 const getPartKey = (
@@ -65,7 +65,7 @@ function SubAgentConversationView({
     nickname: conversation.username,
   },
 }: SubAgentConversationProps & { employee?: AIEmployee }) {
-  const t = useAITranslate();
+  const { t } = useTranslation('@nocobase/app-plugin-ai-employee');
   const completed = conversation.status === 'completed';
   const [expanded, setExpanded] = useState(true);
   const messages =

@@ -1,5 +1,3 @@
-import '../locales/index.js';
-
 export {
   NocoBaseAIRootProvider,
   type NocoBaseAIRootProviderProps,

@@ -1,8 +1,8 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import { Button } from '../../shared/ui/button.js';
 import { cn } from '../../shared/utils.js';
 import type { AIChatAttachment } from '../../providers/index.js';
 import { FileText, LoaderCircle, TriangleAlert, X } from 'lucide-react';
-import { useAITranslate } from '../../locales/use-ai-translate.js';
 
 export function ChatAttachment({
   attachment,
@@ -13,7 +13,7 @@ export function ChatAttachment({
   removable?: boolean;
   onRemove?: () => void;
 }) {
-  const t = useAITranslate();
+  const { t } = useTranslation('@nocobase/app-plugin-ai-employee');
   const preview = attachment.mimetype?.startsWith('image/')
     ? (attachment.preview ?? attachment.url)
     : undefined;
