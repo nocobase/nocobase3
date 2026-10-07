@@ -17,6 +17,7 @@ import notificationInApp from '@nocobase/app-plugin-notification-in-app/client';
 import notificationExample from '@nocobase/app-plugin-notification-example/client';
 import jobsExample from '@nocobase/app-plugin-jobs-example/client';
 import lifecycleExample from '@nocobase/app-plugin-lifecycle-example/client';
+import approvalExample from '@nocobase/app-plugin-approval-example/client';
 import officeFlowsExample from '@nocobase/app-plugin-office-flows-example/client';
 import routesExample from '@nocobase/app-plugin-routes-example/client';
 import i18n from '@nocobase/app-plugin-i18n/client';
@@ -48,6 +49,7 @@ const clientPlugins: AppClientPlugins = defineClientPlugins([
   notificationExample(),
   jobsExample(),
   lifecycleExample(),
+  approvalExample(),
   officeFlowsExample(),
   routesExample(),
   workflow(),

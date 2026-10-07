@@ -10,6 +10,8 @@ import templatePrintExample from '@nocobase/app-plugin-template-print-example/se
 import departmentsExample from '@nocobase/app-plugin-departments-example/server';
 import databaseExplorer from '@nocobase/app-plugin-database-explorer/server';
 import databaseExample from '@nocobase/app-plugin-database-example/server';
+import approval from '@nocobase/app-plugin-approval/server';
+import approvalExample from '@nocobase/app-plugin-approval-example/server';
 import i18n from '@nocobase/app-plugin-i18n/server';
 import jobsExample from '@nocobase/app-plugin-jobs-example/server';
 import lifecycleExample from '@nocobase/app-plugin-lifecycle-example/server';
@@ -57,6 +59,8 @@ const serverPlugins: AppServerPlugins = defineServerPlugins([
   realtimeExample,
   jobsExample,
   lifecycleExample,
+  approval,
+  approvalExample,
   officeFlowsExample,
   routesExample,
   serviceProviderExample,
