@@ -82,7 +82,7 @@ jobs:
         run: |
           set -euo pipefail
           test -s dist/index.html
-          test -s dist/favicon.svg
+          test -s dist/favicon.ico
           test -d dist/assets
           # The publish step uploads the registry index by name, so its absence has to fail here rather than after
           # every other object has already been uploaded. The entry files are derived from the index instead of being
