@@ -48,12 +48,12 @@
     "@nocobase/lifecycle": "workspace:^"
   },
   "devDependencies": {
-    "@nocobase/db-sqlite": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",
     "eslint": "catalog:",
     "prettier": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@nocobase/app-testing": "workspace:*"
   }
 }

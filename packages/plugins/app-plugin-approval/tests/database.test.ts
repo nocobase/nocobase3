@@ -2,16 +2,13 @@
 // drops its collections, and an approval runs on the Repository store with
 // its runs, tasks and events in those collections, written in the
 // transaction of the transition that caused them.
-import { mkdtemp, rm } from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 
+import { type DatabaseManager } from '@nocobase/db';
 import {
-  createDatabaseManager,
-  type DatabaseManager,
-  type Migrator,
-} from '@nocobase/db';
-import sqlite from '@nocobase/db-sqlite';
+  createTestDatabase,
+  describeMigration,
+} from '@nocobase/app-testing/server';
 import {
   createRepositoryLifecycleStore,
   defineLifecycle,
@@ -31,18 +28,6 @@ import {
   type ApprovalDirectory,
   type TaskRow,
 } from '../server/index.js';
-
-interface SchemaClient {
-  readonly schema: {
-    hasTable(name: string): Promise<boolean>;
-  };
-}
-
-const PHYSICAL: Readonly<Record<string, string>> = {
-  [APPROVAL_COLLECTIONS.runs]: 'approval_runs',
-  [APPROVAL_COLLECTIONS.tasks]: 'approval_tasks',
-  [APPROVAL_COLLECTIONS.events]: 'approval_events',
-};
 
 const MEMOS = 'memos';
 
@@ -109,49 +94,35 @@ const memoDefinition: LifecycleDefinition<MemoTypes> = {
 const memoLifecycle = defineLifecycle(memoDefinition);
 
 let database: DatabaseManager;
-let folder: string;
-let migrator: Migrator;
+let fixture: Awaited<ReturnType<typeof createTestDatabase>>;
+const migrations = [
+  {
+    directory: path.resolve(import.meta.dirname, '../database/migrations'),
+    packageName: packageMetadata.name,
+  },
+];
 let now: Date;
 
 beforeEach(async () => {
-  // A file, not :memory:, so the pool behaves as it does in an application.
-  folder = await mkdtemp(path.join(os.tmpdir(), 'approval-plugin-'));
-  database = createDatabaseManager({
-    default: 'main',
-    drivers: { sqlite },
-    connections: {
-      main: { dialect: 'sqlite', filename: path.join(folder, 'main.sqlite') },
-    },
-  });
-  migrator = database.createMigrator({
-    connection: 'main',
-    directory: path.resolve(import.meta.dirname, '../database/migrations'),
-    packageName: packageMetadata.name,
-  });
+  fixture = await createTestDatabase({ migrations });
+  database = fixture.database;
   now = new Date('2026-10-06T09:00:00.000Z');
 });
 
 afterEach(async () => {
-  await database.destroy();
-  await rm(folder, { recursive: true, force: true });
+  await fixture.destroy();
 });
 
-describe('the migration', () => {
-  it('creates the collections on up and removes them on down', async () => {
-    await migrator.latest();
-    const connection = database.connection('main');
-    const client = await connection.client<SchemaClient>();
-    for (const [name, physical] of Object.entries(PHYSICAL)) {
-      expect(await client.schema.hasTable(physical)).toBe(true);
-      expect(await connection.collectionMetadata.get(name)).toBeDefined();
-    }
-
-    await migrator.rollback();
-    for (const [name, physical] of Object.entries(PHYSICAL)) {
-      expect(await client.schema.hasTable(physical)).toBe(false);
-      expect(await connection.collectionMetadata.get(name)).toBeUndefined();
-    }
-  });
+describeMigration('202610060001_approval_create_collections', {
+  sources: migrations,
+  up: async ({ expectCollection }) => {
+    for (const name of Object.values(APPROVAL_COLLECTIONS))
+      await expectCollection(name).toExist();
+  },
+  down: async ({ expectCollection }) => {
+    for (const name of Object.values(APPROVAL_COLLECTIONS))
+      await expectCollection(name).not.toExist();
+  },
 });
 
 describe('an approval on the Repository store', () => {
@@ -159,7 +130,6 @@ describe('an approval on the Repository store', () => {
   let approvals: ApprovalService;
 
   beforeEach(async () => {
-    await migrator.latest();
     // The business's own tables, which its own migration would create.
     const builder = database.builder();
     await builder.createCollection(MEMOS, (table) => {
@@ -184,6 +154,8 @@ describe('an approval on the Repository store', () => {
         table.datetimeTz('at').notNull();
         table.integer('version').notNull();
         table.string('requestId');
+        table.string('requestKey').notNull();
+        table.unique(['lifecycle', 'recordId', 'requestKey']);
         table.unique(['lifecycle', 'recordId', 'version']);
       },
     );

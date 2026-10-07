@@ -105,9 +105,9 @@ The runtime must run on the Repository store, `createRepositoryLifecycleStore()`
 
 ## Testing
 
-`tests/policies.test.ts` checks each stage policy as the pure function it is. `tests/approval-run.test.ts` checks the contract between a business record and its run on memory storage: a run starts on entering the state, is cancelled on leaving it, and ends through the business's exits with the changes it settled. `tests/database.test.ts` runs the migration up and down on SQLite, an approval on the Repository store, and the sweep's escalation.
+`tests/policies.test.ts` checks each stage policy as the pure function it is. `tests/approval-run.test.ts` checks the contract between a business record and its run on memory storage: a run starts on entering the state, is cancelled on leaving it, and ends through the business's exits with the changes it settled. `tests/database.test.ts` runs the migration up and down on the selected test database, an approval on the Repository store, and the sweep's escalation.
 
-`@nocobase/app-plugin-approval-example` runs 28 approval scenarios on this layer, in its tests on memory storage and in its approval center and lab on the application's database; it is where a change to the layer meets every policy, return, delegation and parallel review at once.
+`@nocobase/app-plugin-approval-example` runs 28 approval scenarios on this layer, in its tests on the selected test database and in its approval center and lab on the application's database; it is where a change to the layer meets every policy, return, delegation and parallel review at once.
 
 ```bash
 pnpm --filter @nocobase/app-plugin-approval lint
@@ -115,3 +115,7 @@ pnpm --filter @nocobase/app-plugin-approval typecheck
 pnpm --filter @nocobase/app-plugin-approval test
 pnpm --filter @nocobase/app-plugin-approval build
 ```
+
+## Host lifecycle storage
+
+The host owns the lifecycle transition log and effect-run collections for both business records and approval runs. Before registering approvals, migrate both collections using the [lifecycle storage schema](https://github.com/nocobase/nocobase3/blob/develop/packages/libs/lifecycle/docs/design.md#storage), including the non-null `requestKey` and unique `(lifecycle, recordId, requestKey)` index, and configure `createRepositoryLifecycleStore()` with their names. This plugin migrates only `approvalRuns`, `approvalTasks` and `approvalEvents`; it does not install a separate lifecycle store. Missing collections are configuration errors: migrate the host before starting approvals.

@@ -100,3 +100,7 @@ Every Server plugin declaration requires an absolute `baseDir`. In `server/plugi
 After compiling database tasks and finishing JavaScript rewriting, run `nocobase-db-manifests` from `@nocobase/dev-config`. Publish the generated `.manifest.json` alongside the marked JavaScript in each migrations and seeds directory. Do not edit historical migration sources or bypass checksums to accommodate compilation differences.
 
 The application must explicitly provide required shared server peers in its production dependencies because deployment disables automatic peer installation. Peer ranges must be compatible; the declaration alone does not guarantee one module across incompatible installed versions.
+
+## Host lifecycle storage
+
+The host owns the lifecycle transition log and effect-run collections for both business records and approval runs. Before registering approvals, migrate both collections using the [lifecycle storage schema](https://github.com/nocobase/nocobase3/blob/develop/packages/libs/lifecycle/docs/design.md#storage), including the non-null `requestKey` and unique `(lifecycle, recordId, requestKey)` index, and configure `createRepositoryLifecycleStore()` with their names. This plugin migrates only `approvalRuns`, `approvalTasks` and `approvalEvents`; it does not install a separate lifecycle store. Missing collections are configuration errors: migrate the host before starting approvals.

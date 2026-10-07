@@ -119,7 +119,16 @@ function filterOf(match: Match): RepositoryFilter<RepositoryRecord> {
 
 function databaseRows(connection: DatabaseConnection): Rows {
   const repository = (collection: string): Repository =>
-    connection.repository(collection);
+    (() => {
+      try {
+        return connection.repository(collection);
+      } catch (cause) {
+        throw new Error(
+          `The approval host must migrate collection "${collection}" and provide lifecycle transition and effect-run collections to its Repository store. See @nocobase/app-plugin-approval/README.md.`,
+          { cause },
+        );
+      }
+    })();
   return {
     insert: async (collection, values) =>
       toRow(
