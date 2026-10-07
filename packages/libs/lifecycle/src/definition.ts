@@ -62,6 +62,14 @@ export interface TransitionHookContext<T extends LifecycleTypes> {
  * of. A hook writes rows that must commit with the state — the tasks of a
  * stage, a run waiting in it — and may fire or create other records, or this
  * one, through `tx`.
+ *
+ * A hook that fires this record onward ends the transition that ran it: the
+ * hooks and `onTransition` still to come do not run, the `onEnter` effects
+ * of the state it entered are not queued, and that state announces nothing.
+ * The transition still happened, so its own `effects` are queued; `fire()`
+ * or `create()` returns the record as the hook's transition left it, with
+ * this transition's log entry and those effect runs. It stays in the
+ * history, and its listeners hear of it before the one the hook fired.
  */
 export interface StateHookContext<T extends LifecycleTypes> {
   /** The lifecycle's name, for a hook shared by several lifecycles to fire its own record. */
@@ -236,7 +244,9 @@ export interface TransitionDefinition<T extends LifecycleTypes> {
    * Runs inside the transition's transaction, after the record and its log
    * entry are written: write related rows that must commit with the state,
    * or throw to refuse the transition and roll everything back. Nothing that
-   * reaches outside the database belongs here; that is an effect.
+   * reaches outside the database belongs here; that is an effect. Firing
+   * this record onward through `tx` ends the transition here, as it does
+   * from a state hook; see {@link StateHookContext}.
    */
   onTransition?(context: TransitionHookContext<T>): void | Promise<void>;
   /** Run after commit. */

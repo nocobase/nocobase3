@@ -239,6 +239,35 @@ describe('runtime.transaction', () => {
     ]);
   });
 
+  it('runs afterCommit callbacks and each call’s events and effects in the order they were registered', async () => {
+    const h = setup();
+    h.runtime.on('completed', {}, (event) => {
+      h.log.push(`completed:${event.transition}`);
+    });
+    const { record } = await h.runtime.create(
+      'reviews',
+      { reviewers: ['ann'] },
+      { actor: { id: 'zoe' } },
+    );
+    h.log.length = 0;
+    await h.runtime.transaction(async (tx) => {
+      tx.afterCommit(() => void h.log.push('registered before'));
+      await tx.fire('reviews', record.id, 'submit', {
+        actor: { id: 'zoe' },
+      });
+      tx.afterCommit(() => void h.log.push('registered after'));
+    });
+    // A callback registered before tx.fire() runs before that transition's
+    // event and effect; one registered after the call runs after them.
+    expect(h.log).toEqual([
+      'enter:reviewing',
+      'registered before',
+      'completed:submit',
+      'effect:reviewing',
+      'registered after',
+    ]);
+  });
+
   it('rolls every record back when the work fails, and runs nothing after it', async () => {
     const h = setup();
     const { record } = await h.runtime.create(

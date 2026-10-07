@@ -36,14 +36,14 @@ let database: DatabaseManager;
 
 async function createTables(): Promise<void> {
   const builder = database.builder();
-  for (const name of ['orders', 'tasks'])
+  for (const name of ['orders', 'tasks', 'steps'])
     await builder.createCollection(name, (table) => {
       table.bigInt('id').primary().autoIncrement().notNull();
       table.string('status').notNull();
       table.datetimeTz('statusChangedAt').notNull();
       table.integer('lifecycleVersion').notNull().defaultTo(0);
       if (name === 'orders') table.boolean('refuse').notNull().defaultTo(false);
-      else table.string('orderId').notNull();
+      else if (name === 'tasks') table.string('orderId').notNull();
     });
   await builder.createCollection('notes', (table) => {
     table.bigInt('id').primary().autoIncrement().notNull();
@@ -230,5 +230,67 @@ describe('savepoints three levels deep', () => {
     // Nothing the child registered after commit ran.
     expect(services.assigned).toEqual([]);
     expect(heard).toEqual([]);
+  });
+});
+
+describe('a state hook that moves its own record on', () => {
+  it('stops the transition that ran it and returns the record as it moved', async () => {
+    const runtime = new LifecycleRuntime({
+      store: createRepositoryLifecycleStore(database),
+      clock: () => new Date('2026-10-01T09:00:00.000Z'),
+    });
+    const ran: string[] = [];
+    const entering = (state: string) =>
+      defineEffect<{ record: LifecycleRecord; state: 'a' | 'b' | 'c' }>({
+        name: `enter.${state}`,
+        run: () => void ran.push(`effect:${state}`),
+      });
+    runtime.register(
+      defineLifecycle<{ record: LifecycleRecord; state: 'a' | 'b' | 'c' }>({
+        name: 'steps',
+        initial: 'a',
+        states: [
+          'a',
+          {
+            name: 'b',
+            onEnterState: async ({ tx, lifecycle, record }) => {
+              ran.push('state-enter:b');
+              await tx.fire(lifecycle, record.id, 'onward', {
+                actor: { id: 'system' },
+              });
+            },
+          },
+          { name: 'c', final: true },
+        ],
+        transitions: {
+          start: { from: 'a', to: 'b' },
+          onward: { from: 'b', to: 'c' },
+        },
+        onEnterState: { b: () => void ran.push('lifecycle-enter:b') },
+        onEnter: { b: [entering('b')], c: [entering('c')] },
+      }),
+    );
+    const { record } = await runtime.create(
+      'steps',
+      {},
+      { actor: { id: 'lin' } },
+    );
+
+    const fired = await runtime.fire('steps', record.id, 'start', {
+      actor: { id: 'lin' },
+    });
+
+    expect(ran).toEqual(['state-enter:b', 'effect:c']);
+    expect(fired.record).toMatchObject({ status: 'c' });
+    expect(Number(fired.record.lifecycleVersion)).toBe(3);
+    expect(fired.entry).toMatchObject({ from: 'a', to: 'b', version: 2 });
+    expect(fired.effectRuns).toEqual([]);
+    const history = await runtime.history('steps', record.id);
+    expect(history.transitions.map((entry) => [entry.from, entry.to])).toEqual([
+      [null, 'a'],
+      ['a', 'b'],
+      ['b', 'c'],
+    ]);
+    expect(history.effectRuns.map((run) => run.effect)).toEqual(['enter.c']);
   });
 });
