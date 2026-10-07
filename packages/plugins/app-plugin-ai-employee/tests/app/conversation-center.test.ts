@@ -970,7 +970,8 @@ describe('app-wide conversation center', async () => {
         await expectError(
           await run(sessions.root, 'send', {
             aiEmployee: 'ada',
-            messages: [userMessage],
+            // The chat sends its own `key` with the message, which is not a stored column.
+            messages: [{ ...userMessage, key: randomUUID() }],
           }),
           429,
           {
