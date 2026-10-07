@@ -412,7 +412,7 @@ function answer(conversationId: string, agentId: string): void {
     ...item,
     run: { id: `run-${conversationId}`, status: 'running', acceptsInput: true },
   }));
-  window.setTimeout(() => {
+  setTimeout(() => {
     const draft = appendMessage(conversationId, (seq) =>
       message(conversationId, seq, 'assistant', '', {
         createdAt: new Date().toISOString(),
@@ -420,7 +420,7 @@ function answer(conversationId: string, agentId: string): void {
       }),
     );
     let length = 0;
-    const timer = window.setInterval(() => {
+    const timer = setInterval(() => {
       length = Math.min(REPLY.length, length + 12);
       const done = length === REPLY.length;
       replaceMessage({
@@ -429,7 +429,7 @@ function answer(conversationId: string, agentId: string): void {
         metadata: { agentId, ...(done ? {} : { streaming: true }) },
       });
       if (!done) return;
-      window.clearInterval(timer);
+      clearInterval(timer);
       patchConversation(conversationId, (item) => ({
         ...item,
         run: null,
