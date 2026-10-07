@@ -11,7 +11,7 @@ export interface OverviewData {
   readonly reload: () => Promise<void>;
 }
 
-/** Every record and the persona's to-do center, refreshed while the page is open. */
+/** Every record and the persona's to-do center, loaded on entry and after actions. */
 export function useOverview(actor: string): OverviewData {
   const client = useApiClient();
   return useLoader(

@@ -108,14 +108,15 @@ function Run({
           <span>{text.t('flow.ruleVersion', { version: run.version })}</span>
         ) : null}
       </div>
-      <ol className='space-y-3 border-l pl-4'>
+      <ol className='space-y-3 border-l'>
         {view.stages.map((stage) => {
           const tasks = current(stage.key);
           return (
-            <li key={stage.key} className='relative'>
+            <li key={stage.key} className='relative pl-4'>
+              {/* The positioning origin is inside the 1px timeline border. */}
               <span
                 className={cn(
-                  'absolute top-0.5 -left-[25px] inline-flex size-5 items-center justify-center rounded-full border bg-background',
+                  'absolute top-0.5 -left-[0.5px] inline-flex size-5 -translate-x-1/2 items-center justify-center rounded-full border bg-background',
                   stage.state === 'done' &&
                     'border-emerald-500 text-emerald-600',
                   stage.state === 'current' && 'border-primary text-primary',

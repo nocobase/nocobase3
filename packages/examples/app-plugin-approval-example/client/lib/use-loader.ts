@@ -2,12 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { errorMessage } from './api.js';
 
-/** How often an open page refreshes; effects and sweeps finish in the background. */
-const REFRESH_MS = 4000;
-
 /**
- * Loads `load` now and every few seconds while `key` stays the same, and
- * returns a `reload` for after an action. A failed load keeps the last data.
+ * Loads once when `key` changes and returns a `reload` for after an action.
+ * A failed load keeps the last data. Background changes require a page refresh.
  */
 export function useLoader<T>(
   load: (() => Promise<T>) | undefined,
@@ -34,12 +31,10 @@ export function useLoader<T>(
     // eslint-disable-next-line react-hooks/exhaustive-deps, @eslint-react/exhaustive-deps
   }, [key]);
   useEffect(() => {
-    // The first load also waits a tick, so every refresh comes from a timer.
+    // Defer the initial load until after the effect has been set up.
     const first = setTimeout(() => void reload(), 0);
-    const timer = setInterval(() => void reload(), REFRESH_MS);
     return () => {
       clearTimeout(first);
-      clearInterval(timer);
     };
   }, [reload]);
   return {

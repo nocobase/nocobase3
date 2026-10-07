@@ -52,3 +52,5 @@ pnpm --filter @nocobase/app-plugin-approval-example build
 ## HTTP API
 
 Routes start at `/api/approvalExample` and are documented by the host at `/api/swagger/docs`. Successful requests return `{ data }`; `GET /records` returns `{ data, meta }` with `page` and `pageSize` (default 20, maximum 100). `/overview` is an aggregate for the demonstration dashboard. Settings use `PATCH /settings`. Task, record and simulated event actions have individually declared routes and strict JSON bodies. The plugin owns its lifecycle routes under `/lifecycles`; human fire requests pass `manual: true` to the runtime, and errors use `ApiError` with lifecycle blockers and problems in `metadata`.
+
+The example pages load data on entry and when the acting persona or selected record changes, and refresh after user actions. They do not poll. Refresh the page to see changes made by another user or completed background effects and sweeps; live updates can be added through a push transport when needed.
