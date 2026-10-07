@@ -216,7 +216,13 @@ export class LifecycleTestKit<T extends LifecycleTypes> {
     return this.dispatcher.runDue();
   }
 
-  /** Creates a record in the initial state, as a create form would. */
+  /**
+   * Inserts a record in the initial state directly, as a seed would. It
+   * bypasses the definition's `create` checks — `validate` and `guard` — and
+   * writes no `$create` entry, which suits a test about later transitions;
+   * test who may create what with `start()`, which goes through
+   * `runtime.create()`.
+   */
   public create(values: Readonly<Record<string, unknown>> = {}): T['record'] {
     return this.store.insertRecord(this.lifecycle.collection, {
       ...values,

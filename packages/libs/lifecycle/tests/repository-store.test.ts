@@ -46,13 +46,11 @@ async function createTables(): Promise<void> {
     table.datetimeTz('at').notNull();
     table.integer('version').notNull();
     table.string('requestId');
+    // The request id, or `$v:<version>` without one: never null, so one
+    // unique index means the same on every dialect.
+    table.string('requestKey').notNull();
     table.unique(['lifecycle', 'recordId', 'version']);
-    // Only entries that carry a request key, where the dialect can say so.
-    table.unique(['lifecycle', 'recordId', 'requestId'], {
-      ...(testDatabase.capabilities.partialIndexes
-        ? { predicate: { requestId: { $notNull: true } } }
-        : {}),
-    });
+    table.unique(['lifecycle', 'recordId', 'requestKey']);
   });
   await builder.createCollection(LIFECYCLE_COLLECTIONS.effectRuns, (table) => {
     table.bigInt('id').primary().autoIncrement().notNull();
@@ -578,5 +576,147 @@ describe('Repository lifecycle store', () => {
     expect((await runtime().history('tickets', id)).effectRuns).toMatchObject([
       { status: 'succeeded', attempts: 2 },
     ]);
+  });
+});
+
+describe('the request key of a log entry', () => {
+  const entry = {
+    lifecycle: 'tickets',
+    recordId: '1',
+    transition: 'close',
+    from: 'open',
+    to: 'closed',
+    actorId: 'agent',
+    input: {},
+    at: '2026-10-01T09:00:00.000Z',
+  };
+
+  it('logs every transition without a request id, each under its version', async () => {
+    const id = await createTicket();
+    // Two entries on one record with no request id: a unique index over a
+    // nullable request id would count them as duplicates on some dialects.
+    await runtime().fire('tickets', id, 'replyToCustomer', {
+      actor: { id: 'agent' },
+      input: { message: 'Please confirm' },
+    });
+    await runtime().fire('tickets', id, 'customerReplied', {
+      actor: { id: 'customer' },
+    });
+    await runtime().fire('tickets', id, 'close', {
+      actor: { id: 'agent' },
+      requestId: 'close-1',
+    });
+    const rows = await database
+      .repository(LIFECYCLE_COLLECTIONS.transitions)
+      .findMany({ sort: (sort) => sort.field('version').asc() });
+    expect(
+      rows.map((row) => ({
+        version: Number(row.version),
+        requestId: row.requestId ?? null,
+        requestKey: row.requestKey,
+      })),
+    ).toEqual([
+      { version: 1, requestId: null, requestKey: '$v:1' },
+      { version: 2, requestId: null, requestKey: '$v:2' },
+      { version: 3, requestId: 'close-1', requestKey: 'close-1' },
+    ]);
+    expect(
+      (await runtime().history('tickets', id)).transitions.map(
+        (transition) => transition.requestId,
+      ),
+    ).toEqual([null, null, 'close-1']);
+  });
+
+  it('refuses a second entry under a request id already spent on the record', async () => {
+    await store.appendTransition({ ...entry, version: 1, requestId: 'r-1' });
+    await expect(
+      store.appendTransition({ ...entry, version: 2, requestId: 'r-1' }),
+    ).rejects.toThrow();
+    // Another record may use the same key.
+    await store.appendTransition({
+      ...entry,
+      recordId: '2',
+      version: 1,
+      requestId: 'r-1',
+    });
+    expect(
+      await store.findTransitionByRequest('tickets', '1', 'r-1'),
+    ).toMatchObject({ version: 1, requestId: 'r-1' });
+    expect(
+      await store.findTransitionByRequest('tickets', '1', '$v:1'),
+    ).toBeUndefined();
+  });
+});
+
+describe('joining a caller’s transaction', () => {
+  async function ticketOf(id: string): Promise<unknown> {
+    return database
+      .repository('tickets')
+      .findOne({ filter: { id: Number(id) } });
+  }
+
+  it('refuses the root connection instead of committing outside the caller’s transaction', async () => {
+    const lifecycle = runtime();
+    const id = await createTicket();
+    await expect(
+      database.transaction(async () => {
+        await lifecycle.fire('tickets', id, 'replyToCustomer', {
+          actor: { id: 'agent' },
+          input: { message: 'Please confirm' },
+          transaction: database.connection(),
+        });
+      }),
+    ).rejects.toThrow(/itself is not a transaction/);
+    expect(await ticketOf(id)).toMatchObject({ status: 'open' });
+    expect((await lifecycle.history('tickets', id)).transitions).toEqual([]);
+    expect(sent).toEqual([]);
+  });
+
+  it('refuses a policy-bound root connection, which is no transaction either', async () => {
+    const id = await createTicket();
+    await expect(
+      runtime().fire('tickets', id, 'replyToCustomer', {
+        actor: { id: 'agent' },
+        input: { message: 'Please confirm' },
+        transaction: database.connection().withPolicies({}, null),
+      }),
+    ).rejects.toThrow(/not a transaction/);
+    expect(await ticketOf(id)).toMatchObject({ status: 'open' });
+  });
+
+  it('refuses a transaction on another connection', async () => {
+    const id = await createTicket();
+    await expect(
+      database.transaction(async (tx) => {
+        // A transaction connection as another connection's would carry it.
+        const elsewhere = Object.create(tx, {
+          name: { value: 'reporting' },
+        }) as DatabaseConnection;
+        await runtime().fire('tickets', id, 'replyToCustomer', {
+          actor: { id: 'agent' },
+          input: { message: 'Please confirm' },
+          transaction: elsewhere,
+        });
+      }),
+    ).rejects.toThrow(/runs on connection "reporting"/);
+    expect(await ticketOf(id)).toMatchObject({ status: 'open' });
+  });
+
+  it('refuses a transaction that has already committed', async () => {
+    const id = await createTicket();
+    let escaped: DatabaseConnection | undefined;
+    await database.transaction((tx) => {
+      escaped = tx;
+      return Promise.resolve();
+    });
+    await expect(
+      runtime().fire('tickets', id, 'replyToCustomer', {
+        actor: { id: 'agent' },
+        input: { message: 'Please confirm' },
+        transaction: escaped,
+      }),
+    ).rejects.toThrow(/already complete/);
+    expect(await ticketOf(id)).toMatchObject({ status: 'open' });
+    expect(sent).toEqual([]);
   });
 });

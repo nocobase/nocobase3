@@ -63,6 +63,22 @@ export interface EffectRun {
 }
 
 export type NewTransitionEntry = Omit<TransitionEntry, 'id'>;
+
+/**
+ * The key a store deduplicates log entries by: the entry's `requestId`, or
+ * `$v:<version>` when it has none. It is never null, so one unique index on
+ * `(lifecycle, recordId, requestKey)` behaves the same on every dialect,
+ * whether that dialect lets a unique index hold several NULLs, counts NULL
+ * as a value, or treats rows whose other columns match as duplicates.
+ * Request ids starting with `$` are reserved — the runtime refuses them from
+ * callers and itself uses only `$run:` — so the derived key never collides
+ * with one.
+ */
+export function transitionRequestKey(
+  entry: Pick<NewTransitionEntry, 'requestId' | 'version'>,
+): string {
+  return entry.requestId ?? `$v:${String(entry.version)}`;
+}
 export type NewEffectRun = Omit<EffectRun, 'id'>;
 export type EffectRunChanges = Partial<
   Omit<EffectRun, 'id' | 'transitionId' | 'lifecycle' | 'recordId' | 'effect'>
@@ -133,8 +149,10 @@ export interface TransactionOptions {
   /**
    * The `transactionHandle` of a transaction still running, such as the
    * `@nocobase/db` connection a caller's own transaction received, to nest
-   * this one in. It must belong to the same store, or to the same database
-   * connection the store writes to.
+   * this one in. It must belong to the same store, or be a transaction on
+   * the same database connection the store writes to; a root connection, a
+   * connection of another name, or a transaction that has already committed
+   * or rolled back is refused rather than silently written outside it.
    */
   readonly within?: unknown;
 }

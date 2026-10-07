@@ -2,7 +2,14 @@
 // its own writes, and nothing written outside it meanwhile.
 import { describe, expect, it } from 'vitest';
 
-import { MemoryLifecycleStore, type NewEffectRun } from '../src/index.js';
+import {
+  defineLifecycle,
+  LifecycleRuntime,
+  MemoryLifecycleStore,
+  type LifecycleRecord,
+  type LifecycleStore,
+  type NewEffectRun,
+} from '../src/index.js';
 
 const queued: NewEffectRun = {
   transitionId: 't1',
@@ -237,5 +244,210 @@ describe('memory store transactions', () => {
         }),
       ).rejects.toThrow(/one of its own running transactions/);
     });
+  });
+
+  it('puts back only the fields it wrote, keeping an edit made meanwhile', async () => {
+    interface Mail extends LifecycleRecord {
+      readonly status: 'open' | 'sent';
+      readonly title: string;
+    }
+    const store = new MemoryLifecycleStore();
+    const runtime = new LifecycleRuntime({ store });
+    const writing = gate();
+    const edited = gate();
+    runtime.register(
+      defineLifecycle<{ record: Mail; state: Mail['status'] }>({
+        name: 'mails',
+        initial: 'open',
+        states: ['open', { name: 'sent', final: true }],
+        transitions: {
+          send: {
+            from: 'open',
+            to: 'sent',
+            // The record is already written when this runs.
+            onTransition: async () => {
+              writing.open();
+              await edited.promise;
+              throw new Error('The mail server refused it.');
+            },
+          },
+        },
+      }),
+    );
+    const { id } = store.insertRecord('mails', {
+      status: 'open',
+      title: 'a',
+      statusChangedAt: '2026-10-01T09:00:00.000Z',
+      lifecycleVersion: 0,
+    });
+    const sending = runtime.fire('mails', id, 'send', { actor: { id: 'lin' } });
+    await writing.promise;
+    expect(store.record('mails', id)).toMatchObject({
+      status: 'sent',
+      lifecycleVersion: 1,
+    });
+    // An edit form saves another field while the transition is undecided.
+    store.patchRecord('mails', id, { title: 'b' });
+    edited.open();
+    await expect(sending).rejects.toThrow('refused it');
+
+    expect(store.record('mails', id)).toMatchObject({
+      status: 'open',
+      lifecycleVersion: 0,
+      title: 'b',
+      statusChangedAt: '2026-10-01T09:00:00.000Z',
+    });
+    expect(await store.listTransitions('mails', String(id))).toEqual([]);
+  });
+
+  it('keeps a field an outside write changed too, and drops a row it inserted', async () => {
+    const store = new MemoryLifecycleStore();
+    const record = store.insertRecord('orders', {
+      status: 'waiting',
+      note: 'none',
+    });
+    const started = gate();
+    const edited = gate();
+    let insertedId: string | number | undefined;
+    const failing = store.transaction(async (tx) => {
+      await tx.updateRecordIf(
+        'orders',
+        record.id,
+        {
+          stateField: 'status',
+          state: 'waiting',
+          versionField: 'lifecycleVersion',
+          version: null,
+        },
+        { status: 'approved', note: 'approved', lifecycleVersion: 1 },
+      );
+      // A row of its own, written twice: rolling back removes it.
+      const inserted = await tx.createRecord('orders', { status: 'waiting' });
+      insertedId = inserted.id;
+      await tx.updateRecordIf(
+        'orders',
+        inserted.id,
+        {
+          stateField: 'status',
+          state: 'waiting',
+          versionField: 'lifecycleVersion',
+          version: null,
+        },
+        { status: 'approved', lifecycleVersion: 1 },
+      );
+      started.open();
+      await edited.promise;
+      throw new Error('Refused.');
+    });
+    await started.promise;
+    store.patchRecord('orders', record.id, { note: 'edited' });
+    edited.open();
+    await expect(failing).rejects.toThrow('Refused.');
+
+    expect(store.record('orders', record.id)).toEqual({
+      id: record.id,
+      status: 'waiting',
+      note: 'edited',
+    });
+    expect(store.record('orders', insertedId!)).toBeUndefined();
+  });
+
+  it('refuses a transaction handle once its transaction has committed or rolled back', async () => {
+    const store = new MemoryLifecycleStore();
+    let committed: LifecycleStore | undefined;
+    await store.transaction((tx) => {
+      committed = tx;
+      return Promise.resolve();
+    });
+    let rolledBack: LifecycleStore | undefined;
+    await expect(
+      store.transaction((tx) => {
+        rolledBack = tx;
+        return Promise.reject(new Error('Refused.'));
+      }),
+    ).rejects.toThrow('Refused.');
+
+    for (const ended of [committed!, rolledBack!]) {
+      await expect(
+        store.transaction(() => Promise.resolve(), {
+          within: ended.transactionHandle,
+        }),
+      ).rejects.toThrow(/Transaction query already complete/);
+      expect(() => ended.afterCommit(() => undefined)).toThrow(
+        /Transaction query already complete/,
+      );
+      await expect(
+        ended.createRecord('orders', { status: 'waiting' }),
+      ).rejects.toThrow(/Transaction query already complete/);
+      await expect(ended.findRecord('orders', 1)).rejects.toThrow(
+        /Transaction query already complete/,
+      );
+    }
+    expect(await store.listEffectRuns({})).toEqual([]);
+  });
+
+  it('refuses a nested transaction once it has ended, and afterCommit from a commit callback', async () => {
+    const store = new MemoryLifecycleStore();
+    let nested: LifecycleStore | undefined;
+    const late: unknown[] = [];
+    await store.transaction(async (outer) => {
+      await store.transaction(
+        (inner) => {
+          nested = inner;
+          return Promise.resolve();
+        },
+        { within: outer.transactionHandle },
+      );
+      await expect(
+        nested!.createRecord('orders', { status: 'waiting' }),
+      ).rejects.toThrow(/already complete/);
+      outer.afterCommit(() => {
+        try {
+          outer.afterCommit(() => undefined);
+        } catch (error) {
+          late.push(error);
+        }
+      });
+    });
+    expect(late).toEqual([
+      expect.objectContaining({
+        message: expect.stringMatching(/already complete/) as unknown,
+      }),
+    ]);
+  });
+
+  it('refuses a lifecycle call joining a transaction that has ended', async () => {
+    const store = new MemoryLifecycleStore();
+    const runtime = new LifecycleRuntime({ store });
+    runtime.register(
+      defineLifecycle({
+        name: 'orders',
+        initial: 'waiting',
+        states: ['waiting', { name: 'approved', final: true }],
+        transitions: { approve: { from: 'waiting', to: 'approved' } },
+      }),
+    );
+    const completed: string[] = [];
+    runtime.on('completed', {}, (event) => {
+      completed.push(event.transition);
+    });
+    const { id } = store.insertRecord('orders', {
+      status: 'waiting',
+      statusChangedAt: '2026-10-01T09:00:00.000Z',
+      lifecycleVersion: 0,
+    });
+    let ended: unknown;
+    await store.transaction((tx) => {
+      ended = tx.transactionHandle;
+      return Promise.resolve();
+    });
+    await expect(
+      runtime.fire('orders', id, 'approve', {
+        actor: { id: 'lin' },
+        transaction: ended,
+      }),
+    ).rejects.toThrow(/already complete/);
+    expect(store.record('orders', id)).toMatchObject({ status: 'waiting' });
+    expect(completed).toEqual([]);
   });
 });

@@ -12,6 +12,7 @@ import type {
   TransactionOptions,
   TransitionEntry,
 } from './store.js';
+import { transitionRequestKey } from './store.js';
 import type { LifecycleRecord, RecordId } from './types.js';
 
 /** The sweep order: oldest change first, then by id, as a database index would. */
@@ -47,6 +48,16 @@ type Undo = () => void;
 interface Scope {
   readonly journal: Undo[];
   readonly commits: (() => void | Promise<void>)[];
+  /** Set once the scope has committed, been released to its parent, or rolled back. */
+  finished: boolean;
+}
+
+/** What `@nocobase/db` answers for a transaction connection used after it ended. */
+const FINISHED =
+  'Transaction query already complete: this memory store transaction has already committed or rolled back. Use the store itself, or a transaction that is still running.';
+
+function openScope(): Scope {
+  return { journal: [], commits: [], finished: false };
 }
 
 /**
@@ -69,11 +80,56 @@ function write<V>(
 }
 
 /**
+ * Writes `values` over a record, and returns the record written and how to
+ * undo it. The undo works field by field, as a database rollback would after
+ * a write made outside the transaction waited for the row's lock: a field
+ * still holding the value written here gets its previous value back, and
+ * every other field — one an outside write changed meanwhile — keeps what
+ * it holds now.
+ */
+function update(
+  rows: Map<string, LifecycleRecord>,
+  key: string,
+  current: LifecycleRecord,
+  values: Readonly<Record<string, unknown>>,
+): [LifecycleRecord, Undo] {
+  const written = Object.freeze({
+    ...current,
+    ...values,
+    id: current.id,
+  }) as LifecycleRecord;
+  rows.set(key, written);
+  const undo = (): void => {
+    const now = rows.get(key);
+    if (!now) return;
+    // Nothing has written the row since: put back the record exactly, so an
+    // earlier undo of this transaction still recognizes it as its own.
+    if (now === written) {
+      rows.set(key, current);
+      return;
+    }
+    const restored: Record<string, unknown> = { ...now };
+    let changed = false;
+    for (const field of Object.keys(values)) {
+      if (field === 'id' || !Object.is(now[field], written[field])) continue;
+      if (Object.hasOwn(current, field)) restored[field] = current[field];
+      else delete restored[field];
+      changed = true;
+    }
+    if (changed) rows.set(key, Object.freeze(restored) as LifecycleRecord);
+  };
+  return [written, undo];
+}
+
+/**
  * A store in process memory, for tests and examples. A transaction keeps a
  * log of what its own writes replaced and puts it back when the work fails,
  * so a refused transition leaves nothing behind here either, while a write
- * made outside the transaction meanwhile — a worker claiming an effect run —
- * survives the rollback, as it would on a database.
+ * made outside the transaction meanwhile — a worker claiming an effect run,
+ * an edit to another field of a record the transaction changed — survives
+ * the rollback, as it would on a database. Unlike a database, a write
+ * outside the transaction does not wait for it, and sees what it has not
+ * committed yet.
  */
 export class MemoryLifecycleStore implements LifecycleStore {
   private state: MemoryState = {
@@ -102,6 +158,7 @@ export class MemoryLifecycleStore implements LifecycleStore {
     collection: string,
     values: Readonly<Record<string, unknown>>,
   ): LifecycleRecord {
+    this.assertOpen();
     const id = (values.id as RecordId | undefined) ?? this.next();
     const record = Object.freeze({ ...values, id }) as LifecycleRecord;
     this.log(write(this.rows(collection), String(id), record));
@@ -114,15 +171,18 @@ export class MemoryLifecycleStore implements LifecycleStore {
     id: RecordId,
     values: Readonly<Record<string, unknown>>,
   ): LifecycleRecord {
-    const current = this.rows(collection).get(String(id));
+    this.assertOpen();
+    const rows = this.rows(collection);
+    const current = rows.get(String(id));
     if (!current) throw new Error(`No ${collection} record "${String(id)}".`);
-    const record = Object.freeze({ ...current, ...values, id: current.id });
-    this.log(write(this.rows(collection), String(id), record));
+    const [record, undo] = update(rows, String(id), current, values);
+    this.log(undo);
     return record;
   }
 
   /** The record as it is now, read synchronously. */
   public record(collection: string, id: RecordId): LifecycleRecord | undefined {
+    this.assertOpen();
     return this.rows(collection).get(String(id));
   }
 
@@ -130,9 +190,15 @@ export class MemoryLifecycleStore implements LifecycleStore {
    * Transactions run one after another, the way a database serializes
    * writers of one row. The work receives a view of this store that logs
    * what each of its writes replaced; a failure undoes those writes, newest
-   * first, and leaves every other write alone. A write made outside the
-   * transaction to a row the transaction also wrote wins, as it would once
-   * the database released the row's lock.
+   * first, and leaves every other write alone. A field of a record that a
+   * write made outside the transaction changed keeps that write's value,
+   * and the fields only the transaction wrote get their previous values
+   * back, which is what a database leaves once the rollback releases the
+   * row's lock and the waiting outside write applies its own columns.
+   *
+   * Once a transaction has committed or rolled back, its view refuses to
+   * read, write, register `afterCommit` callbacks or be nested `within`, as a
+   * `@nocobase/db` transaction connection does.
    *
    * With `within` — the `transactionHandle` of a transaction still running
    * — the work runs inside that one instead, as a savepoint would: a failure
@@ -150,24 +216,30 @@ export class MemoryLifecycleStore implements LifecycleStore {
     const { root } = this;
     if (options.within !== undefined) {
       const parent = root.scopeOf(options.within);
-      const scope: Scope = { journal: [], commits: [] };
+      const scope = openScope();
       try {
         const result = await work(root.view(scope));
+        // The enclosing transaction may have ended while this one ran.
+        if (parent.finished) throw new Error(FINISHED);
         parent.journal.push(...scope.journal);
         parent.commits.push(...scope.commits);
         return result;
       } catch (error) {
         for (const undo of scope.journal.reverse()) undo();
         throw error;
+      } finally {
+        scope.finished = true;
       }
     }
-    const scope: Scope = { journal: [], commits: [] };
+    const scope = openScope();
     const run = root.queue.then(async () => {
       try {
         return await work(root.view(scope));
       } catch (error) {
         for (const undo of scope.journal.reverse()) undo();
         throw error;
+      } finally {
+        scope.finished = true;
       }
     });
     root.queue = run.catch(() => undefined);
@@ -194,6 +266,7 @@ export class MemoryLifecycleStore implements LifecycleStore {
       throw new Error(
         'afterCommit is only available inside a transaction, on the store its work receives.',
       );
+    this.assertOpen();
     this.scope.commits.push(callback);
   }
 
@@ -201,6 +274,7 @@ export class MemoryLifecycleStore implements LifecycleStore {
     collection: string,
     id: RecordId,
   ): Promise<LifecycleRecord | undefined> {
+    if (this.scope?.finished) return Promise.reject(new Error(FINISHED));
     return Promise.resolve(this.rows(collection).get(String(id)));
   }
 
@@ -208,6 +282,7 @@ export class MemoryLifecycleStore implements LifecycleStore {
     collection: string,
     values: Readonly<Record<string, unknown>>,
   ): Promise<LifecycleRecord> {
+    if (this.scope?.finished) return Promise.reject(new Error(FINISHED));
     return Promise.resolve(this.insertRecord(collection, values));
   }
 
@@ -217,7 +292,9 @@ export class MemoryLifecycleStore implements LifecycleStore {
     condition: RecordCondition,
     values: Readonly<Record<string, unknown>>,
   ): Promise<boolean> {
-    const current = this.rows(collection).get(String(id));
+    if (this.scope?.finished) return Promise.reject(new Error(FINISHED));
+    const rows = this.rows(collection);
+    const current = rows.get(String(id));
     const version = current?.[condition.versionField] ?? null;
     if (
       !current ||
@@ -225,13 +302,7 @@ export class MemoryLifecycleStore implements LifecycleStore {
       (version === null ? null : Number(version)) !== condition.version
     )
       return Promise.resolve(false);
-    this.log(
-      write(
-        this.rows(collection),
-        String(id),
-        Object.freeze({ ...current, ...values, id: current.id }),
-      ),
-    );
+    this.log(update(rows, String(id), current, values)[1]);
     return Promise.resolve(true);
   }
 
@@ -239,6 +310,7 @@ export class MemoryLifecycleStore implements LifecycleStore {
     collection: string,
     query: IdleRecordQuery,
   ): Promise<LifecycleRecord[]> {
+    if (this.scope?.finished) return Promise.reject(new Error(FINISHED));
     const { after } = query;
     return Promise.resolve(
       [...this.rows(collection).values()]
@@ -258,14 +330,17 @@ export class MemoryLifecycleStore implements LifecycleStore {
   }
 
   public appendTransition(entry: NewTransitionEntry): Promise<TransitionEntry> {
-    // The unique index a database store declares on (lifecycle, recordId, version).
+    if (this.scope?.finished) return Promise.reject(new Error(FINISHED));
+    // The unique indexes a database store declares on (lifecycle, recordId,
+    // version) and (lifecycle, recordId, requestKey).
+    const requestKey = transitionRequestKey(entry);
     if (
       this.state.transitions.some(
         (other) =>
           other.lifecycle === entry.lifecycle &&
           other.recordId === entry.recordId &&
           (other.version === entry.version ||
-            (entry.requestId !== null && other.requestId === entry.requestId)),
+            transitionRequestKey(other) === requestKey),
       )
     )
       return Promise.reject(
@@ -284,6 +359,7 @@ export class MemoryLifecycleStore implements LifecycleStore {
   }
 
   public findTransition(id: string): Promise<TransitionEntry | undefined> {
+    if (this.scope?.finished) return Promise.reject(new Error(FINISHED));
     return Promise.resolve(
       this.state.transitions.find((entry) => entry.id === id),
     );
@@ -294,6 +370,7 @@ export class MemoryLifecycleStore implements LifecycleStore {
     recordId: string,
     requestId: string,
   ): Promise<TransitionEntry | undefined> {
+    if (this.scope?.finished) return Promise.reject(new Error(FINISHED));
     return Promise.resolve(
       this.state.transitions.find(
         (entry) =>
@@ -308,6 +385,7 @@ export class MemoryLifecycleStore implements LifecycleStore {
     lifecycle: string,
     recordId: string,
   ): Promise<TransitionEntry[]> {
+    if (this.scope?.finished) return Promise.reject(new Error(FINISHED));
     return Promise.resolve(
       this.state.transitions.filter(
         (entry) => entry.lifecycle === lifecycle && entry.recordId === recordId,
@@ -316,12 +394,14 @@ export class MemoryLifecycleStore implements LifecycleStore {
   }
 
   public createEffectRun(run: NewEffectRun): Promise<EffectRun> {
+    if (this.scope?.finished) return Promise.reject(new Error(FINISHED));
     const saved = Object.freeze({ ...run, id: String(this.next()) });
     this.log(write(this.state.effectRuns, saved.id, saved));
     return Promise.resolve(saved);
   }
 
   public findEffectRun(id: string): Promise<EffectRun | undefined> {
+    if (this.scope?.finished) return Promise.reject(new Error(FINISHED));
     return Promise.resolve(this.state.effectRuns.get(id));
   }
 
@@ -330,6 +410,7 @@ export class MemoryLifecycleStore implements LifecycleStore {
     condition: EffectRunCondition,
     changes: EffectRunChanges,
   ): Promise<boolean> {
+    if (this.scope?.finished) return Promise.reject(new Error(FINISHED));
     const current = this.state.effectRuns.get(id);
     if (
       !current ||
@@ -349,6 +430,7 @@ export class MemoryLifecycleStore implements LifecycleStore {
   }
 
   public listEffectRuns(query: EffectRunQuery): Promise<EffectRun[]> {
+    if (this.scope?.finished) return Promise.reject(new Error(FINISHED));
     const runs = [...this.state.effectRuns.values()].filter(
       (run) =>
         (query.lifecycle === undefined || run.lifecycle === query.lifecycle) &&
@@ -366,6 +448,7 @@ export class MemoryLifecycleStore implements LifecycleStore {
   }
 
   public deleteEffectRuns(query: EffectRunPruneQuery): Promise<number> {
+    if (this.scope?.finished) return Promise.reject(new Error(FINISHED));
     let deleted = 0;
     for (const [id, run] of this.state.effectRuns)
       if (
@@ -387,6 +470,11 @@ export class MemoryLifecycleStore implements LifecycleStore {
     return rows;
   }
 
+  /** A transaction's view is unusable once the transaction has ended. */
+  private assertOpen(): void {
+    if (this.scope?.finished) throw new Error(FINISHED);
+  }
+
   /** Keeps how to undo a write, when it was made inside a transaction. */
   private log(undo: Undo): void {
     this.scope?.journal.push(undo);
@@ -404,8 +492,10 @@ export class MemoryLifecycleStore implements LifecycleStore {
       handle instanceof MemoryLifecycleStore &&
       handle.root === this &&
       handle.scope
-    )
+    ) {
+      if (handle.scope.finished) throw new Error(FINISHED);
       return handle.scope;
+    }
     throw new Error(
       'A memory store nests a transaction only within the transactionHandle of one of its own running transactions.',
     );
