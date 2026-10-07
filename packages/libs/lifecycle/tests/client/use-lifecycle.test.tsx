@@ -89,6 +89,60 @@ describe('useLifecycle', () => {
   });
 });
 
+describe('continueRun', () => {
+  it('fires a waiting continuation through its route, and answers why when none waits', async () => {
+    const { client, id, store } = setup('agent');
+    // A run whose `close` continuation waits, as a refused one would.
+    const waiting = await store.createEffectRun({
+      transitionId: '0',
+      lifecycle: 'tickets',
+      recordId: id,
+      effect: 'tickets.notifyCustomer',
+      status: 'succeeded',
+      attempts: 1,
+      maxAttempts: 3,
+      result: {},
+      error: null,
+      createdAt: '2026-10-01T09:00:00.000Z',
+      updatedAt: '2026-10-01T09:00:00.000Z',
+      claimedAt: null,
+      runAfter: null,
+      continuation: {
+        transition: 'close',
+        outcome: 'succeeded',
+        input: {},
+        error: 'Not yet.',
+        code: 'INVALID_SET',
+        attempts: 1,
+        failedAt: '2026-10-01T09:00:00.000Z',
+        dueAt: '2026-10-01T09:01:00.000Z',
+      },
+    });
+    const { result } = renderHook(() =>
+      useLifecycle(client, 'tickets', id, { refreshMs: 0 }),
+    );
+    await waitFor(() => expect(result.current.view).toBeDefined());
+    await act(async () => {
+      await result.current.continueRun(waiting.id);
+    });
+    expect(result.current.view).toMatchObject({ state: 'closed' });
+    expect(
+      result.current.view?.history.effectRuns.find(
+        (run) => run.id === waiting.id,
+      ),
+    ).toMatchObject({ continuation: null });
+
+    let refusal: unknown;
+    await act(async () => {
+      refusal = await result.current
+        .continueRun(waiting.id)
+        .catch((error: unknown) => error);
+    });
+    expect(refusal).toBeInstanceOf(LifecycleRequestError);
+    expect(refusal).toMatchObject({ reason: 'NO_CONTINUATION' });
+  });
+});
+
 describe('createLifecycleHook', () => {
   it('serves a page with one call, and keeps its client while the query is unchanged', async () => {
     const { id, transport } = routesApp();

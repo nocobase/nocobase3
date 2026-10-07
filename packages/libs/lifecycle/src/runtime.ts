@@ -77,6 +77,25 @@ export interface LifecycleRuntimeOptions {
     effect: string,
     attempt: number,
   ) => void | Promise<void>;
+  /** How `reclaim()` retries the continuations that wait on their runs. */
+  readonly continuations?: ContinuationSweepOptions;
+}
+
+/**
+ * How the sweep retries waiting continuations. After the n-th refused try a
+ * continuation waits `backoffMs × factor^(n-1)`, capped at `maxMs`, before
+ * the sweep tries it again, and each sweep tries at most `batchSize` of the
+ * due ones, those due longest first.
+ */
+export interface ContinuationSweepOptions {
+  /** Defaults to 100. */
+  readonly batchSize?: number;
+  /** Defaults to a minute. */
+  readonly backoffMs?: number;
+  /** Defaults to 2. */
+  readonly factor?: number;
+  /** Defaults to an hour. */
+  readonly maxMs?: number;
 }
 
 /**
@@ -412,6 +431,17 @@ const RACED: ReadonlySet<LifecycleErrorCode> = new Set<LifecycleErrorCode>([
  */
 const raisedInStep = new WeakSet<LifecycleError>();
 
+/**
+ * Whether a refusal of a continuation means its record moved on, so nothing
+ * is to follow: only when the continuation's own transition was refused on
+ * its own record. A refusal a lifecycle call in its `onTransition` or a hook
+ * raised — a parent that will not move yet — leaves the record where it was,
+ * so the continuation waits instead.
+ */
+function recordMovedOn(error: LifecycleError): boolean {
+  return MOVED_ON.has(error.code) && !raisedInStep.has(error);
+}
+
 /** Whether a run of failed tries has reached a count worth a log line: 1, 2, 4, 8… */
 function isLogworthy(attempts: number): boolean {
   return attempts > 0 && (attempts & (attempts - 1)) === 0;
@@ -472,6 +502,7 @@ export class LifecycleRuntime {
   private readonly logger: LifecycleLogger;
   private readonly leaseMs: number;
   private readonly beforeEffect: LifecycleRuntimeOptions['beforeEffect'];
+  private readonly continuations: Required<ContinuationSweepOptions>;
   private readonly lifecycles = new Map<string, Registered>();
   private readonly subscriptions: Subscription[] = [];
   /** Attempts running in this process, so `cancelRun()` can abort them. */
@@ -484,6 +515,12 @@ export class LifecycleRuntime {
     this.logger = options.logger ?? silent;
     this.leaseMs = options.leaseMs ?? 5 * 60_000;
     this.beforeEffect = options.beforeEffect;
+    this.continuations = {
+      batchSize: options.continuations?.batchSize ?? 100,
+      backoffMs: options.continuations?.backoffMs ?? 60_000,
+      factor: options.continuations?.factor ?? 2,
+      maxMs: options.continuations?.maxMs ?? 3_600_000,
+    };
   }
 
   public register<T extends LifecycleTypes>(
@@ -1194,18 +1231,19 @@ export class LifecycleRuntime {
             throw error;
           const message = `Effect "${run.effect}" could not continue with "${next}": ${error.message}`;
           // The record moved on, or its guard refuses: nothing follows.
-          if (MOVED_ON.has(error.code)) {
+          if (recordMovedOn(error)) {
             this.logger.warn(message, { runId, code: error.code });
             return null;
           }
-          // The continuation cannot be fired as this process defines it — an
-          // old definition in a rolling deploy, or a bug in `set` or `route`
-          // — which a deploy can change: it waits on the run for reclaim()
-          // or continueRun() to try again.
-          this.logger.error(
-            `${message}. The outcome is recorded and the continuation is tried again on every sweep.`,
-            { runId, code: error.code, error },
-          );
+          // A lifecycle call the continuation made was refused — a parent
+          // not ready to move — or the continuation cannot be fired as this
+          // process defines it — an old definition in a rolling deploy, a
+          // bug in `set` or `route` — which time or a deploy can change: it
+          // waits on the run for reclaim() or continueRun() to try again.
+          const nested = raisedInStep.has(error);
+          const waits = `${message}. The outcome is recorded and the continuation is tried again by the sweep.`;
+          if (nested) this.logger.warn(waits, { runId, code: error.code });
+          else this.logger.error(waits, { runId, code: error.code, error });
           await store.updateEffectRun(
             runId,
             { status, attempts: attempt },
@@ -1218,6 +1256,7 @@ export class LifecycleRuntime {
                 code: error.code,
                 attempts: 1,
                 failedAt: finishedAt,
+                dueAt: this.continuationDue(finishedAt, 1),
               },
             },
           );
@@ -1541,8 +1580,9 @@ export class LifecycleRuntime {
    * Hands over again what no process is working on, without waiting for a
    * restart: every attempt whose lease has expired — its process stopped, or
    * stalled past `leaseMs` — and every queued run that has been due for
-   * longer than a lease, whose dispatch was lost. It then tries every
-   * pending continuation again; see `continueRun()`. Run it on the same
+   * longer than a lease, whose dispatch was lost. It then tries again the
+   * pending continuations that are due; see {@link ContinuationSweepOptions}
+   * and `continueRun()`. Run it on the same
    * schedule as `runTriggers()`. Returns how many runs it handed over or
    * continued.
    */
@@ -1556,15 +1596,16 @@ export class LifecycleRuntime {
   }
 
   /**
-   * Tries every pending continuation this process can fire once, and
-   * returns how many fired. A continuation refused again with the error it
-   * was refused with before is logged as a warning on its 2nd, 4th, 8th…
-   * try rather than on every sweep; a different refusal is logged as an
-   * error, since something has changed.
+   * Tries once each pending continuation that is due, at most `batchSize`
+   * of them and those due longest first, and returns how many fired. A
+   * continuation refused again with the error it was refused with before is
+   * logged as a warning on its 2nd, 4th, 8th… try; a different refusal is
+   * logged as an error, since something has changed.
    */
   private async continuePending(): Promise<number> {
     const pending = await this.store.listEffectRuns({
-      continuationPending: true,
+      continuationDueBy: this.clock().toISOString(),
+      limit: this.continuations.batchSize,
     });
     let continued = 0;
     for (const run of pending) {
@@ -1667,7 +1708,7 @@ export class LifecycleRuntime {
       } catch (error) {
         if (!(error instanceof LifecycleError) || error.code === 'CONFLICT')
           throw error;
-        if (MOVED_ON.has(error.code)) return { kind: 'movedOn', error };
+        if (recordMovedOn(error)) return { kind: 'movedOn', error };
         const attempts = pending.attempts + 1;
         await store.updateEffectRun(run.id, condition, {
           continuation: {
@@ -1676,11 +1717,19 @@ export class LifecycleRuntime {
             code: error.code,
             attempts,
             failedAt: at,
+            dueAt: this.continuationDue(at, attempts),
           },
         });
         return { kind: 'refused', error, previous: pending, attempts };
       }
     });
+  }
+
+  /** When a continuation refused `attempts` times, the last at `at`, is due again. */
+  private continuationDue(at: string, attempts: number): string {
+    const { backoffMs, factor, maxMs } = this.continuations;
+    const delay = Math.min(backoffMs * factor ** (attempts - 1), maxMs);
+    return new Date(Date.parse(at) + delay).toISOString();
   }
 
   /**

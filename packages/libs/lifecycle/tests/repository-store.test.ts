@@ -69,10 +69,10 @@ async function createTables(): Promise<void> {
     table.datetimeTz('updatedAt').notNull();
     table.datetimeTz('claimedAt');
     table.datetimeTz('runAfter');
-    // A continuation waiting to be tried again, and when it was last refused:
-    // null exactly when nothing is pending, so the sweep finds the pending ones.
+    // A continuation waiting to be tried again, and when it is due: null
+    // exactly when nothing is pending, so the sweep finds the due ones.
     table.json('continuation');
-    table.datetimeTz('continuationFailedAt');
+    table.datetimeTz('continuationDueAt');
   });
 }
 
@@ -720,15 +720,25 @@ describe('a continuation waiting on the database', () => {
     ).resolves.toEqual([]);
     // Waiting, it is not pruned.
     await expect(
-      runtime.prune({ olderThan: new Date(now.getTime() + 60_000) }),
+      runtime.prune({ olderThan: new Date(now.getTime() + 3_600_000) }),
     ).resolves.toBe(0);
 
+    // Not due until a minute has passed.
     await expect(runtime.reclaim()).resolves.toBe(0);
     await expect(store.findEffectRun(runId)).resolves.toMatchObject({
-      continuation: { attempts: 2 },
+      continuation: { attempts: 1 },
     });
+    now = new Date(now.getTime() + 60_000);
+    await expect(runtime.reclaim()).resolves.toBe(0);
+    await expect(store.findEffectRun(runId)).resolves.toMatchObject({
+      continuation: { attempts: 2, dueAt: '2026-10-01T09:03:00.000Z' },
+    });
+    await expect(
+      runtime.listEffectRuns({ continuationDueBy: now.toISOString() }),
+    ).resolves.toEqual([]);
 
     flags.broken = false;
+    now = new Date(now.getTime() + 2 * 60_000);
     await expect(runtime.reclaim()).resolves.toBe(1);
     expect(
       await database

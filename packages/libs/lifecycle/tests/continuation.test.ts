@@ -135,7 +135,13 @@ function setup() {
     warn: vi.fn<LifecycleLogger['warn']>(),
     error: vi.fn<LifecycleLogger['error']>(),
   };
-  const runtime = new LifecycleRuntime({ store, dispatcher, logger });
+  const clock = { now: new Date('2026-10-01T09:00:00.000Z') };
+  const runtime = new LifecycleRuntime({
+    store,
+    dispatcher,
+    logger,
+    clock: () => clock.now,
+  });
   const services: Services = { runtime: () => runtime, calls: [] };
   runtime.register(orders, { services });
   runtime.register(tasks, { services });
@@ -152,7 +158,17 @@ function setup() {
     lifecycleVersion: 0,
     orderId: String(order.id),
   });
-  return { store, trace, dispatcher, logger, runtime, services, order, task };
+  return {
+    store,
+    trace,
+    dispatcher,
+    logger,
+    runtime,
+    services,
+    order,
+    task,
+    clock,
+  };
 }
 
 async function startWork(context: ReturnType<typeof setup>): Promise<string> {
@@ -185,7 +201,7 @@ describe('an effect’s continuation', () => {
     );
   });
 
-  it('is undone as a whole when a lifecycle call in its onTransition is refused, and the outcome still stands', async () => {
+  it('is undone as a whole when a lifecycle call in its onTransition is refused, and waits for the sweep', async () => {
     const context = setup();
     context.store.patchRecord('orders', context.order.id, { blocked: true });
     const runId = await startWork(context);
@@ -217,11 +233,38 @@ describe('an effect’s continuation', () => {
     // Nothing is told and nothing more is handed over.
     expect(context.trace).toEqual([]);
     expect(context.dispatcher.handed).toEqual([runId]);
-    expect(run?.continuation).toBeNull();
+    // The task did not move on: its order refused, so the continuation
+    // waits rather than being dropped.
+    expect(run?.continuation).toMatchObject({
+      transition: 'finish',
+      code: 'GUARD_REJECTED',
+      attempts: 1,
+    });
     expect(context.logger.warn).toHaveBeenCalledWith(
       expect.stringContaining('The order is blocked.'),
       expect.objectContaining({ runId, code: 'GUARD_REJECTED' }),
     );
+    expect(context.logger.error).not.toHaveBeenCalled();
+
+    // Once the order is unblocked, the next sweep it is due on finishes the
+    // task and completes the order, and the effect does not run again.
+    context.store.patchRecord('orders', context.order.id, { blocked: false });
+    context.clock.now = new Date(context.clock.now.getTime() + 60_000);
+    await expect(context.runtime.reclaim()).resolves.toBe(1);
+    expect(context.store.record('tasks', context.task.id)?.status).toBe('done');
+    expect(context.store.record('orders', context.order.id)?.status).toBe(
+      'closed',
+    );
+    await expect(context.store.findEffectRun(runId)).resolves.toMatchObject({
+      continuation: null,
+    });
+    expect(context.services.calls).toEqual(['tasks.work']);
+    expect(context.trace).toEqual([
+      'completed tasks.finish',
+      'dispatch tasks.archive',
+      'completed orders.complete',
+      'dispatch orders.notify',
+    ]);
   });
 
   it('records the outcome without running the effect again when the continuation refuses its input', async () => {

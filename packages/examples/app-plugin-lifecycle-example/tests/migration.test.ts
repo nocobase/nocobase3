@@ -75,6 +75,23 @@ describeMigration('202610010001_lifecycle_example_create_collections', {
       { unique: true },
     );
     await expectRequestKeysUnique(connection);
+    // A continuation waiting on its run, and when the sweep tries it next:
+    // both null while nothing waits, and the sweep reads the due time.
+    await expectCollection('lifecycleExampleEffectRuns').toHaveField(
+      'continuation',
+      {
+        nullable: true,
+      },
+    );
+    await expectCollection('lifecycleExampleEffectRuns').toHaveField(
+      'continuationDueAt',
+      {
+        nullable: true,
+      },
+    );
+    await expectCollection('lifecycleExampleEffectRuns').toHaveIndex([
+      'continuationDueAt',
+    ]);
   },
   down: async ({ expectCollection }) => {
     for (const name of COLLECTIONS) await expectCollection(name).not.toExist();

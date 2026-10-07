@@ -80,10 +80,10 @@ async function createTables(): Promise<void> {
     table.datetimeTz('updatedAt').notNull();
     table.datetimeTz('claimedAt');
     table.datetimeTz('runAfter');
-    // A continuation waiting to be tried again, and when it was last refused:
-    // null exactly when nothing is pending, so the sweep finds the pending ones.
+    // A continuation waiting to be tried again, and when it is due: null
+    // exactly when nothing is pending, so the sweep finds the due ones.
     table.json('continuation');
-    table.datetimeTz('continuationFailedAt');
+    table.datetimeTz('continuationDueAt');
   });
 }
 

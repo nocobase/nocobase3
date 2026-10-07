@@ -87,6 +87,11 @@ export interface PendingContinuation {
   readonly attempts: number;
   /** When the last try was refused. */
   readonly failedAt: string;
+  /**
+   * When the sweep may try it next: `failedAt` plus a backoff that grows
+   * with `attempts`. `continueRun()` does not wait for it.
+   */
+  readonly dueAt: string;
 }
 
 export type NewTransitionEntry = Omit<TransitionEntry, 'id'>;
@@ -146,6 +151,12 @@ export interface EffectRunQuery {
   readonly updatedBefore?: string;
   /** True for the runs with a pending continuation only, false for those without one. */
   readonly continuationPending?: boolean;
+  /**
+   * Only runs whose pending continuation is due at or before this instant,
+   * the earliest due first rather than by id, so `limit` takes the ones that
+   * have waited longest.
+   */
+  readonly continuationDueBy?: string;
   readonly limit?: number;
 }
 

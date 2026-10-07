@@ -66,7 +66,7 @@ export interface RetryRequest {
  * - `GET <lifecycle>/lifecycle` — `LifecycleDescriptionView`
  * - `GET <lifecycle>/{id}` — `RecordView`
  * - `POST <lifecycle>/{id}/fire` with `{ transition, input, requestId, expectVersion? }` — `FireView`
- * - `POST <lifecycle>/{id}/effectRuns/{runId}/retry` with `{ force?, reason? }`, and `…/cancel` — `RecordView`
+ * - `POST <lifecycle>/{id}/effectRuns/{runId}/retry` with `{ force?, reason? }`, `…/continue` and `…/cancel` — `RecordView`
  */
 export interface LifecycleClient {
   describe(lifecycle: string): Promise<LifecycleDescriptionView>;
@@ -82,6 +82,12 @@ export interface LifecycleClient {
     id: string,
     runId: string,
     request?: RetryRequest,
+  ): Promise<RecordView>;
+  /** Tries a run's waiting continuation at once; see `runtime.continueRun()`. */
+  continueRun(
+    lifecycle: string,
+    id: string,
+    runId: string,
   ): Promise<RecordView>;
   cancelRun(lifecycle: string, id: string, runId: string): Promise<RecordView>;
 }
@@ -195,6 +201,11 @@ export function createLifecycleClient(
         path: `${record(lifecycle, id)}/effectRuns/${segment(runId)}/retry`,
         json: request,
       }),
+    continueRun: (lifecycle, id, runId) =>
+      send({
+        method: 'POST',
+        path: `${record(lifecycle, id)}/effectRuns/${segment(runId)}/continue`,
+      }),
     cancelRun: (lifecycle, id, runId) =>
       send({
         method: 'POST',
@@ -225,6 +236,11 @@ export interface UseLifecycleResult {
   readonly fire: (transition: string, input?: JsonObject) => Promise<FireView>;
   /** Rejects with `RUN_SETTLED` when the run's `onFailure` already moved the record on, unless forced. */
   readonly retryRun: (runId: string, request?: RetryRequest) => Promise<void>;
+  /**
+   * Tries the run's waiting continuation at once. Rejects with its refusal
+   * when it is refused again, and with `NO_CONTINUATION` when none waits.
+   */
+  readonly continueRun: (runId: string) => Promise<void>;
   readonly cancelRun: (runId: string) => Promise<void>;
   readonly reload: () => Promise<void>;
 }
@@ -323,6 +339,9 @@ export function useLifecycle(
         ),
       retryRun: async (runId: string, request: RetryRequest = {}) => {
         await act(() => client.retryRun(lifecycle, id ?? '', runId, request));
+      },
+      continueRun: async (runId: string) => {
+        await act(() => client.continueRun(lifecycle, id ?? '', runId));
       },
       cancelRun: async (runId: string) => {
         await act(() => client.cancelRun(lifecycle, id ?? '', runId));

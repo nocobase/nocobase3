@@ -229,6 +229,8 @@ const zhCN: LifecycleExampleResource = {
       '由 toMermaid(describe()) 生成，可以粘贴到任意 Mermaid 渲染器里查看。',
     retry: '重试',
     cancel: '取消',
+    continue: '继续',
+    continuationWaits: '{{transition}} 尚未执行：{{error}}',
     states: '状态',
     parameters: '参数',
     transitions: '转换记录',

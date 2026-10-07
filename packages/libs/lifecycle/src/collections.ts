@@ -9,8 +9,8 @@
  * for `version`, `attempts` and `maxAttempts`; and `datetimeTz` for every
  * instant. The transitions collection also takes a unique index on
  * `(lifecycle, recordId, version)`. The effect runs also take a nullable
- * `json` `continuation` and a nullable `datetimeTz` `continuationFailedAt`,
- * which is null exactly when no continuation waits.
+ * `json` `continuation` and a nullable `datetimeTz` `continuationDueAt`,
+ * when that continuation may be tried next, null exactly when none waits.
  *
  * Each record collection a lifecycle runs on needs its state field, its
  * changed-at field (`datetimeTz`) and its version field (an integer,

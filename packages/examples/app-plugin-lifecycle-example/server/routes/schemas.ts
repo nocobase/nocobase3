@@ -316,11 +316,12 @@ const Run: z.ZodType<EffectRun> = z
         code: z.string(),
         attempts: z.number(),
         failedAt: z.iso.datetime(),
+        dueAt: z.iso.datetime(),
       })
       .nullable()
       .meta({
         description:
-          'The transition the outcome still has to fire, refused so far for a reason a deploy can remove; null when nothing is pending.',
+          'The transition the outcome still has to fire, refused so far, and when the sweep tries it next; null when nothing is pending.',
       }),
   })
   .meta({ ref: 'LifecycleExampleEffectRun' });

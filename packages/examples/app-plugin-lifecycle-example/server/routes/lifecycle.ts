@@ -221,6 +221,45 @@ export function lifecycleRoutes(
   );
 
   router.post(
+    `${path}/:recordId/effectRuns/:runId/continue`,
+    describeRoute({
+      tags,
+      summary: `Continue an effect run of a ${lower}`,
+      operationId: `lifecycleExampleContinue${noun}EffectRun`,
+      description:
+        "Tries the run's waiting continuation at once — the `onSuccess` or `onFailure` its outcome could not fire yet — without running the effect again. A refusal is answered as the continuation's own: one saying the record moved on also drops the continuation.",
+      responses: {
+        200: dataResponse(RecordViewSchema, 'The record afterwards.'),
+        400: apiErrorResponse(
+          400,
+          'Nothing waits (`NO_CONTINUATION`), the effect is unknown here (`UNKNOWN_EFFECT`), or the continuation was refused again.',
+        ),
+        401: apiErrorResponse(401),
+        403: apiErrorResponse(403, "The continuation's guard refused again."),
+        404: apiErrorResponse(404, 'No such record, or no such run on it.'),
+        409: apiErrorResponse(
+          409,
+          'The record changed meanwhile (`CONFLICT`).',
+        ),
+        500: apiErrorResponse(500),
+      },
+    }),
+    apiValidator('param', RunRouteParams),
+    apiValidator('query', ActAsQuery),
+    async (context) => {
+      const { recordId, runId } = context.req.valid('param');
+      const { actAs } = context.req.valid('query');
+      const actor = { id: actAs };
+      await runtime.view(lifecycle, recordId, actor);
+      await runOf(recordId, runId);
+      await runtime.continueRun(runId);
+      return context.json({
+        data: outwardView(await runtime.view(lifecycle, recordId, actor)),
+      });
+    },
+  );
+
+  router.post(
     `${path}/:recordId/effectRuns/:runId/cancel`,
     describeRoute({
       tags,

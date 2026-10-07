@@ -100,8 +100,13 @@ class HeldDispatcher implements EffectDispatcher {
   }
 }
 
-function setup() {
+function setup(options: { readonly batchSize?: number } = {}) {
   const store = new MemoryLifecycleStore();
+  const clock = { now: new Date('2026-10-01T09:00:00.000Z') };
+  /** Moves the fake clock on by `ms`. */
+  const advance = (ms: number): void => {
+    clock.now = new Date(clock.now.getTime() + ms);
+  };
   const dispatcher = new HeldDispatcher();
   const logger = {
     warn: vi.fn<LifecycleLogger['warn']>(),
@@ -116,7 +121,10 @@ function setup() {
     store,
     dispatcher,
     logger,
-    clock: () => new Date('2026-10-01T09:00:00.000Z'),
+    clock: () => clock.now,
+    ...(options.batchSize === undefined
+      ? {}
+      : { continuations: { batchSize: options.batchSize } }),
   });
   runtime.register(tasks, { services });
   runtime.on('completed', {}, ({ transition }) => void heard.push(transition));
@@ -124,8 +132,19 @@ function setup() {
     status: 'todo',
     lifecycleVersion: 0,
   });
-  return { store, dispatcher, logger, services, heard, runtime, task };
+  return {
+    store,
+    dispatcher,
+    logger,
+    services,
+    heard,
+    runtime,
+    task,
+    advance,
+  };
 }
+
+const MINUTE = 60_000;
 
 type Context = ReturnType<typeof setup>;
 
@@ -162,6 +181,8 @@ describe('a continuation that cannot be fired as defined', () => {
         code: 'INVALID_SET',
         attempts: 1,
         failedAt: '2026-10-01T09:00:00.000Z',
+        // The default backoff: a minute after the first refusal.
+        dueAt: '2026-10-01T09:01:00.000Z',
       },
     });
     expect(context.services.calls).toEqual(['tasks.work']);
@@ -183,20 +204,36 @@ describe('a continuation that cannot be fired as defined', () => {
     ).resolves.toEqual([]);
   });
 
-  it('is tried again on every sweep and fires once the definition is fixed', async () => {
+  it('is tried again by the sweep once due, and fires once the definition is fixed', async () => {
     const context = setup();
     const runId = await workOnce(context);
 
-    // Still broken: it stays pending, counts the try and logs it no more
-    // loudly than before.
+    // Not due yet: the sweep leaves it alone.
+    await expect(context.runtime.reclaim()).resolves.toBe(0);
+    expect(await context.store.findEffectRun(runId)).toMatchObject({
+      continuation: { attempts: 1 },
+    });
+    // Due and still broken: it stays pending, counts the try, waits twice as
+    // long, and is logged no more loudly than before.
+    context.advance(MINUTE);
     await expect(context.runtime.reclaim()).resolves.toBe(0);
     expect(await context.store.findEffectRun(runId)).toMatchObject({
       status: 'succeeded',
-      continuation: { attempts: 2, code: 'INVALID_SET' },
+      continuation: {
+        attempts: 2,
+        code: 'INVALID_SET',
+        dueAt: '2026-10-01T09:03:00.000Z',
+      },
     });
+    context.advance(MINUTE);
     await context.runtime.reclaim();
     expect(await context.store.findEffectRun(runId)).toMatchObject({
-      continuation: { attempts: 3 },
+      continuation: { attempts: 2 },
+    });
+    context.advance(MINUTE);
+    await context.runtime.reclaim();
+    expect(await context.store.findEffectRun(runId)).toMatchObject({
+      continuation: { attempts: 3, dueAt: '2026-10-01T09:07:00.000Z' },
     });
     expect(context.logger.error).toHaveBeenCalledTimes(1);
     expect(context.logger.warn).toHaveBeenCalledTimes(1);
@@ -208,8 +245,9 @@ describe('a continuation that cannot be fired as defined', () => {
       'working',
     );
 
-    // The fix is deployed: the next sweep fires it.
+    // The fix is deployed: the next sweep it is due on fires it.
     context.services.flags.broken = false;
+    context.advance(4 * MINUTE);
     await expect(context.runtime.reclaim()).resolves.toBe(1);
     expect(context.store.record('tasks', context.task.id)).toMatchObject({
       status: 'done',
@@ -351,6 +389,52 @@ describe('a continuation that cannot be fired as defined', () => {
     expect(context.store.record('tasks', context.task.id)?.status).toBe('done');
   });
 
+  it('backs off up to an hour', async () => {
+    const context = setup();
+    const runId = await workOnce(context);
+    for (let sweep = 0; sweep < 8; sweep += 1) {
+      context.advance(60 * MINUTE);
+      await context.runtime.reclaim();
+    }
+    const run = await context.store.findEffectRun(runId);
+    expect(run?.continuation?.attempts).toBe(9);
+    expect(
+      Date.parse(run?.continuation?.dueAt ?? '') -
+        Date.parse(run?.continuation?.failedAt ?? ''),
+    ).toBe(60 * MINUTE);
+  });
+
+  it('tries at most a batch per sweep, those due longest first', async () => {
+    const context = setup({ batchSize: 2 });
+    const runs: string[] = [];
+    for (let index = 0; index < 3; index += 1) {
+      const task = context.store.insertRecord('tasks', {
+        status: 'todo',
+        lifecycleVersion: 0,
+      });
+      const started = await context.runtime.fire('tasks', task.id, 'start', {
+        actor: SYSTEM_ACTOR,
+      });
+      await context.runtime.runEffect(started.effectRuns[0].id);
+      runs.push(started.effectRuns[0].id);
+      // Each refused a second later than the one before.
+      context.advance(1_000);
+    }
+    context.advance(MINUTE);
+    await context.runtime.reclaim();
+    const attempts = async (): Promise<(number | undefined)[]> =>
+      Promise.all(
+        runs.map(
+          async (id) =>
+            (await context.store.findEffectRun(id))?.continuation?.attempts,
+        ),
+      );
+    expect(await attempts()).toEqual([2, 2, 1]);
+    // The one left behind is due longest now, so the next sweep takes it.
+    await context.runtime.reclaim();
+    expect(await attempts()).toEqual([2, 2, 2]);
+  });
+
   it('is never pruned while it waits', async () => {
     const context = setup();
     const runId = await workOnce(context);
@@ -394,6 +478,7 @@ describe('a continuation whose record moved on', () => {
       actor: SYSTEM_ACTOR,
     });
     context.heard.length = 0;
+    context.advance(MINUTE);
     await expect(context.runtime.reclaim()).resolves.toBe(0);
     expect(await context.store.findEffectRun(runId)).toMatchObject({
       continuation: null,

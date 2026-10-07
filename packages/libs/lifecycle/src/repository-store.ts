@@ -173,7 +173,7 @@ function toContinuation(value: unknown): PendingContinuation | null {
   const stored = json<JsonValue>(value, null);
   if (typeof stored !== 'object' || stored === null || Array.isArray(stored))
     return null;
-  const { transition, outcome, input, error, code, attempts, failedAt } =
+  const { transition, outcome, input, error, code, attempts, failedAt, dueAt } =
     stored;
   if (
     typeof transition !== 'string' ||
@@ -191,21 +191,28 @@ function toContinuation(value: unknown): PendingContinuation | null {
     code: typeof code === 'string' ? code : '',
     attempts: typeof attempts === 'number' ? attempts : 0,
     failedAt: typeof failedAt === 'string' ? failedAt : '',
+    dueAt:
+      typeof dueAt === 'string'
+        ? dueAt
+        : typeof failedAt === 'string'
+          ? failedAt
+          : '',
   };
 }
 
 /**
  * The columns a run's continuation is written to: the continuation itself,
- * and `continuationFailedAt`, a plain timestamp that is null exactly when
- * nothing is pending, so a query finds the pending runs on every dialect
- * without filtering on JSON.
+ * and `continuationDueAt`, its `dueAt` as a plain timestamp that is null
+ * exactly when nothing is pending, so a query finds the pending runs, and
+ * the due ones in the order they fell due, on every dialect without
+ * filtering on JSON.
  */
 function continuationColumns(
   continuation: PendingContinuation | null,
 ): Record<string, unknown> {
   return {
     continuation,
-    continuationFailedAt: continuation?.failedAt ?? null,
+    continuationDueAt: continuation?.dueAt ?? null,
   };
 }
 
@@ -438,11 +445,22 @@ class RepositoryLifecycleStore implements LifecycleStore {
             ? []
             : [
                 query.continuationPending
-                  ? filter.date('continuationFailedAt').notEmpty()
-                  : filter.date('continuationFailedAt').empty(),
+                  ? filter.date('continuationDueAt').notEmpty()
+                  : filter.date('continuationDueAt').empty(),
+              ]),
+          ...(query.continuationDueBy === undefined
+            ? []
+            : [
+                filter.date('continuationDueAt').notEmpty(),
+                filter
+                  .date('continuationDueAt')
+                  .notAfter(query.continuationDueBy),
               ]),
         ]),
-      sort: (sort) => sort.field('id').asc(),
+      sort: (sort) =>
+        query.continuationDueBy === undefined
+          ? sort.field('id').asc()
+          : [sort.field('continuationDueAt').asc(), sort.field('id').asc()],
       ...(query.limit === undefined ? {} : { limit: query.limit }),
     });
     return rows.map(toEffectRun);
@@ -460,7 +478,7 @@ class RepositoryLifecycleStore implements LifecycleStore {
           ),
           filter.date('updatedAt').before(query.updatedBefore),
           // Its outcome has yet to move the record.
-          filter.date('continuationFailedAt').empty(),
+          filter.date('continuationDueAt').empty(),
         ]),
     });
     return deletedCount;
@@ -485,10 +503,10 @@ class RepositoryLifecycleStore implements LifecycleStore {
  * version)` and `(lifecycle, recordId, requestKey)`, the same on every
  * dialect.
  *
- * Each effect run also stores `continuationFailedAt`, a nullable
- * `datetimeTz` column alongside the nullable `continuation` (json): the
- * `failedAt` of a pending continuation, and null when there is none, which is
- * how the pending runs are found without filtering on JSON.
+ * Each effect run also stores `continuationDueAt`, a nullable `datetimeTz`
+ * column alongside the nullable `continuation` (json): the `dueAt` of a
+ * pending continuation, and null when there is none, which is how the sweep
+ * finds the pending runs that are due without filtering on JSON.
  */
 export function createRepositoryLifecycleStore(
   database: DatabaseManager,

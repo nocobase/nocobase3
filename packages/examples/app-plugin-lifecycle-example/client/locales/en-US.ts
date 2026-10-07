@@ -236,6 +236,8 @@ const enUS = {
       'toMermaid(describe()) draws the lifecycle as a state diagram; paste it into any Mermaid renderer.',
     retry: 'Retry',
     cancel: 'Cancel',
+    continue: 'Continue',
+    continuationWaits: '{{transition}} waits: {{error}}',
     states: 'States',
     parameters: 'Parameters',
     transitions: 'Transition log',

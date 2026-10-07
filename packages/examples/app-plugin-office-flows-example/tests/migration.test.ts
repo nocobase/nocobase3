@@ -70,6 +70,20 @@ describeMigration('202610010001_office_flows_example_create_collections', {
       unique: true,
     });
     await expectRequestKeysUnique(connection);
+    // A continuation waiting on its run, and when the sweep tries it next:
+    // both null while nothing waits, and the sweep reads the due time.
+    await expectCollection(COLLECTIONS.effectRuns).toHaveField('continuation', {
+      nullable: true,
+    });
+    await expectCollection(COLLECTIONS.effectRuns).toHaveField(
+      'continuationDueAt',
+      {
+        nullable: true,
+      },
+    );
+    await expectCollection(COLLECTIONS.effectRuns).toHaveIndex([
+      'continuationDueAt',
+    ]);
   },
   down: async ({ expectCollection }) => {
     for (const name of names) await expectCollection(name).not.toExist();

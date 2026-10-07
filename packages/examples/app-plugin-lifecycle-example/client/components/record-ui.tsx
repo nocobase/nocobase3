@@ -100,7 +100,10 @@ export function LifecyclePanel({
 }: {
   readonly detail: RecordDetail;
   /** The library's operator actions on this record's runs. */
-  readonly actions: Pick<UseLifecycleResult, 'retryRun' | 'cancelRun'>;
+  readonly actions: Pick<
+    UseLifecycleResult,
+    'retryRun' | 'continueRun' | 'cancelRun'
+  >;
   readonly onChange: () => Promise<void>;
 }): ReactElement {
   const { t, i18n } = useTranslation(NAMESPACE);
@@ -116,7 +119,7 @@ export function LifecyclePanel({
 
   // What an operator does with a run that is stuck or gave up.
   const operate = async (
-    action: 'retryRun' | 'cancelRun',
+    action: 'retryRun' | 'continueRun' | 'cancelRun',
     runId: string,
   ): Promise<void> => {
     try {
@@ -347,6 +350,21 @@ export function LifecyclePanel({
                               {t('lifecycle.cancel')}
                             </Button>
                           ) : null}
+                          {run.continuation ? (
+                            // The outcome is recorded but what follows it
+                            // could not fire yet; the sweep tries it again,
+                            // and this tries it now.
+                            <Button
+                              size='sm'
+                              variant='outline'
+                              className='mt-1 ml-1'
+                              onClick={() =>
+                                void operate('continueRun', run.id)
+                              }
+                            >
+                              {t('lifecycle.continue')}
+                            </Button>
+                          ) : null}
                         </td>
                         <td className='py-1.5 pr-3'>
                           {t('lifecycle.attempts', {
@@ -355,7 +373,13 @@ export function LifecyclePanel({
                           })}
                         </td>
                         <td className='min-w-40 py-1.5 break-words text-destructive'>
-                          {run.error ?? ''}
+                          {run.error ??
+                            (run.continuation
+                              ? t('lifecycle.continuationWaits', {
+                                  transition: run.continuation.transition,
+                                  error: run.continuation.error,
+                                })
+                              : '')}
                         </td>
                       </tr>
                     ))}

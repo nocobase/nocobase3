@@ -93,7 +93,7 @@ function application(authentication: Auth) {
     router: new Hono(),
     container,
   };
-  return { app, service };
+  return { app, service, store };
 }
 
 function post(path: string, body: unknown, method = 'POST'): Request {
@@ -345,6 +345,88 @@ describe('lifecycle example routes', () => {
     });
   });
 
+  it('continues a run whose continuation waits, without running its effect again', async () => {
+    const { app, store } = application(allow);
+    const router = await apiRoutes.createRouter(app);
+    // An approved report whose payment succeeded, but whose `paid` could not
+    // be fired yet: the continuation waits on the run.
+    store.insertRecord('lifecycleExampleExpenses', {
+      id: 3,
+      title: '客户拜访',
+      items: [],
+      amountCents: 120_000,
+      applicantId: 'lin',
+      approverId: null,
+      paymentRef: null,
+      failPayments: 0,
+      status: 'approved',
+      statusChangedAt: '2026-10-01T09:00:00.000Z',
+      lifecycleVersion: 2,
+    });
+    const run = await store.createEffectRun({
+      transitionId: '0',
+      lifecycle: 'expenses',
+      recordId: '3',
+      effect: 'expenses.requestPayment',
+      status: 'succeeded',
+      attempts: 1,
+      maxAttempts: 3,
+      result: { paymentRef: 'PAY-3' },
+      error: null,
+      createdAt: '2026-10-01T09:00:00.000Z',
+      updatedAt: '2026-10-01T09:00:00.000Z',
+      claimedAt: null,
+      runAfter: null,
+      continuation: {
+        transition: 'paid',
+        outcome: 'succeeded',
+        input: { paymentRef: 'PAY-3' },
+        error: 'Not deployed yet.',
+        code: 'UNKNOWN_TRANSITION',
+        attempts: 1,
+        failedAt: '2026-10-01T09:00:00.000Z',
+        dueAt: '2026-10-01T09:01:00.000Z',
+      },
+    });
+    const continuePath = `/lifecycleExample/expenses/3/effectRuns/${run.id}/continue?actAs=lin`;
+
+    const continued = await router.request(post(continuePath, {}));
+    expect(continued.status).toBe(200);
+    const body = (await continued.json()) as {
+      data: {
+        state: string;
+        record: { paymentRef: unknown };
+        history: { effectRuns: { id: string; continuation: unknown }[] };
+      };
+    };
+    expect(body.data).toMatchObject({
+      state: 'paid',
+      record: { paymentRef: 'PAY-3' },
+    });
+    expect(
+      body.data.history.effectRuns.find((each) => each.id === run.id),
+    ).toMatchObject({ continuation: null });
+
+    // Nothing waits any more.
+    const again = await router.request(post(continuePath, {}));
+    expect(again.status).toBe(400);
+    await expect(again.json()).resolves.toMatchObject({
+      error: { status: 'FAILED_PRECONDITION', reason: 'NO_CONTINUATION' },
+    });
+
+    // A run of another record is not this record's.
+    const elsewhere = await router.request(
+      post(
+        `/lifecycleExample/expenses/1/effectRuns/${run.id}/continue?actAs=lin`,
+        {},
+      ),
+    );
+    expect(elsewhere.status).toBe(404);
+    await expect(elsewhere.json()).resolves.toMatchObject({
+      error: { reason: 'EFFECT_RUN_NOT_FOUND' },
+    });
+  });
+
   it('validates a new expense before creating it', async () => {
     const { app, service } = application(allow);
     const router = await apiRoutes.createRouter(app);
@@ -413,6 +495,8 @@ describe('lifecycle example routes', () => {
     expect(operations.map(({ operationId }) => operationId).sort()).toEqual([
       'lifecycleExampleCancelExpenseEffectRun',
       'lifecycleExampleCancelTicketEffectRun',
+      'lifecycleExampleContinueExpenseEffectRun',
+      'lifecycleExampleContinueTicketEffectRun',
       'lifecycleExampleCreateExpense',
       'lifecycleExampleCreateTicket',
       'lifecycleExampleDescribeExpenseLifecycle',

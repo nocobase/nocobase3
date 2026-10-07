@@ -478,8 +478,21 @@ export class MemoryLifecycleStore implements LifecycleStore, MemoryRows {
         (query.updatedBefore === undefined ||
           run.updatedAt < query.updatedBefore) &&
         (query.continuationPending === undefined ||
-          (run.continuation !== null) === query.continuationPending),
+          (run.continuation !== null) === query.continuationPending) &&
+        (query.continuationDueBy === undefined ||
+          (run.continuation !== null &&
+            run.continuation.dueAt <= query.continuationDueBy)),
     );
+    if (query.continuationDueBy !== undefined)
+      runs.sort((a, b) => {
+        const left = a.continuation?.dueAt ?? '';
+        const right = b.continuation?.dueAt ?? '';
+        return left === right
+          ? Number(a.id) - Number(b.id)
+          : left < right
+            ? -1
+            : 1;
+      });
     return Promise.resolve(
       query.limit === undefined ? runs : runs.slice(0, query.limit),
     );

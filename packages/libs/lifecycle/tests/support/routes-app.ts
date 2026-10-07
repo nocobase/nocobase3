@@ -66,6 +66,7 @@ export function routesApp() {
     const [, runId = '', action] = rest;
     if (action === 'retry')
       await runtime.retryRun(runId, { force: body.force === true });
+    else if (action === 'continue') await runtime.continueRun(runId);
     else await runtime.cancelRun(runId);
     return runtime.view(lifecycle, id, actor);
   }

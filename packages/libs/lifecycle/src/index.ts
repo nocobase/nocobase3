@@ -52,6 +52,7 @@ export {
   type AnnounceEvent,
   type AvailableTransition,
   type CanOptions,
+  type ContinuationSweepOptions,
   type CreateOptions,
   type EventFilter,
   type EffectDispatcher,
