@@ -412,7 +412,7 @@ describe('createPlugin', () => {
       await readFile(path.join(result.targetDirectory, 'package.json'), 'utf8'),
     ) as { devDependencies?: Record<string, string> };
     const test = await readFile(
-      path.join(result.targetDirectory, 'tests/database.test.ts'),
+      path.join(result.targetDirectory, 'tests/database/migrations.test.ts'),
       'utf8',
     );
     expect(manifest.devDependencies).toHaveProperty(
@@ -458,16 +458,29 @@ describe('createPlugin', () => {
     expect(vitestConfig).toContain("exclude: ['tests/client/**']");
   });
 
-  it('adds no page-test setup to a plugin without client code', async () => {
+  it('runs a plugin without client code on the Node preset alone', async () => {
     const result = await createWith(['server.routes']);
     const manifest = JSON.parse(
       await readFile(path.join(result.targetDirectory, 'package.json'), 'utf8'),
     ) as { devDependencies: Record<string, string> };
+    const vitestConfig = await readFile(
+      path.join(result.targetDirectory, 'vitest.config.ts'),
+      'utf8',
+    );
 
     expect(manifest.devDependencies).not.toHaveProperty(
       '@testing-library/react',
     );
     expect(manifest.devDependencies).not.toHaveProperty('jsdom');
+    // The Node preset carries the shared timeouts a database test needs; Vitest's own 5-second default is too short.
+    expect(vitestConfig).toContain('createNodeVitestConfig');
+    expect(vitestConfig).not.toContain('createReactVitestConfig');
+    expect(vitestConfig).toContain("include: ['tests/**/*.test.ts']");
+  });
+
+  it('adds no Vitest configuration to a plugin without tests', async () => {
+    const result = await createWith(['skills']);
+
     await expect(
       readFile(path.join(result.targetDirectory, 'vitest.config.ts'), 'utf8'),
     ).rejects.toThrow();
@@ -608,7 +621,7 @@ describe('createPlugin', () => {
       'utf8',
     );
     const test = await readFile(
-      path.join(result.targetDirectory, 'tests/cli.test.ts'),
+      path.join(result.targetDirectory, 'tests/cli/info.test.ts'),
       'utf8',
     );
 
