@@ -1,5 +1,7 @@
 import type { ApiClient } from '@nocobase/app-client';
 
+import { OFFICE_FLOWS_ROUTES } from '../../shared/routes.js';
+
 export type Plain = Record<string, unknown>;
 
 /** Mirrors the server's `LifecycleDescription`; the client imports no server code. */
@@ -92,7 +94,7 @@ export interface Config {
 /** The transition name of the log entry that records a creation. */
 export const CREATE_TRANSITION = '$create';
 
-const base = 'officeFlowsExample';
+const base = OFFICE_FLOWS_ROUTES;
 
 /** Lists show at most this many records; the routes page by it. */
 const PAGE_SIZE = '100';

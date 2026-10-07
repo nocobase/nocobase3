@@ -3,6 +3,7 @@ import {
   defineLifecycle,
   LifecycleError,
   type EffectDefinition,
+  type GuardVerdict,
   type Lifecycle,
   type LifecycleRecord,
   type TransitionContext,
@@ -97,6 +98,24 @@ function isAcceptor({ record, actor }: Context): boolean {
   );
 }
 
+/**
+ * The acceptor may act, but not while extraction tasks in `statuses` exist.
+ * Who acts is a permission; the tasks are a precondition the acceptor can
+ * clear, so the route answers that refusal as 400 FAILED_PRECONDITION.
+ */
+async function acceptorWithout(
+  context: Context,
+  statuses: readonly string[],
+  refusal: { readonly code: string; readonly message: string },
+): Promise<GuardVerdict> {
+  if (!isAcceptor(context)) return false;
+  const open = await context.services.store.countExtractions(
+    context.record.id,
+    statuses,
+  );
+  return open === 0 || { ...refusal, kind: 'precondition' };
+}
+
 function reasonRequired(input: Record<string, unknown>): string | null {
   return typeof input.reason === 'string' && input.reason.trim()
     ? null
@@ -153,11 +172,13 @@ export const dataRequestLifecycle: Lifecycle<DataRequestTypes> =
         from: 'draft',
         to: 'level1Review',
         guard: ({ record, actor }) => actor.id === record.applicantId,
+        // An incomplete form is the request's state, not a bad request to
+        // submit it: INVALID_STATE, which answers 400 FAILED_PRECONDITION.
         set: ({ record }) => {
           const errors = validateDataRequest(formOf(record));
           if (Object.keys(errors).length)
             throw new LifecycleError(
-              'INVALID_INPUT',
+              'INVALID_STATE',
               Object.values(errors).join('；'),
             );
           return { approverId: DATA_REQUEST_ROLES.level1, returnReason: null };
@@ -197,12 +218,12 @@ export const dataRequestLifecycle: Lifecycle<DataRequestTypes> =
         from: 'accepting',
         to: 'draft',
         // Not once any extraction task exists, running or finished.
-        guard: async (context) =>
-          isAcceptor(context) &&
-          (await context.services.store.countExtractions(context.record.id, [
-            'pending',
-            'completed',
-          ])) === 0,
+        guard: (context) =>
+          acceptorWithout(context, ['pending', 'completed'], {
+            code: 'extractionsExist',
+            message:
+              'The request has extraction tasks; it can no longer go back to the applicant.',
+          }),
         validate: reasonRequired,
         set: ({ input }) => ({
           approverId: null,
@@ -214,11 +235,12 @@ export const dataRequestLifecycle: Lifecycle<DataRequestTypes> =
         from: 'accepting',
         to: 'completed',
         // Not while an extraction task is still open.
-        guard: async (context) =>
-          isAcceptor(context) &&
-          (await context.services.store.countExtractions(context.record.id, [
-            'pending',
-          ])) === 0,
+        guard: (context) =>
+          acceptorWithout(context, ['pending'], {
+            code: 'extractionsOpen',
+            message:
+              'An extraction task is still open; finish or void it first.',
+          }),
         set: () => ({ approverId: null }),
       },
       exit: {

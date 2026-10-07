@@ -39,7 +39,7 @@ function taskColumns(table: CollectionDefinitionBuilder): void {
 const migration: MigrationDefinition = defineMigration({
   name: '202610010001_office_flows_example_create_collections',
 
-  async up({ builder, connection }) {
+  async up({ builder }) {
     await builder.createCollection('officeFlowsDataRequests', (table) => {
       table.bigInt('id').primary().autoIncrement().notNull();
       table.string('number').notNull();
@@ -219,18 +219,16 @@ const migration: MigrationDefinition = defineMigration({
       table.json('input').notNull().defaultTo({});
       table.datetimeTz('at').notNull();
       table.integer('version').notNull();
-      // The caller's request key: a repeated request finds its entry.
+      // The caller's request id, as it sent it; null when it sent none.
       table.string('requestId');
+      // What a repeated request is found by: the request id, or a key derived
+      // from the version for an entry without one. It is never null, so one
+      // plain unique index means the same on every dialect, whichever way it
+      // treats NULL in a unique index.
+      table.string('requestKey').notNull();
       table.index(['lifecycle', 'recordId', 'id']);
       table.unique(['lifecycle', 'recordId', 'version']);
-      // Only entries that carry a request key: a dialect that counts NULL as
-      // a value, such as MSSQL, would otherwise allow one keyless transition
-      // per record.
-      table.unique(['lifecycle', 'recordId', 'requestId'], {
-        ...(connection.capabilities.partialIndexes
-          ? { predicate: { requestId: { $notNull: true } } }
-          : {}),
-      });
+      table.unique(['lifecycle', 'recordId', 'requestKey']);
     });
 
     await builder.createCollection('officeFlowsEffectRuns', (table) => {

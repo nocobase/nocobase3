@@ -54,21 +54,36 @@ const TASK_LIFECYCLES: Readonly<Record<TaskKind, LifecycleName>> = {
   executor: 'executorTasks',
 };
 
+export interface OfficeFlowsErrorOptions {
+  /**
+   * The request body fields an `INVALID` refusal is about, which the route
+   * reports as field violations so a form can mark them.
+   */
+  readonly field?: string | readonly string[];
+}
+
 /**
  * A refusal the service makes itself, before any lifecycle is involved:
  * `INVALID` is the request, `LOCKED` the record's state, `CONFLICT` a
  * concurrent change.
  */
 export class OfficeFlowsError extends Error {
+  /** The body fields the refusal names; empty when it is about none. */
+  public readonly fields: readonly string[];
+
   public constructor(
     public readonly code:
       'NOT_FOUND' | 'FORBIDDEN' | 'INVALID' | 'LOCKED' | 'CONFLICT',
     /** Stable, UPPER_SNAKE_CASE: what a client branches on. */
     public readonly reason: string,
     message: string,
+    options: OfficeFlowsErrorOptions = {},
   ) {
     super(message);
     this.name = 'OfficeFlowsError';
+    const { field } = options;
+    this.fields =
+      field === undefined ? [] : typeof field === 'string' ? [field] : field;
   }
 }
 
@@ -240,7 +255,8 @@ export class OfficeFlowsService {
     name: LifecycleName,
     collection: string,
     id: string,
-    values: Plain,
+    /** The columns to write, or how to derive them from the record as read. */
+    change: Plain | ((record: Plain) => Plain),
     allowed: (record: Plain) => boolean,
   ): Promise<void> {
     const record = await this.require(collection, id);
@@ -256,6 +272,7 @@ export class OfficeFlowsService {
         'EDIT_NOT_ALLOWED',
         'The current role cannot edit this record.',
       );
+    const values = typeof change === 'function' ? change(record) : change;
     if (!Object.keys(values).length) return;
     // The status and its timestamp are never in `values`: only fire() writes
     // them. The edit was authorized for the record as read, so it applies
@@ -309,16 +326,28 @@ export class OfficeFlowsService {
     return { ...record };
   }
 
+  /**
+   * Changes the fields `changes` names; the others keep their stored values.
+   * Which fields show depends on others, such as `frequency` and `scope`, so
+   * the change is merged into the stored form before it is normalized: a
+   * patch of `frequency` alone still clears the answers it hides.
+   */
   public async updateDataRequest(
     id: string,
-    form: DataRequestForm,
+    changes: Partial<DataRequestForm>,
     actor: string,
   ): Promise<void> {
     await this.edit(
       'dataRequests',
       COLLECTIONS.dataRequests,
       id,
-      pick({ ...normalizeDataRequest(form) }, DATA_REQUEST_FIELDS),
+      // Merged into the version `edit` writes against, so a concurrent
+      // change is refused rather than overwritten with what was read before.
+      (record) =>
+        pick(
+          { ...normalizeDataRequest({ ...formOf(record), ...changes }) },
+          DATA_REQUEST_FIELDS,
+        ),
       (record) => record.applicantId === actor,
     );
   }
@@ -375,11 +404,16 @@ export class OfficeFlowsService {
         'ACCEPTOR_ONLY',
         'Only the acceptor can create an extraction task, and only while the request is in acceptance.',
       );
-    if (!values.topic.trim() || !isDate(values.scheduledDate))
+    const missing = [
+      ...(values.topic.trim() ? [] : ['topic']),
+      ...(isDate(values.scheduledDate) ? [] : ['scheduledDate']),
+    ];
+    if (missing.length)
       throw new OfficeFlowsError(
         'INVALID',
         'EXTRACTION_FIELDS_REQUIRED',
         'Give the extraction task a topic and a first extraction date.',
+        { field: missing },
       );
     // A manual task has no period: its key is the number it is given, so
     // two created at once cannot collide on a count read beforehand.
@@ -566,6 +600,7 @@ export class OfficeFlowsService {
         'INVALID',
         'ROW_CLERKS_REQUIRED',
         'A row must include the clerks.',
+        { field: 'includeClerks' },
       );
     const department = await this.database
       .repository(COLLECTIONS.departments)
@@ -575,6 +610,7 @@ export class OfficeFlowsService {
         'INVALID',
         'DEPARTMENT_REQUIRED',
         'Choose a department to distribute to.',
+        { field: 'departmentName' },
       );
     // A clerk task's "派发其他部门协助" row goes to the root document's own
     // rows, at the clerk level, rather than to this task's execution team.
@@ -651,10 +687,19 @@ export class OfficeFlowsService {
     );
     let fromConfig = false;
     if (input.groupId !== undefined) {
-      const group = await this.require(
+      // A group the body names that does not exist is a bad request, not a
+      // missing resource: the URL names the document, which does exist.
+      const group = await this.store.find(
         COLLECTIONS.managementGroups,
         input.groupId,
       );
+      if (!group)
+        throw new OfficeFlowsError(
+          'INVALID',
+          'MANAGEMENT_GROUP_NOT_FOUND',
+          `Management group "${input.groupId}" does not exist.`,
+          { field: 'groupId' },
+        );
       groupName = text(group.name);
       members = people(group.members);
       fromConfig = true;
@@ -664,6 +709,14 @@ export class OfficeFlowsService {
         'INVALID',
         'MANAGEMENT_GROUP_REQUIRED',
         'Name the group and choose who to copy.',
+        {
+          field: fromConfig
+            ? 'groupId'
+            : [
+                ...(groupName ? [] : ['groupName']),
+                ...(members.length ? [] : ['members']),
+              ],
+        },
       );
     const created = await this.database
       .repository(COLLECTIONS.managementCc)

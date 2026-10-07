@@ -78,9 +78,10 @@ function feedbackSet(
   )
     missing.push('outgoing document number');
   if (!record.feedback) missing.push('feedback');
+  // Unfilled fields are the task's state: 400 FAILED_PRECONDITION.
   if (missing.length)
     throw new LifecycleError(
-      'INVALID_INPUT',
+      'INVALID_STATE',
       `Fill in before submitting: ${missing.join(', ')}.`,
     );
   return {};
@@ -231,9 +232,16 @@ export const clerkTaskLifecycle: Lifecycle<ClerkTypes> =
         title: '会签',
         from: 'signing',
         to: ['signing', 'reviewing', 'accepted', 'objected'],
+        // An assignee may countersign, once: having signed already is the
+        // task's state rather than a missing permission.
         guard: (context) =>
-          isAssignee(context) &&
-          !people(context.record.signedBy).includes(context.actor.id),
+          !isAssignee(context)
+            ? false
+            : !people(context.record.signedBy).includes(context.actor.id) || {
+                code: 'alreadySigned',
+                message: 'You have already countersigned this task.',
+                kind: 'precondition',
+              },
         validate: (input) =>
           typeof input.decision === 'string' && input.decision in SIGN_DECISIONS
             ? null

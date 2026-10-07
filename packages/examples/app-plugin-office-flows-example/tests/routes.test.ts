@@ -115,7 +115,14 @@ describe('office flows routes', () => {
     const { app, service } = application(allow);
     service.fireTask.mockRejectedValueOnce(
       new LifecycleError('GUARD_REJECTED', 'no', {
-        blockers: [{ source: 'guard', code: 'notAssignee', message: 'no' }],
+        blockers: [
+          {
+            source: 'guard',
+            kind: 'permission',
+            code: 'notAssignee',
+            message: 'no',
+          },
+        ],
       }),
     );
     service.addRow.mockRejectedValueOnce(

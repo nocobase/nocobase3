@@ -23,6 +23,7 @@ import {
   emptyDataRequest,
   type DataRequestForm,
 } from '../../shared/data-request.js';
+import { OFFICE_FLOWS_ROUTES } from '../../shared/routes.js';
 import { OfficeFlowsError } from '../services/office-flows.js';
 import type { Plain } from '../services/store.js';
 import { officeFlowsServiceToken } from '../tokens.js';
@@ -53,7 +54,10 @@ import {
 } from './schemas.js';
 
 /** The namespace of every route this plugin owns, and the domain of its errors. */
-export const OFFICE_FLOWS_DOMAIN = 'officeFlowsExample';
+export const OFFICE_FLOWS_DOMAIN: string = OFFICE_FLOWS_ROUTES;
+
+/** Every route below starts here; the client reads the same constant. */
+const BASE = `/${OFFICE_FLOWS_ROUTES}`;
 
 /** Every route of this plugin is listed under one tag in the API document at `/api/swagger/docs`. */
 const tags = ['OfficeFlowsExample'];
@@ -87,6 +91,14 @@ function toApiError(error: unknown, inputField?: string): unknown {
       reason: error.reason,
       domain: OFFICE_FLOWS_DOMAIN,
       message: error.message,
+      ...(error.fields.length
+        ? {
+            fieldViolations: error.fields.map((field) => ({
+              field,
+              description: error.message,
+            })),
+          }
+        : {}),
     });
   return error;
 }
@@ -123,7 +135,7 @@ function page(
   };
 }
 
-/** The form as stored: a field the request leaves out keeps its empty value. */
+/** A new request's form: a field the request leaves out starts empty. */
 function form(values: Partial<DataRequestForm>): DataRequestForm {
   return { ...emptyDataRequest(), ...values };
 }
@@ -135,9 +147,9 @@ const notFound = apiErrorResponse(404, 'No such record (`RECORD_NOT_FOUND`).');
 const fireRefusals = {
   400: apiErrorResponse(
     400,
-    'The state does not allow it (`INVALID_STATE`), its input is invalid (`INVALID_INPUT`) or the transition is unknown (`UNKNOWN_TRANSITION`).',
+    'The state does not allow it, or the record is not complete enough (`INVALID_STATE`); every guard that refused waits for the record to change (`GUARD_REJECTED`, status `FAILED_PRECONDITION`), such as an open extraction task; its input is invalid (`INVALID_INPUT`) or the transition is unknown (`UNKNOWN_TRANSITION`).',
   ),
-  403: apiErrorResponse(403, 'A guard refused (`GUARD_REJECTED`).'),
+  403: apiErrorResponse(403, 'A guard refused the persona (`GUARD_REJECTED`).'),
   409: apiErrorResponse(409, 'A concurrent change won (`CONFLICT`).'),
 };
 const editRefusals = {
@@ -166,7 +178,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       }
     };
 
-    router.use('/officeFlowsExample/*', authentication.required());
+    router.use(`${BASE}/*`, authentication.required());
     router.onError((error, context) =>
       apiErrorHandler(toApiError(error), context),
     );
@@ -174,7 +186,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
     // ── Reference data and the persona's reminders ──────────────────────
 
     router.get(
-      '/officeFlowsExample/config',
+      `${BASE}/config`,
       describeRoute({
         tags,
         summary: 'Get the reference data',
@@ -190,7 +202,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       async (context) => context.json(data(await service.config())),
     );
     router.get(
-      '/officeFlowsExample/notices',
+      `${BASE}/notices`,
       describeRoute({
         tags,
         summary: 'List the persona’s reminders',
@@ -210,7 +222,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       },
     );
     router.post(
-      '/officeFlowsExample/runSchedule',
+      `${BASE}/runSchedule`,
       describeRoute({
         tags,
         summary: 'Create the extraction tasks that are due',
@@ -230,7 +242,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
     // ── Data usage requests ─────────────────────────────────────────────
 
     router.get(
-      '/officeFlowsExample/dataRequests',
+      `${BASE}/dataRequests`,
       describeRoute({
         tags,
         summary: 'List data usage requests',
@@ -248,7 +260,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       },
     );
     router.post(
-      '/officeFlowsExample/dataRequests',
+      `${BASE}/dataRequests`,
       describeRoute({
         tags,
         summary: 'Draft a data usage request',
@@ -275,7 +287,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       },
     );
     router.get(
-      '/officeFlowsExample/dataRequests/:requestId',
+      `${BASE}/dataRequests/:requestId`,
       describeRoute({
         tags,
         summary: 'Get a data usage request',
@@ -298,11 +310,13 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       },
     );
     router.patch(
-      '/officeFlowsExample/dataRequests/:requestId',
+      `${BASE}/dataRequests/:requestId`,
       describeRoute({
         tags,
         summary: 'Edit a draft data usage request',
         operationId: 'officeFlowsExampleUpdateDataRequest',
+        description:
+          'Changes only the form fields sent; the others keep their values. Answers the choices hide are cleared, as on creation.',
         responses: {
           200: dataResponse(OfficeDetail, 'The request as edited.'),
           ...editRefusals,
@@ -318,14 +332,15 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         const { requestId } = context.req.valid('param');
         const { actAs } = context.req.valid('query');
         const values = context.req.valid('json');
-        await service.updateDataRequest(requestId, form(values.form), actAs);
+        // Only the fields sent: the schema adds none, so the rest stay as stored.
+        await service.updateDataRequest(requestId, values.form, actAs);
         return context.json(
           data(await service.dataRequestDetail(requestId, actAs)),
         );
       },
     );
     router.post(
-      '/officeFlowsExample/dataRequests/:requestId/fire',
+      `${BASE}/dataRequests/:requestId/fire`,
       describeRoute({
         tags,
         summary: 'Fire a transition on a data usage request',
@@ -352,7 +367,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       },
     );
     router.post(
-      '/officeFlowsExample/dataRequests/:requestId/extractions',
+      `${BASE}/dataRequests/:requestId/extractions`,
       describeRoute({
         tags,
         summary: 'Create an extraction task by hand',
@@ -363,7 +378,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
           201: dataResponse(OfficeRecord, 'The extraction task, `pending`.'),
           400: apiErrorResponse(
             400,
-            'No topic or no valid first date (`EXTRACTION_FIELDS_REQUIRED`).',
+            'No topic or no valid first date (`EXTRACTION_FIELDS_REQUIRED`, with `fieldViolations`).',
           ),
           401: unauthorized,
           403: apiErrorResponse(
@@ -395,7 +410,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
     // ── Extraction tasks ────────────────────────────────────────────────
 
     router.get(
-      '/officeFlowsExample/extractions/:extractionId',
+      `${BASE}/extractions/:extractionId`,
       describeRoute({
         tags,
         summary: 'Get an extraction task',
@@ -418,7 +433,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       },
     );
     router.patch(
-      '/officeFlowsExample/extractions/:extractionId',
+      `${BASE}/extractions/:extractionId`,
       describeRoute({
         tags,
         summary: 'Edit a pending extraction task',
@@ -445,7 +460,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       },
     );
     router.post(
-      '/officeFlowsExample/extractions/:extractionId/fire',
+      `${BASE}/extractions/:extractionId/fire`,
       describeRoute({
         tags,
         summary: 'Fire a transition on an extraction task',
@@ -475,7 +490,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
     // ── Incoming documents ──────────────────────────────────────────────
 
     router.get(
-      '/officeFlowsExample/incoming',
+      `${BASE}/incoming`,
       describeRoute({
         tags,
         summary: 'List incoming documents',
@@ -493,7 +508,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       },
     );
     router.post(
-      '/officeFlowsExample/incoming',
+      `${BASE}/incoming`,
       describeRoute({
         tags,
         summary: 'Record an incoming document',
@@ -520,7 +535,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       },
     );
     router.get(
-      '/officeFlowsExample/incoming/:incomingId',
+      `${BASE}/incoming/:incomingId`,
       describeRoute({
         tags,
         summary: 'Get an incoming document',
@@ -543,7 +558,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       },
     );
     router.patch(
-      '/officeFlowsExample/incoming/:incomingId',
+      `${BASE}/incoming/:incomingId`,
       describeRoute({
         tags,
         summary: 'Edit a draft incoming document',
@@ -570,7 +585,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       },
     );
     router.post(
-      '/officeFlowsExample/incoming/:incomingId/fire',
+      `${BASE}/incoming/:incomingId/fire`,
       describeRoute({
         tags,
         summary: 'Fire a transition on an incoming document',
@@ -599,7 +614,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       },
     );
     router.post(
-      '/officeFlowsExample/incoming/:incomingId/rows',
+      `${BASE}/incoming/:incomingId/rows`,
       describeRoute({
         tags,
         summary: 'Add a distribution row to an incoming document',
@@ -608,7 +623,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
           201: dataResponse(Created, 'The row.'),
           400: apiErrorResponse(
             400,
-            'No clerks or no department (`ROW_CLERKS_REQUIRED`, `DEPARTMENT_REQUIRED`).',
+            'No clerks or no department (`ROW_CLERKS_REQUIRED`, `DEPARTMENT_REQUIRED`, with `fieldViolations`).',
           ),
           401: unauthorized,
           403: apiErrorResponse(
@@ -631,7 +646,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       },
     );
     router.post(
-      '/officeFlowsExample/incoming/:incomingId/managementRows',
+      `${BASE}/incoming/:incomingId/managementRows`,
       describeRoute({
         tags,
         summary: 'Copy an incoming document to a management group',
@@ -642,14 +657,14 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
           201: dataResponse(Created, 'The row.'),
           400: apiErrorResponse(
             400,
-            'No group name or no members (`MANAGEMENT_GROUP_REQUIRED`).',
+            'No such configured group (`MANAGEMENT_GROUP_NOT_FOUND`), or no group name or no members (`MANAGEMENT_GROUP_REQUIRED`), with `fieldViolations`.',
           ),
           401: unauthorized,
           403: apiErrorResponse(
             403,
             'Not the registrar, or not being dispatched (`MANAGEMENT_NOT_ALLOWED`).',
           ),
-          404: notFound,
+          404: apiErrorResponse(404, 'No such document (`RECORD_NOT_FOUND`).'),
           500: internal,
         },
       }),
@@ -673,7 +688,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       },
     );
     router.delete(
-      '/officeFlowsExample/managementRows/:rowId',
+      `${BASE}/managementRows/:rowId`,
       describeRoute({
         tags,
         summary: 'Remove a management copy that was not forwarded',
@@ -703,7 +718,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       },
     );
     router.delete(
-      '/officeFlowsExample/rows/:rowId',
+      `${BASE}/rows/:rowId`,
       describeRoute({
         tags,
         summary: 'Remove a distribution row that was not dispatched',
@@ -733,7 +748,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
     // ── Incoming-document tasks ─────────────────────────────────────────
 
     router.get(
-      '/officeFlowsExample/tasks',
+      `${BASE}/tasks`,
       describeRoute({
         tags,
         summary: 'List the persona’s tasks',
@@ -755,7 +770,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       },
     );
     router.get(
-      '/officeFlowsExample/tasks/:taskKind/:taskId',
+      `${BASE}/tasks/:taskKind/:taskId`,
       describeRoute({
         tags,
         summary: 'Get a task',
@@ -778,7 +793,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       },
     );
     router.patch(
-      '/officeFlowsExample/tasks/:taskKind/:taskId',
+      `${BASE}/tasks/:taskKind/:taskId`,
       describeRoute({
         tags,
         summary: 'Edit a task in progress',
@@ -805,7 +820,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       },
     );
     router.post(
-      '/officeFlowsExample/tasks/:taskKind/:taskId/fire',
+      `${BASE}/tasks/:taskKind/:taskId/fire`,
       describeRoute({
         tags,
         summary: 'Fire a transition on a task',
@@ -832,7 +847,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       },
     );
     router.post(
-      '/officeFlowsExample/tasks/:taskKind/:taskId/rows',
+      `${BASE}/tasks/:taskKind/:taskId/rows`,
       describeRoute({
         tags,
         summary: 'Add a distribution row to a task',
@@ -843,7 +858,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
           201: dataResponse(Created, 'The row.'),
           400: apiErrorResponse(
             400,
-            'No clerks or no department (`ROW_CLERKS_REQUIRED`, `DEPARTMENT_REQUIRED`).',
+            'No clerks or no department (`ROW_CLERKS_REQUIRED`, `DEPARTMENT_REQUIRED`, with `fieldViolations`).',
           ),
           401: unauthorized,
           403: apiErrorResponse(

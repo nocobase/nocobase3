@@ -157,9 +157,10 @@ export const incomingLifecycle: Lifecycle<IncomingTypes> =
           const missing = INCOMING_REQUIRED.filter(
             ([field]) => !record[field],
           ).map(([, label]) => label);
+          // Unfilled fields are the document's state: 400 FAILED_PRECONDITION.
           if (missing.length)
             throw new LifecycleError(
-              'INVALID_INPUT',
+              'INVALID_STATE',
               `Fill in before submitting: ${missing.join(', ')}.`,
             );
           return { returnReason: null };
