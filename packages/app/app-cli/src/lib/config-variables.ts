@@ -40,7 +40,7 @@ export async function runConfigVariables(
     const { paths } = runtime;
     manifest = buildVariablesManifest({
       app: await readAppIdentity(paths.rootDir),
-      variables: runtime.config.sectionEnvironmentVariables(),
+      variables: runtime.config.environmentVariableMappings(),
       defaults: runtime.config.layers().defaults,
       example: await readConfigExample(paths.deploymentRootDir),
     });

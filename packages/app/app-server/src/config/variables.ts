@@ -45,7 +45,7 @@ export interface VariablesManifest {
 
 export interface BuildVariablesManifestOptions {
   readonly app: { readonly name: string; readonly version?: string };
-  /** What `AppConfig.sectionEnvironmentVariables()` returns: absolute paths. */
+  /** What `AppConfig.environmentVariableMappings()` returns: absolute paths. */
   readonly variables: Readonly<Record<string, EnvironmentMapping>>;
   /** The code defaults, `AppConfig.layers().defaults`. */
   readonly defaults: ConfigMap;

@@ -49,7 +49,7 @@ export async function runConfigEnv(
     const defaults = runtime.config.layers().defaults;
     const example = await readConfigExample(runtime.paths.deploymentRootDir);
     const declared = Object.entries(
-      runtime.config.sectionEnvironmentVariables(),
+      runtime.config.environmentVariableMappings(),
     )
       .map(([name, mapping]) => ({
         name,
