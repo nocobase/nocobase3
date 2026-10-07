@@ -13,6 +13,7 @@ export type LifecycleErrorCode =
   | 'UNKNOWN_EFFECT'
   | 'CONFLICT'
   | 'REQUEST_REUSED'
+  | 'NOT_MANUAL'
   | 'INVALID_REQUEST_ID'
   | 'RUN_SETTLED';
 
@@ -30,7 +31,7 @@ export type BlockerKind = 'permission' | 'precondition';
  * unless the guard said otherwise; a `state` blocker is a `precondition`.
  */
 export interface Blocker {
-  readonly source: 'state' | 'guard';
+  readonly source: 'state' | 'guard' | 'manual';
   readonly kind: BlockerKind;
   readonly code: string;
   readonly message: string;

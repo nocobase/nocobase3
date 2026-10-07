@@ -17,6 +17,8 @@ export {
   type LifecycleTrigger,
   type SetContext,
   type StateDefinition,
+  type StateHook,
+  type StateHookContext,
   type TransitionContext,
   type TransitionDefinition,
   type TransitionHookContext,
@@ -61,6 +63,7 @@ export {
   type LifecycleListener,
   type LifecycleLogger,
   type LifecycleRuntimeOptions,
+  type LifecycleTransaction,
   type PruneOptions,
   type RetryRunOptions,
   type RecordHistory,
@@ -97,7 +100,11 @@ export {
   type LifecycleApiFieldViolation,
   type LifecycleApiStatus,
 } from './api-errors.js';
-export { MemoryLifecycleStore } from './memory-store.js';
+export {
+  MemoryLifecycleStore,
+  type MemoryRows,
+  type MemoryTransaction,
+} from './memory-store.js';
 export { LIFECYCLE_COLLECTIONS } from './collections.js';
 export {
   createRepositoryLifecycleStore,

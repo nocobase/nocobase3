@@ -4,6 +4,8 @@ import {
   type EffectRetry,
   type Lifecycle,
   type LifecycleDescription,
+  type StateHook,
+  type StateHookContext,
   type TransitionContext,
 } from './definition.js';
 import {
@@ -103,6 +105,8 @@ export interface FireExpectation {
 }
 
 export interface FireOptions {
+  /** A human action: refuses system-only transitions with NOT_MANUAL. */
+  readonly manual?: boolean;
   readonly actor: LifecycleActor;
   readonly input?: JsonObject;
   readonly expect?: FireExpectation;
@@ -208,6 +212,38 @@ export interface CreateOptions {
   readonly input?: JsonObject;
   /** A transaction to join instead of opening one; see {@link FireOptions.transaction}. */
   readonly transaction?: unknown;
+}
+
+/**
+ * One store transaction shared by the caller and its hooks. Each fire or
+ * create nests through the public API as a savepoint: a caught refusal
+ * undoes that call, and an uncaught error rolls back the outer transaction.
+ * Events and effects wait for the outermost commit.
+ */
+export interface LifecycleTransaction {
+  /** The store's handle for this transaction, such as a `@nocobase/db` connection: write other rows through it. */
+  readonly handle: unknown;
+  /** The runtime's clock when the transaction began. */
+  readonly now: Date;
+  /** The record as this transaction sees it. */
+  read(lifecycle: string, id: RecordId): Promise<LifecycleRecord | undefined>;
+  fire(
+    lifecycle: string,
+    id: RecordId,
+    transition: string,
+    options: FireOptions,
+  ): Promise<FireResult>;
+  create(
+    lifecycle: string,
+    values: Readonly<Record<string, unknown>>,
+    options: CreateOptions,
+  ): Promise<FireResult>;
+  /**
+   * Runs once the transaction commits, after its events: a notification
+   * about rows written in it. Best effort, as listeners are — a callback
+   * that throws is logged, and nothing runs it again after a crash.
+   */
+  afterCommit(callback: () => void | Promise<void>): void;
 }
 
 /** What happened, told after it committed. */
@@ -398,7 +434,7 @@ export class LifecycleRuntime {
       );
     const source = options.services;
     this.lifecycles.set(lifecycle.name, {
-      lifecycle: lifecycle,
+      lifecycle: lifecycle as unknown as Lifecycle<LifecycleTypes>,
       services:
         typeof source === 'function' ? source : (): object => source ?? {},
       parameters: options.parameters ?? ((): object => ({})),
@@ -496,6 +532,59 @@ export class LifecycleRuntime {
     }, joining(options.transaction));
   }
 
+  /** Runs work on the store; each tx call nests as a savepoint. */
+  public transaction<R>(
+    work: (tx: LifecycleTransaction) => Promise<R>,
+  ): Promise<R> {
+    return this.store.transaction((store) =>
+      work(this.scope(store, this.clock())),
+    );
+  }
+
+  private scope(store: LifecycleStore, now: Date): LifecycleTransaction {
+    return Object.freeze({
+      handle: store.transactionHandle,
+      now,
+      read: (name: string, id: RecordId) =>
+        store.findRecord(this.get(name).lifecycle.collection, id),
+      fire: (
+        name: string,
+        id: RecordId,
+        transition: string,
+        options: FireOptions,
+      ) =>
+        this.fire(name, id, transition, {
+          ...options,
+          transaction: store.transactionHandle,
+        }),
+      create: (
+        name: string,
+        values: Readonly<Record<string, unknown>>,
+        options: CreateOptions,
+      ) =>
+        this.create(name, values, {
+          ...options,
+          transaction: store.transactionHandle,
+        }),
+      afterCommit: (callback: () => void | Promise<void>): void => {
+        store.afterCommit(async () => {
+          try {
+            await callback();
+          } catch (error) {
+            this.logger.error('An afterCommit callback failed', { error });
+          }
+        });
+      },
+    });
+  }
+
+  private async runHooks(
+    hooks: readonly StateHook<LifecycleTypes>[] | undefined,
+    context: StateHookContext<LifecycleTypes>,
+  ): Promise<void> {
+    for (const hook of hooks ?? []) await hook(context);
+  }
+
   /**
    * Listens to transitions after they commit: `completed` once per
    * transition (and creation), `entered` once per state entered, and
@@ -551,6 +640,7 @@ export class LifecycleRuntime {
       lifecycle,
       stateOf(lifecycle, record),
     )) {
+      if (!transition.manual) continue;
       const blockers = await guardBlockers(
         transition,
         context,
@@ -590,6 +680,19 @@ export class LifecycleRuntime {
         'UNKNOWN_TRANSITION',
         `Lifecycle "${name}" has no transition "${transition}".`,
       );
+    if (!declared.manual)
+      return {
+        allowed: false,
+        blockers: [
+          {
+            source: 'manual',
+            kind: 'permission',
+            code: 'NOT_MANUAL',
+            message: `"${transition}" is fired by the system, not by a person.`,
+          },
+        ],
+        problems: [],
+      };
     const record = await this.require(registered, id);
     const state = stateOf(lifecycle, record);
     if (!declared.from.includes(state))
@@ -682,6 +785,32 @@ export class LifecycleRuntime {
         version: 1,
         requestId: null,
       });
+      const outcome: { created?: FireResult } = {};
+      store.afterCommit(() =>
+        outcome.created
+          ? this.settle(registered, outcome.created, options.actor)
+          : undefined,
+      );
+      await this.runHooks(
+        lifecycle.onEnterState.get(state),
+        Object.freeze({
+          lifecycle: name,
+          record,
+          previous: null,
+          from: null,
+          to: state,
+          transition: CREATE_TRANSITION,
+          actor: options.actor,
+          input: options.input ?? {},
+          entry,
+          parameters: this.parameters(name) as ParametersOf<LifecycleTypes>,
+          services: registered.services(
+            store.transactionHandle,
+          ) as ServicesOf<LifecycleTypes>,
+          tx: this.scope(store, now),
+          now,
+        }),
+      );
       const effectRuns = await this.owe(
         store,
         lifecycle,
@@ -689,7 +818,7 @@ export class LifecycleRuntime {
         lifecycle.onEnter.get(state) ?? [],
       );
       const created: FireResult = { record, entry, effectRuns };
-      store.afterCommit(() => this.settle(registered, created, options.actor));
+      outcome.created = created;
       return created;
     }, joining(options.transaction));
   }
@@ -1336,6 +1465,14 @@ export class LifecycleRuntime {
     now: Date,
   ): Promise<FireResult> {
     const { lifecycle } = registered;
+    if (
+      options.manual &&
+      lifecycle.transitions.get(transition)?.manual === false
+    )
+      throw new LifecycleError(
+        'NOT_MANUAL',
+        `"${transition}" is fired by the system, not by a person.`,
+      );
     const current = await store.findRecord(lifecycle.collection, id);
     if (!current)
       throw new LifecycleError(
@@ -1433,6 +1570,26 @@ export class LifecycleRuntime {
       ...current,
       ...plan.values,
     }) as LifecycleRecord;
+    const hook: StateHookContext<LifecycleTypes> = Object.freeze({
+      lifecycle: lifecycle.name,
+      record,
+      previous: current,
+      from: plan.from,
+      to: plan.to,
+      transition,
+      actor: options.actor,
+      input: plan.input,
+      entry,
+      parameters: this.parameters(
+        lifecycle.name,
+      ) as ParametersOf<LifecycleTypes>,
+      services: registered.services(
+        store.transactionHandle,
+      ) as ServicesOf<LifecycleTypes>,
+      tx: this.scope(store, now),
+      now,
+    });
+    await this.runHooks(lifecycle.onLeaveState.get(plan.from), hook);
     const definition = lifecycle.transitions.get(transition)?.definition;
     if (definition?.onTransition)
       await definition.onTransition(
@@ -1451,9 +1608,11 @@ export class LifecycleRuntime {
             store.transactionHandle,
           ) as ServicesOf<LifecycleTypes>,
           transactionHandle: store.transactionHandle,
+          tx: hook.tx,
           now,
         }),
       );
+    await this.runHooks(lifecycle.onEnterState.get(plan.to), hook);
     const effectRuns = await this.owe(store, lifecycle, entry, plan.effects);
     return { record, entry, effectRuns };
   }
@@ -1489,12 +1648,12 @@ export class LifecycleRuntime {
     const deliveries: [Subscription['event'], LifecycleEvent][] = [
       ['completed', base],
       ['entered', base],
-      ...transitionsFrom(lifecycle, entry.to).map(
-        (next): [Subscription['event'], LifecycleEvent] => [
+      ...transitionsFrom(lifecycle, entry.to)
+        .filter((next) => next.manual)
+        .map((next): [Subscription['event'], LifecycleEvent] => [
           'announce',
           Object.freeze({ ...base, next: next.name }) as AnnounceEvent,
-        ],
-      ),
+        ]),
     ];
     for (const [event, payload] of deliveries)
       for (const subscription of [...this.subscriptions]) {

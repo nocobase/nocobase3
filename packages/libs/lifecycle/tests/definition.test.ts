@@ -108,6 +108,7 @@ describe('defineLifecycle', () => {
       to: ['awaitingCustomer'],
       effects: ['tickets.notifyCustomer'],
       accept: [],
+      manual: true,
       meta: {},
     });
     expect(description.triggers).toEqual([

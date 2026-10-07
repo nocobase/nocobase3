@@ -3,10 +3,12 @@ import {
   type BlockerKind,
   type InputProblem,
 } from './errors.js';
+import type { LifecycleTransaction } from './runtime.js';
 import type { TransitionEntry } from './store.js';
 import type {
   JsonObject,
   LifecycleActor,
+  LifecycleRecord,
   LifecycleTypes,
   OneOrMany,
   ParametersOf,
@@ -49,8 +51,44 @@ export interface TransitionHookContext<T extends LifecycleTypes> {
   readonly services: ServicesOf<T>;
   /** The store's transaction, such as a `@nocobase/db` connection. */
   readonly transactionHandle: unknown;
+  /** The transaction this transition is part of: fire or create other records in it. */
+  readonly tx: LifecycleTransaction;
   readonly now: Date;
 }
+
+/**
+ * What a state hook sees: the transition entering or leaving the state, the
+ * record as that transition wrote it, and the transaction the write is part
+ * of. A hook writes rows that must commit with the state — the tasks of a
+ * stage, a run waiting in it — and may fire or create other records, or this
+ * one, through `tx`.
+ */
+export interface StateHookContext<T extends LifecycleTypes> {
+  /** The lifecycle's name, for a hook shared by several lifecycles to fire its own record. */
+  readonly lifecycle: string;
+  /** The record as the transition wrote it: already in `to`. */
+  readonly record: T['record'];
+  /** The record before the transition; null when `runtime.create()` made it. */
+  readonly previous: T['record'] | null;
+  /** Null when the record was just created. */
+  readonly from: T['state'] | null;
+  readonly to: T['state'];
+  /** The transition entering or leaving the state, or `$create`. */
+  readonly transition: string;
+  readonly actor: LifecycleActor;
+  readonly input: JsonObject;
+  readonly entry: TransitionEntry;
+  readonly parameters: ParametersOf<T>;
+  /** Built from the transaction's handle, as a guard's are. */
+  readonly services: ServicesOf<T>;
+  readonly tx: LifecycleTransaction;
+  readonly now: Date;
+}
+
+/** Runs inside a transition's transaction; throwing rolls the transition back. */
+export type StateHook<T extends LifecycleTypes> = (
+  context: StateHookContext<T>,
+) => void | Promise<void>;
 
 export interface EffectContext<T extends LifecycleTypes> {
   /** The record as it is when the attempt starts. */
@@ -117,8 +155,18 @@ export interface EffectDefinition<T extends LifecycleTypes> {
   run(context: EffectContext<T>): unknown;
 }
 
-/** A state with what a page needs to show it. A bare name is a state with none of this. */
-export interface StateDefinition<S extends string> {
+/**
+ * A state with what a page needs to show it, and what happens while a
+ * record is in it. A bare name is a state with none of this.
+ *
+ * A state may bring its own hooks, so that a module can hand a business a
+ * whole state — an approval's waiting state, which starts a run on entering
+ * and cancels it on leaving early — rather than hooks to wire by its name.
+ */
+export interface StateDefinition<
+  S extends string,
+  T extends LifecycleTypes = { record: LifecycleRecord; state: S },
+> {
   readonly name: S;
   /** Defaults to the name. */
   readonly title?: string;
@@ -126,6 +174,10 @@ export interface StateDefinition<S extends string> {
   readonly final?: boolean;
   /** Anything a page or a diagram wants: a colour, an icon. */
   readonly meta?: JsonObject;
+  /** Run before the lifecycle's `onEnterState` hooks for this state. */
+  readonly onEnterState?: OneOrMany<StateHook<T>>;
+  /** Run before the lifecycle's `onLeaveState` hooks for this state. A final state has none. */
+  readonly onLeaveState?: OneOrMany<StateHook<T>>;
 }
 
 /**
@@ -189,6 +241,15 @@ export interface TransitionDefinition<T extends LifecycleTypes> {
   onTransition?(context: TransitionHookContext<T>): void | Promise<void>;
   /** Run after commit. */
   readonly effects?: readonly EffectDefinition<T>[];
+  /**
+   * Whether a person may fire it. Defaults to true. A transition only server
+   * code fires — the conclusion a second layer of state reaches, such as an
+   * approval stage adding up its votes — sets false: the standard routes
+   * refuse it, `available()` leaves it out and `can()` says no, so nobody
+   * can skip what decides it. Who fires it on the server is not checked;
+   * that is what its guard is for.
+   */
+  readonly manual?: boolean;
   /** Anything a page wants for its button: a tone, whether to confirm. */
   readonly meta?: JsonObject;
 }
@@ -263,14 +324,31 @@ export interface LifecycleDefinition<T extends LifecycleTypes> {
   readonly initial: OneOrMany<T['state']>;
   /** What `runtime.create()` checks before it writes a record. */
   readonly create?: CreateDefinition<T>;
-  /** Names, or definitions with a title, `final` and `meta`. */
-  readonly states: readonly (T['state'] | StateDefinition<T['state']>)[];
+  /** Names, or definitions with a title, `final`, `meta` and hooks of their own. */
+  readonly states: readonly (T['state'] | StateDefinition<T['state'], T>)[];
   /** Defaults an administrator may override. They do not change the shape of the lifecycle. */
   readonly parameters?: ParametersOf<T>;
   readonly transitions: Readonly<Record<string, TransitionDefinition<T>>>;
   /** Effects run whenever a transition enters the state, whichever transition it was. */
   readonly onEnter?: Partial<
     Readonly<Record<T['state'], readonly EffectDefinition<T>[]>>
+  >;
+  /**
+   * Hooks run inside the transaction of every transition entering the
+   * state, `runtime.create()` included, after those leaving the state it
+   * came from. A self-transition leaves the state and enters it again, so
+   * what a hook set up for one stay is torn down and set up anew.
+   */
+  readonly onEnterState?: Partial<
+    Readonly<Record<T['state'], OneOrMany<StateHook<T>>>>
+  >;
+  /**
+   * Hooks run inside the transaction of every transition leaving the state,
+   * once the record is written and before the hooks of the state it enters:
+   * end whatever the stay set up, such as the tasks still open in it.
+   */
+  readonly onLeaveState?: Partial<
+    Readonly<Record<T['state'], OneOrMany<StateHook<T>>>>
   >;
   readonly triggers?: Readonly<Record<string, TriggerDefinition<T>>>;
 }
@@ -282,6 +360,8 @@ export interface LifecycleTransition<T extends LifecycleTypes> {
   readonly to: readonly T['state'][];
   readonly definition: TransitionDefinition<T>;
   readonly effects: readonly EffectDefinition<T>[];
+  /** False for a transition only server code fires. */
+  readonly manual: boolean;
   readonly meta: JsonObject;
 }
 
@@ -318,6 +398,8 @@ export interface Lifecycle<T extends LifecycleTypes> {
   readonly parameters: ParametersOf<T>;
   readonly transitions: ReadonlyMap<string, LifecycleTransition<T>>;
   readonly onEnter: ReadonlyMap<T['state'], readonly EffectDefinition<T>[]>;
+  readonly onEnterState: ReadonlyMap<T['state'], readonly StateHook<T>[]>;
+  readonly onLeaveState: ReadonlyMap<T['state'], readonly StateHook<T>[]>;
   readonly triggers: ReadonlyMap<string, LifecycleTrigger<T>>;
   /** Every effect by name, from transitions and `onEnter`. */
   readonly effects: ReadonlyMap<string, EffectDefinition<T>>;
@@ -337,6 +419,8 @@ export interface LifecycleDescription {
     readonly to: readonly string[];
     readonly effects: readonly string[];
     readonly accept: readonly string[];
+    /** False for a transition only server code fires: draw no button for it. */
+    readonly manual: boolean;
     readonly meta: JsonObject;
   }[];
   /** Each effect's continuation transitions, for a diagram. */
@@ -404,8 +488,12 @@ export function defineLifecycle<T extends LifecycleTypes>(
 
   const states = new Set<T['state']>();
   const stateInfo = new Map<T['state'], LifecycleState<T['state']>>();
+  const ownHooks = {
+    onEnterState: new Map<T['state'], readonly StateHook<T>[]>(),
+    onLeaveState: new Map<T['state'], readonly StateHook<T>[]>(),
+  };
   for (const entry of definition.states) {
-    const state: StateDefinition<T['state']> =
+    const state: StateDefinition<T['state'], T> =
       typeof entry === 'string' ? { name: entry } : entry;
     if (!NAME.test(state.name))
       throw invalid(name, `state "${state.name}" is not an identifier.`);
@@ -421,6 +509,16 @@ export function defineLifecycle<T extends LifecycleTypes>(
         meta: Object.freeze({ ...(state.meta ?? {}) }),
       }),
     );
+    if (state.onEnterState !== undefined)
+      ownHooks.onEnterState.set(state.name, list(state.onEnterState));
+    if (state.onLeaveState !== undefined) {
+      if (state.final)
+        throw invalid(
+          name,
+          `state "${state.name}" has leave hooks that can never run: it is final.`,
+        );
+      ownHooks.onLeaveState.set(state.name, list(state.onLeaveState));
+    }
   }
   const open = [...states].filter((state) => !stateInfo.get(state)?.final);
   if (!states.size) throw invalid(name, 'it declares no states.');
@@ -487,6 +585,7 @@ export function defineLifecycle<T extends LifecycleTypes>(
         to,
         definition: transition,
         effects: transition.effects ?? [],
+        manual: transition.manual !== false,
         meta: Object.freeze({ ...(transition.meta ?? {}) }),
       }),
     );
@@ -535,6 +634,36 @@ export function defineLifecycle<T extends LifecycleTypes>(
     for (const effect of entered ?? []) collect(effect, `onEnter.${state}`);
     onEnter.set(state, entered ?? []);
   }
+
+  const hooks = (
+    declared: LifecycleDefinition<T>['onEnterState'],
+    where: 'onEnterState' | 'onLeaveState',
+  ): Map<T['state'], readonly StateHook<T>[]> => {
+    // A state's own hooks first: what the state itself does on entering or
+    // leaving, before what the lifecycle adds to it.
+    const result = new Map<T['state'], readonly StateHook<T>[]>();
+    for (const [state, own] of ownHooks[where])
+      result.set(state, Object.freeze([...own]));
+    for (const [state, given] of Object.entries(declared ?? {}) as [
+      T['state'],
+      OneOrMany<StateHook<T>> | undefined,
+    ][]) {
+      known(state, where);
+      if (given === undefined) continue;
+      if (where === 'onLeaveState' && stateInfo.get(state)?.final)
+        throw invalid(
+          name,
+          `onLeaveState.${state} can never run: "${state}" is final.`,
+        );
+      result.set(
+        state,
+        Object.freeze([...(result.get(state) ?? []), ...list(given)]),
+      );
+    }
+    return result;
+  };
+  const onEnterState = hooks(definition.onEnterState, 'onEnterState');
+  const onLeaveState = hooks(definition.onLeaveState, 'onLeaveState');
 
   for (const effect of effects.values())
     for (const next of [effect.onSuccess, effect.onFailure])
@@ -589,6 +718,8 @@ export function defineLifecycle<T extends LifecycleTypes>(
     }) as ParametersOf<T>,
     transitions,
     onEnter,
+    onEnterState,
+    onLeaveState,
     triggers,
     effects,
   });
@@ -610,6 +741,7 @@ export function describeLifecycle<T extends LifecycleTypes>(
       to: [...transition.to],
       effects: transition.effects.map((effect) => effect.name),
       accept: [...(transition.definition.accept ?? [])],
+      manual: transition.manual,
       meta: transition.meta,
     })),
     continuations: [...lifecycle.effects.values()]

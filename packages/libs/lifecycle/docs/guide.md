@@ -392,6 +392,20 @@ Inside an `onTransition`, always pass its `transactionHandle`. A `fire()` or `cr
 
 Put `onTransition(context)` on the transition. It runs in the same transaction after the record and the log entry are written; `context.transactionHandle` is the transaction, and throwing rolls everything back — in an effect's continuation too, where the effect's outcome stays recorded. Nothing that reaches outside the database belongs here — that is an effect.
 
+### Set something up while a record waits in a state
+
+`onEnterState: { reviewing: hook }` runs in the transaction of every transition entering `reviewing`, `runtime.create()` included; `onLeaveState` runs in the transaction of every transition leaving it, after the record is written and before the hooks of the state it enters. The hook receives the record, `previous`, `from`, `to`, the transition, the actor, the input and `tx`. Use it for rows that belong to the stay, such as the tasks a stage opens, and end them on the way out; a self-transition runs both.
+
+A state definition may carry the same hooks itself — `{ name: 'approving', onEnterState, onLeaveState }` — and they run before the lifecycle's hooks for that state. This is how a module hands a business a whole state rather than hooks to wire by name: an approval's `approval.state('approving')` starts a run on entering and cancels it on leaving early, and the business only lists it among its `states`.
+
+### Move several records in one transaction
+
+`runtime.transaction(async (tx) => { … })` gives one transaction across every registered lifecycle: `tx.read()` reads through the transaction store, while `tx.fire()` and `tx.create()` check exactly what `fire()` and `create()` check, `tx.handle` writes rows of your own, and `tx.afterCommit()` schedules a best-effort callback. Events, effects and callbacks follow the commit, and none of it happens on a rollback. Each `tx.fire()` and `tx.create()` runs in a savepoint; a refusal or hook failure undoes that call, and the caller may catch it and continue. An uncaught failure rolls the outer transaction back. Hooks and `onTransition` receive the same `tx`. Calling `runtime.fire()` instead from inside the work opens a second transaction, which on the memory store and on SQLite waits forever.
+
+### A transition only the server fires
+
+`manual: false` on a transition keeps it off every page: plugin routes pass `manual: true` to `fire()` to refuse it with `NOT_MANUAL`, `available()` leaves it out, `can()` refuses it with a `manual` blocker and `announce` skips it. Server code fires it as usual. Use it for a conclusion that something else decides — the last vote of a stage, an external callback — so nobody can skip what decides it.
+
 ### Read other tables from a guard
 
 Register the services as a factory, `(handle) => services`, so the services a guard, `route` or `set` receives are bound to the transaction. On SQLite anything else deadlocks.
@@ -406,7 +420,7 @@ Register the services as a factory, `(handle) => services`, so the services a gu
 
 ### Draw the state diagram
 
-`toMermaid(runtime.describe('leaves'))` produces a Mermaid state diagram: ⏱ marks a trigger, ✓ and ✗ mark an effect's `onSuccess` and `onFailure`. `lifecycleDescriptionView(runtime, name)` includes it as `diagram`, for the `GET <lifecycle>/lifecycle` route.
+`toMermaid(runtime.describe('leaves'))` produces a Mermaid state diagram: ⏱ marks a trigger, ✓ and ✗ mark an effect's `onSuccess` and `onFailure`, and ⚙ a transition only server code fires. `lifecycleDescriptionView(runtime, name)` includes it as `diagram`, for the `GET <lifecycle>/lifecycle` route.
 
 ## Before going live
 
@@ -450,6 +464,7 @@ Changing a definition that is already in production is covered in [design.md](de
 
 | Code                                                   | Status                      | When                                                                                             |
 | ------------------------------------------------------ | --------------------------- | ------------------------------------------------------------------------------------------------ |
+| `NOT_MANUAL`                                           | `PERMISSION_DENIED` (403)   | A human action (`manual: true`) names a system-only transition                                   |
 | `GUARD_REJECTED`                                       | `PERMISSION_DENIED` (403)   | A guard refused; `blockers` says why                                                             |
 | `GUARD_REJECTED`, every blocker a `precondition`       | `FAILED_PRECONDITION` (400) | Nobody may until the record changes, such as while a subtask is open; `blockers` says what       |
 | `INVALID_STATE`                                        | `FAILED_PRECONDITION` (400) | The current state does not allow the transition, or a run is not in a state the operation allows |

@@ -33,7 +33,7 @@ sequenceDiagram
     R->>R: state check, validate, guards and addGuard, route, accept, set
     R->>DB: conditional update (state and version unchanged)
     R->>DB: log entry (version + 1, requestId)
-    R->>R: onTransition hook (same transaction)
+    R->>R: onLeaveState hooks of the state left, onTransition, onEnterState hooks of the state entered (same transaction)
     R->>DB: effect runs (queued)
     DB-->>R: commit
     R->>R: notify listeners: completed / entered / announce
@@ -56,9 +56,28 @@ Comparing the state alone breaks on self-transitions. The expense report's `esca
 
 A manager opens a report at version 3. Meanwhile the applicant withdraws it and resubmits; the record is at version 5 and back in `awaitingManager`. Judged by state alone, the manager's "approve" would be taken as approval of the new content. With `expect: { version: 3 }` the click is refused, and the page reloads before the manager decides again.
 
+### Hooks run only for the transition that won
+
+The hooks run after the conditional update, not before it, so a transition that loses a race has run none of them: whatever a hook writes belongs to a transition that is going to commit. Anything that fails rolls back the transition and its nested calls to their savepoint. A caller may catch the refusal and commit its other writes; an uncaught failure rolls back the outer transaction. Replays and refused transitions run no hooks.
+
 ### Creation is a transition too
 
-`runtime.create()` writes a log entry with `from: null`, `transition: '$create'` and `version: 1`, and runs the initial state's `onEnter` effects. History starts at creation, and "send a welcome mail on entering draft" needs no special case. `initial` may list several states; the first is the default and the others are asked for by name. Setting the state field in `values` is refused with `INVALID_SET`. The definition's `create` holds a `validate` over the values and a `guard` over the values, the state and the actor, run in that order inside the creation's transaction, so who may create what is one rule for every caller rather than a check in each route.
+`runtime.create()` writes a log entry with `from: null`, `transition: '$create'` and `version: 1`, runs the initial state's `onEnterState` hooks, and owes its `onEnter` effects. History starts at creation, and "send a welcome mail on entering draft" needs no special case. `initial` may list several states; the first is the default and the others are asked for by name. Setting the state field in `values` is refused with `INVALID_SET`. The definition's `create` holds a `validate` over the values and a `guard` over the values, the state and the actor, run in that order inside the creation's transaction, so who may create what is one rule for every caller rather than a check in each route.
+
+## Two layers: what happens while a record waits
+
+A record often waits in one state while something else goes on: several people answer a review, a person and an assistant go back and forth, a supplier sends documents in rounds. None of that is a transition — the record stays where it is — but it has to start when the record arrives, stop when it leaves, and its conclusion has to move the record on. The lifecycle offers four general pieces for this and knows nothing about what the second layer is.
+
+| Piece                           | What it gives the second layer                                                                                                                                                                                                                                                  |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `onEnterState` / `onLeaveState` | Set the stay up and end it in the transaction of whichever transition enters or leaves the state, `runtime.create()` included. A self-transition leaves and enters again, so a stay is torn down and set up anew                                                                |
+| `runtime.transaction(work)`     | Write the second layer's rows through `tx.handle` and fire the transition its conclusion maps to through `tx.fire()`, in one transaction. Hooks and `onTransition` receive the same `tx`, so they can fire or create other records too                                          |
+| `manual: false`                 | A conclusion only the second layer reaches cannot be fired from a page: `fire(..., { manual: true })` refuses it with `NOT_MANUAL`, `available()` leaves it out, `can()` says no, `announce` skips it                                                                           |
+| A state with hooks of its own   | A reusable second layer provides the whole state the record waits in — an approval's `approval.state('approving')` starts a run on entering and cancels it on leaving early — and the business lists it among its `states`. Its hooks run before the lifecycle's for that state |
+
+The rules that make it correct live in the second layer: its rows belong to one stay, identified by the record and the version the entering transition wrote; intermediate events write only those rows and never the record, so the record's version and `statusChangedAt` do not move; the leave hook ends every row of the stay still in progress; and the conclusion fires its transition with `expect: { version }` set to that entering version, so a conclusion for a stay that has already ended — the record left, or left and came back — is refused and its own writes roll back with it. Whoever reaches the record first decides.
+
+`@nocobase/app-plugin-approval` is such a second layer for approvals, with its runs, tasks and log in collections of its own. `packages/examples/app-plugin-lifecycle-example/server/second-layer/` shows two written by hand: a material exchange in rounds and an assistant that waits for a person's answer.
 
 ## Effect execution
 
@@ -131,12 +150,14 @@ The two table names are set through the `collections` option; the example plugin
 
 Choose by whether it must succeed together with the state:
 
-| Need                                   | Use                                                  | When it runs                      | On failure                                     |
-| -------------------------------------- | ---------------------------------------------------- | --------------------------------- | ---------------------------------------------- |
-| Refuse an action and say why           | `guard`; from another plugin, `runtime.addGuard()`   | In the transaction, before writes | Refused; the reason joins the blockers         |
-| Write related rows with the state      | `set` (same record), `onTransition` (other tables)   | In the transaction                | The whole transition rolls back                |
-| An external call that must happen      | `effects` / `onEnter`                                | After commit, retried             | Retried, then `failed`; `onFailure` may follow |
-| Refresh a page, a to-do list, an index | `runtime.on('completed' \| 'entered' \| 'announce')` | After commit, best effort         | Logged, not redelivered                        |
+| Need                                                            | Use                                                  | When it runs                      | On failure                                     |
+| --------------------------------------------------------------- | ---------------------------------------------------- | --------------------------------- | ---------------------------------------------- |
+| Refuse an action and say why                                    | `guard`; from another plugin, `runtime.addGuard()`   | In the transaction, before writes | Refused; the reason joins the blockers         |
+| Write related rows with the state                               | `set` (same record), `onTransition` (other tables)   | In the transaction                | The whole transition rolls back                |
+| Set up or end what a state waits for                            | `onEnterState` / `onLeaveState`                      | In the transaction                | The whole transition rolls back                |
+| Move several records, or conclude work done in rows of your own | `runtime.transaction()`, `tx.fire()`, `tx.create()`  | One transaction for all of it     | All of it rolls back                           |
+| An external call that must happen                               | `effects` / `onEnter`                                | After commit, retried             | Retried, then `failed`; `onFailure` may follow |
+| Refresh a page, a to-do list, an index                          | `runtime.on('completed' \| 'entered' \| 'announce')` | After commit, best effort         | Logged, not redelivered                        |
 
 ## Changing a definition
 
@@ -159,7 +180,7 @@ The definition lives in source, but some of its names are written to the databas
 ## Deliberately not done
 
 - **A visual designer.** Definitions live in source, checked by types and tests. `toMermaid(describe())` draws them for display.
-- **Hierarchical states and parallel regions.** They would stop "what state is this record in" from being one field value. Where work runs in parallel, split it into child records with their own lifecycles.
+- **Hierarchical states and parallel regions.** They would stop "what state is this record in" from being one field value. Work that goes on while a record waits belongs to a second layer of rows of its own, joined to the record by state hooks and `runtime.transaction()`; work that runs in parallel and has states of its own belongs to child records with their own lifecycles, created and concluded in the parent's transaction.
 - **Reliable event delivery.** Listeners are best effort; reliability is what effects are for, and there is one reliable mechanism, not two.
 - **Migrations or a schema helper.** Migrations must be self-contained and immutable, so the owning plugin spells out its tables.
 - **Permissions.** The library has no routes; the plugin's own routes authenticate and authorize ahead of the lifecycle's guards, with whatever access control the application uses.

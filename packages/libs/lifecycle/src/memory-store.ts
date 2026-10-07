@@ -121,6 +121,32 @@ function update(
   return [written, undo];
 }
 
+/** Rows a second layer reads and writes through an open memory handle. */
+export interface MemoryRows {
+  /** Adds a row, the way a create form or a seed would. */
+  insertRecord(
+    collection: string,
+    values: Readonly<Record<string, unknown>>,
+  ): LifecycleRecord;
+  /** Changes fields of a row, the way an edit form would. */
+  patchRecord(
+    collection: string,
+    id: RecordId,
+    values: Readonly<Record<string, unknown>>,
+  ): LifecycleRecord;
+  /** The row as it is now, read synchronously. */
+  record(collection: string, id: RecordId): LifecycleRecord | undefined;
+  /** Every row of a collection, in the order they were added. */
+  records(collection: string): LifecycleRecord[];
+}
+
+/**
+ * One transaction of a {@link MemoryLifecycleStore}: the store's methods,
+ * with every write remembered so a failure can take back exactly what this
+ * transaction wrote. It is also the transaction's `transactionHandle`.
+ */
+export interface MemoryTransaction extends LifecycleStore, MemoryRows {}
+
 /**
  * A store in process memory, for tests and examples. A transaction keeps a
  * log of what its own writes replaced and puts it back when the work fails,
@@ -131,7 +157,7 @@ function update(
  * outside the transaction does not wait for it, and sees what it has not
  * committed yet.
  */
-export class MemoryLifecycleStore implements LifecycleStore {
+export class MemoryLifecycleStore implements LifecycleStore, MemoryRows {
   private state: MemoryState = {
     records: new Map(),
     transitions: [],
@@ -184,6 +210,12 @@ export class MemoryLifecycleStore implements LifecycleStore {
   public record(collection: string, id: RecordId): LifecycleRecord | undefined {
     this.assertOpen();
     return this.rows(collection).get(String(id));
+  }
+
+  /** Every row of a collection, in insertion order, through this open handle. */
+  public records(collection: string): LifecycleRecord[] {
+    this.assertOpen();
+    return [...this.rows(collection).values()];
   }
 
   /**
