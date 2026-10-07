@@ -16,6 +16,7 @@ import {
 
 import { expenseLifecycle } from '../server/lifecycles/expense.js';
 import { createExampleServices } from '../server/lifecycles/services.js';
+import { ticketLifecycle } from '../server/lifecycles/ticket.js';
 import { apiRoutes } from '../server/routes/index.js';
 import {
   lifecycleExampleServiceToken,
@@ -37,9 +38,9 @@ function application(authentication: Auth) {
   // so they are tested against a lifecycle, not a mock.
   const store = new MemoryLifecycleStore();
   const runtime = new LifecycleRuntime({ store });
-  runtime.register(expenseLifecycle, {
-    services: createExampleServices({ info: () => undefined }),
-  });
+  const services = createExampleServices({ info: () => undefined });
+  runtime.register(expenseLifecycle, { services });
+  runtime.register(ticketLifecycle, { services });
   store.insertRecord('lifecycleExampleExpenses', {
     id: 1,
     title: '上海出差',
@@ -53,9 +54,28 @@ function application(authentication: Auth) {
     statusChangedAt: '2026-10-01T09:00:00.000Z',
     lifecycleVersion: 2,
   });
+  // Closed long before the reopen window of seven days.
+  store.insertRecord('lifecycleExampleTickets', {
+    id: 5,
+    subject: '无法登录后台',
+    description: '提示会话过期',
+    category: 'account',
+    priority: 'high',
+    requesterId: 'customer-li',
+    assigneeId: 'agent-zhou',
+    closedReason: 'resolved',
+    failNotifications: 0,
+    status: 'closed',
+    statusChangedAt: '2000-01-01T00:00:00.000Z',
+    lifecycleVersion: 3,
+  });
   const service = {
     runtime,
     createExpense: vi.fn(async (values: object) => ({ id: 2, ...values })),
+    updateExpense: vi.fn(async (id: string, values: object) => ({
+      id: Number(id),
+      ...values,
+    })),
     listTickets: vi.fn(async () => ({ records: [], total: 0 })),
     parameters: vi.fn(() => ({ waitMinutes: 2, reopenDays: 7 })),
   };
@@ -76,9 +96,9 @@ function application(authentication: Auth) {
   return { app, service };
 }
 
-function post(path: string, body: unknown): Request {
+function post(path: string, body: unknown, method = 'POST'): Request {
   return new Request(`http://localhost${path}`, {
-    method: 'POST',
+    method,
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
   });
@@ -236,6 +256,75 @@ describe('lifecycle example routes', () => {
     expect(missing.status).toBe(404);
   });
 
+  it('answers a guard about the record as a failed precondition, and one about the persona as forbidden', async () => {
+    const router = await apiRoutes.createRouter(application(allow).app);
+    const reopen = { transition: 'reopen', input: { message: '又坏了' } };
+    // The customer who filed it may reopen tickets; this one closed too long ago.
+    const expired = await router.request(
+      post('/lifecycleExample/tickets/5/fire?actAs=customer-li', {
+        ...reopen,
+        requestId: 'click-1',
+      }),
+    );
+    expect(expired.status).toBe(400);
+    await expect(expired.json()).resolves.toMatchObject({
+      error: {
+        status: 'FAILED_PRECONDITION',
+        reason: 'GUARD_REJECTED',
+        metadata: {
+          blockers: [{ code: 'reopenExpired', kind: 'precondition' }],
+        },
+      },
+    });
+    // Another customer may not, however recently it closed.
+    const stranger = await router.request(
+      post('/lifecycleExample/tickets/5/fire?actAs=customer-wang', {
+        ...reopen,
+        requestId: 'click-2',
+      }),
+    );
+    expect(stranger.status).toBe(403);
+    await expect(stranger.json()).resolves.toMatchObject({
+      error: {
+        status: 'PERMISSION_DENIED',
+        reason: 'GUARD_REJECTED',
+        metadata: {
+          blockers: [{ code: 'requesterOnly', kind: 'permission' }],
+        },
+      },
+    });
+  });
+
+  it('edits only the fields an expense edit sends, under the record’s id', async () => {
+    const { app, service } = application(allow);
+    const router = await apiRoutes.createRouter(app);
+    const edited = await router.request(
+      post(
+        '/lifecycleExample/expenses/1?actAs=lin',
+        { title: ' 北京出差 ' },
+        'PATCH',
+      ),
+    );
+    expect(edited.status).toBe(200);
+    // Nothing it left out is sent on, so the report keeps its other fields.
+    expect(service.updateExpense).toHaveBeenCalledWith(
+      '1',
+      { title: '北京出差' },
+      'lin',
+    );
+    const notAnId = await router.request(
+      post('/lifecycleExample/expenses/1e3?actAs=lin', { title: 'x' }, 'PATCH'),
+    );
+    expect(notAnId.status).toBe(400);
+    await expect(notAnId.json()).resolves.toMatchObject({
+      error: {
+        reason: 'INVALID_INPUT',
+        fieldViolations: [expect.objectContaining({ field: 'recordId' })],
+      },
+    });
+    expect(service.updateExpense).toHaveBeenCalledTimes(1);
+  });
+
   it('describes a lifecycle, and refuses an effect run of another record', async () => {
     const router = await apiRoutes.createRouter(application(allow).app);
     const described = await router.request(
@@ -342,5 +431,16 @@ describe('lifecycle example routes', () => {
     expect(new Set(operations.flatMap(({ tags }) => tags ?? []))).toEqual(
       new Set(['LifecycleExample']),
     );
+    // A record's routes name its id once: no path spells it another way.
+    const paths = Object.keys(document.paths ?? {});
+    expect(paths).toContain('/api/lifecycleExample/expenses/{recordId}');
+    expect(paths.filter((path) => /\{(?!recordId|runId)/.test(path))).toEqual(
+      [],
+    );
+    expect(
+      Object.keys(
+        document.paths?.['/api/lifecycleExample/expenses/{recordId}'] ?? {},
+      ),
+    ).toEqual(expect.arrayContaining(['get', 'patch']));
   });
 });

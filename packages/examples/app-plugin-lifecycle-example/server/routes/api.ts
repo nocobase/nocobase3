@@ -5,10 +5,11 @@ import {
   type RecordView,
 } from '@nocobase/lifecycle';
 
+import { LIFECYCLE_ROUTES } from '../../shared/routes.js';
 import { ExampleError } from '../services/lifecycle-example.js';
 
 /** The namespace of every route this plugin owns, and the domain of its errors. */
-export const LIFECYCLE_EXAMPLE_DOMAIN = 'lifecycleExample';
+export const LIFECYCLE_EXAMPLE_DOMAIN: string = LIFECYCLE_ROUTES;
 
 /** Every route of this plugin is listed under one tag in the API document at `/api/swagger/docs`. */
 export const tags: string[] = ['LifecycleExample'];

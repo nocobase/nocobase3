@@ -155,6 +155,62 @@ describe('lifecycle example provider', () => {
     }
   });
 
+  test('edits only the fields an edit names, and keeps the rest of the draft', async ({
+    database,
+  }) => {
+    const { container, stop } = await start(database);
+    try {
+      const service = container.resolve(lifecycleExampleServiceToken);
+      const line = {
+        date: '2026-09-28',
+        category: 'transport',
+        description: '机票',
+        amountCents: 800_000,
+      };
+      const expense = await service.createExpense(
+        {
+          title: '上海客户拜访',
+          purpose: '季度回访',
+          items: [line],
+          failPayments: 1,
+        },
+        'lin',
+      );
+      const id = String(expense.id);
+      const retitled = await service.updateExpense(
+        id,
+        { title: '上海客户回访' },
+        'lin',
+      );
+      expect(retitled).toMatchObject({
+        title: '上海客户回访',
+        purpose: '季度回访',
+        items: [line],
+        failPayments: 1,
+      });
+      // A bigint column may read back as text, depending on the dialect.
+      expect(Number(retitled.amountCents)).toBe(800_000);
+      // New lines move the total with them; the title just set stays.
+      const relined = await service.updateExpense(
+        id,
+        { items: [{ ...line, amountCents: 120_000 }] },
+        'lin',
+      );
+      expect(relined).toMatchObject({
+        title: '上海客户回访',
+        purpose: '季度回访',
+        failPayments: 1,
+      });
+      expect(Number(relined.amountCents)).toBe(120_000);
+      // An edit that names nothing still checks who asks.
+      await expect(service.updateExpense(id, {}, 'wang')).rejects.toMatchObject(
+        { reason: 'OWN_EXPENSE_ONLY' },
+      );
+    } finally {
+      await stop();
+    }
+  });
+
   test('closes an idle ticket when the triggers are swept', async ({
     database,
   }) => {

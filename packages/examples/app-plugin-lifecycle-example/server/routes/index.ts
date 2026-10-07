@@ -17,6 +17,7 @@ import { Hono } from 'hono';
 
 import { LIFECYCLE_ROUTES } from '../../shared/routes.js';
 import type {
+  ExpenseChanges,
   ExpenseDraft,
   LifecycleExampleService,
 } from '../services/lifecycle-example.js';
@@ -28,17 +29,36 @@ import {
   ActAsQuery,
   CreateTicketInput,
   ExampleRecord,
+  ExpenseChangesInput,
   ExpenseDraftInput,
-  ExpenseParams,
   ListExpensesQuery,
   ListMeta,
   ListTicketsQuery,
+  RecordParams,
   TriggersRun,
+  type ExpenseChangesInput as ExpenseChangesValues,
   type ExpenseDraftInput as ExpenseDraftValues,
 } from './schemas.js';
 
+/** Every route below starts here; the client reads the same constant. */
+const BASE = `/${LIFECYCLE_ROUTES}`;
+
 function draft(values: ExpenseDraftValues): ExpenseDraft {
   return { ...values, items: values.items.map((item) => ({ ...item })) };
+}
+
+/** Only the fields the request sent: one it left out is not reset. */
+function changes(values: ExpenseChangesValues): ExpenseChanges {
+  return {
+    ...(values.title === undefined ? {} : { title: values.title }),
+    ...(values.purpose === undefined ? {} : { purpose: values.purpose }),
+    ...(values.items === undefined
+      ? {}
+      : { items: values.items.map((item) => ({ ...item })) }),
+    ...(values.failPayments === undefined
+      ? {}
+      : { failPayments: values.failPayments }),
+  };
 }
 
 function listRoutes(
@@ -63,7 +83,7 @@ function listRoutes(
     });
 
   router.get(
-    '/lifecycleExample/tickets',
+    `${BASE}/tickets`,
     describeRoute({
       tags,
       summary: 'List tickets',
@@ -89,7 +109,7 @@ function listRoutes(
     },
   );
   router.post(
-    '/lifecycleExample/tickets',
+    `${BASE}/tickets`,
     describeRoute({
       tags,
       summary: 'File a ticket',
@@ -119,7 +139,7 @@ function listRoutes(
   );
 
   router.get(
-    '/lifecycleExample/expenses',
+    `${BASE}/expenses`,
     describeRoute({
       tags,
       summary: 'List expense reports',
@@ -145,7 +165,7 @@ function listRoutes(
     },
   );
   router.post(
-    '/lifecycleExample/expenses',
+    `${BASE}/expenses`,
     describeRoute({
       tags,
       summary: 'Draft an expense report',
@@ -181,14 +201,14 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
     const authentication = container.resolve(authenticationToken);
     const service = container.resolve(lifecycleExampleServiceToken);
 
-    router.use('/lifecycleExample/*', authentication.required());
+    router.use(`${BASE}/*`, authentication.required());
     router.onError((error, context) =>
       apiErrorHandler(toApiError(error), context),
     );
 
     // Sweeps the triggers now, so the page need not wait for the schedule.
     router.post(
-      '/lifecycleExample/runTriggers',
+      `${BASE}/runTriggers`,
       describeRoute({
         tags,
         summary: 'Run the lifecycle triggers now',
@@ -211,19 +231,20 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
     // runs — follow the paths `@nocobase/lifecycle/react` calls.
     for (const lifecycle of ['tickets', 'expenses'] as const)
       lifecycleRoutes(router, service.runtime, {
-        basePath: `/${LIFECYCLE_ROUTES}`,
+        basePath: BASE,
         lifecycle,
         noun: lifecycle === 'tickets' ? 'Ticket' : 'Expense',
       });
 
+    // `:recordId`, as the record routes above name it: one path, one parameter.
     router.patch(
-      '/lifecycleExample/expenses/:expenseId',
+      `${BASE}/expenses/:recordId`,
       describeRoute({
         tags,
         summary: 'Edit a draft expense report',
         operationId: 'lifecycleExampleUpdateExpense',
         description:
-          'Only the applicant edits a report, while it is a draft or sent back; the state is changed only by its transitions.',
+          'Changes only the fields sent; the others keep their values. Only the applicant edits a report, while it is a draft or sent back; the state is changed only by its transitions.',
         responses: {
           200: dataResponse(ExampleRecord, 'The report as edited.'),
           400: apiErrorResponse(
@@ -243,16 +264,16 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
           500: apiErrorResponse(500),
         },
       }),
-      apiValidator('param', ExpenseParams),
+      apiValidator('param', RecordParams),
       apiValidator('query', ActAsQuery),
-      apiValidator('json', ExpenseDraftInput),
+      apiValidator('json', ExpenseChangesInput),
       async (context) => {
-        const { expenseId } = context.req.valid('param');
+        const { recordId } = context.req.valid('param');
         const { actAs } = context.req.valid('query');
         const values = context.req.valid('json');
         return context.json({
           data: outward(
-            await service.updateExpense(expenseId, draft(values), actAs),
+            await service.updateExpense(recordId, changes(values), actAs),
           ),
         });
       },

@@ -162,7 +162,9 @@ export const ticketLifecycle: Lifecycle<TicketTypes> =
         title: '重新打开',
         from: 'closed',
         to: 'open',
-        // Only the customer, and only for a while after it closed.
+        // Only the customer, and only for a while after it closed. Who may is
+        // a permission; how long ago it closed is a precondition, which the
+        // route answers as 400 FAILED_PRECONDITION rather than 403.
         guard: (context) => {
           const requester = isRequester(context);
           if (requester !== true) return requester;
@@ -171,6 +173,7 @@ export const ticketLifecycle: Lifecycle<TicketTypes> =
               context.parameters.reopenDays * 86_400_000 || {
               code: 'reopenExpired',
               message: `Closed more than ${context.parameters.reopenDays} days ago; file a new ticket instead.`,
+              kind: 'precondition',
             }
           );
         },

@@ -63,6 +63,9 @@ export interface ExpenseDraft {
   readonly failPayments: number;
 }
 
+/** An edit: the fields it names change, the others keep their values. */
+export type ExpenseChanges = Partial<ExpenseDraft>;
+
 /**
  * The example's own operations around the runtime: creating and editing
  * records the way a form would, and reading what a page shows. Every state
@@ -137,7 +140,7 @@ export class LifecycleExampleService {
     return this.create(
       'expenses',
       {
-        ...this.expenseValues(values),
+        ...this.expenseChanges(values),
         applicantId: actor,
         approverId: null,
       },
@@ -145,10 +148,13 @@ export class LifecycleExampleService {
     );
   }
 
-  /** A report is edited only by its applicant, while it is a draft or sent back. */
+  /**
+   * A report is edited only by its applicant, while it is a draft or sent
+   * back. Only the fields in `changes` are written.
+   */
   public async updateExpense(
     id: string,
-    values: ExpenseDraft,
+    changes: ExpenseChanges,
     actor: string,
   ): Promise<Plain> {
     const repository = this.database.repository(expenseLifecycle.collection);
@@ -171,6 +177,8 @@ export class LifecycleExampleService {
         'EXPENSE_LOCKED',
         'A report under review cannot be edited; withdraw it first.',
       );
+    const values = this.expenseChanges(changes);
+    if (!Object.keys(values).length) return plain(current);
     const { updatedCount } = await repository.updateMany({
       // The state and version as read: a concurrent submit wins, and this
       // edit is refused.
@@ -179,7 +187,7 @@ export class LifecycleExampleService {
         status: String(current.status),
         lifecycleVersion: Number(current.lifecycleVersion ?? 0),
       },
-      values: this.expenseValues(values) as RepositoryRecord,
+      values: values as RepositoryRecord,
     });
     if (updatedCount === 0)
       throw new ExampleError(
@@ -201,15 +209,19 @@ export class LifecycleExampleService {
     return this.runtime.runTriggers();
   }
 
-  private expenseValues(values: ExpenseDraft): Plain {
-    const items = parseItems(values.items);
-    return {
-      title: values.title,
-      purpose: values.purpose,
-      items,
-      amountCents: totalCents(items),
-      failPayments: values.failPayments,
-    };
+  /** The columns a draft or an edit writes; the total moves with the items. */
+  private expenseChanges(changes: ExpenseChanges): Plain {
+    const values: Plain = {};
+    if (changes.title !== undefined) values.title = changes.title;
+    if (changes.purpose !== undefined) values.purpose = changes.purpose;
+    if (changes.items !== undefined) {
+      const items = parseItems(changes.items);
+      values.items = items;
+      values.amountCents = totalCents(items);
+    }
+    if (changes.failPayments !== undefined)
+      values.failPayments = changes.failPayments;
+    return values;
   }
 
   /** Created through the lifecycle, so a record's history starts at its creation. */

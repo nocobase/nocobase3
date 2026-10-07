@@ -44,11 +44,11 @@ Run the examples application with `pnpm --filter @nocobase/app-template-examples
 | An idle approver is passed over                   | The self-transition `escalate`, guarded to the system, fired by the trigger `escalateStale`                          | `server/lifecycles/expense.ts`                            |
 | An external call whose result moves the record on | `requestPayment` in `onEnter.approved`, with retries, a timeout and `onSuccess: 'paid'`; `paid` accepts `paymentRef` | `server/lifecycles/expense.effects.ts`, `expense.ts`      |
 | A conversation that is the history                | Every reply is the input of the transition it caused, read back from the transition log                              | `server/lifecycles/ticket.ts`, `client/pages/tickets.tsx` |
-| Reopening within a window                         | A guard that compares `statusChangedAt` with a parameter                                                             | `server/lifecycles/ticket.ts`                             |
+| Reopening within a window                         | A guard that compares `statusChangedAt` with a parameter and refuses with `kind: 'precondition'`, answered `400`     | `server/lifecycles/ticket.ts`                             |
 
 ## Testing
 
-`tests/lifecycles.test.ts` tests both lifecycles with `@nocobase/lifecycle/testing`: a memory store, a fake clock and in-process effects, so waiting, escalating and retrying are plain function calls. `tests/provider.test.ts` runs the real Provider against SQLite and the memory jobs service, and `tests/routes.test.ts` covers the HTTP boundary.
+`tests/lifecycles.test.ts` tests both lifecycles with `@nocobase/lifecycle/testing`: a memory store, a fake clock and in-process effects, so waiting, escalating and retrying are plain function calls. `tests/provider.test.ts` runs the real Provider on the test database (SQLite by default) with the memory jobs service, `tests/routes.test.ts` covers the HTTP boundary, and `tests/error-message.test.ts` covers how a page words a refusal.
 
 ```bash
 pnpm --filter @nocobase/app-plugin-lifecycle-example lint

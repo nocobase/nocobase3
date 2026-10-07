@@ -1,10 +1,12 @@
 import type { ApiClient } from '@nocobase/app-client';
 
 import { LIFECYCLE_ROUTES } from '../../shared/routes.js';
-import type {
-  Blocker,
-  LifecycleDescriptionView,
-  RecordView,
+import {
+  LifecycleRequestError,
+  type Blocker,
+  type InputProblem,
+  type LifecycleDescriptionView,
+  type RecordView,
 } from '@nocobase/lifecycle/react';
 
 export type {
@@ -105,11 +107,46 @@ interface RefusalBody {
   };
 }
 
+/** A refusal's stable codes and its English message, wherever it came from. */
+interface Refusal {
+  readonly reason: unknown;
+  readonly message: unknown;
+  readonly blockers: readonly Blocker[];
+  readonly problems: readonly InputProblem[];
+}
+
 function payloadOf(cause: unknown): RefusalBody | undefined {
   if (typeof cause !== 'object' || cause === null) return undefined;
   const payload = (cause as { payload?: { error?: unknown } }).payload;
   const body = payload?.error;
   return typeof body === 'object' && body !== null ? body : undefined;
+}
+
+/**
+ * `@nocobase/lifecycle/react` throws a `LifecycleRequestError` that carries
+ * the reasons itself; the plugin's own routes, called through the API
+ * client, throw the transport's error with the standard body as `payload`.
+ */
+function refusalOf(cause: unknown): Refusal | undefined {
+  if (cause instanceof LifecycleRequestError)
+    return {
+      reason: cause.reason,
+      message: cause.message,
+      blockers: cause.blockers,
+      problems: cause.problems,
+    };
+  const payload = payloadOf(cause);
+  if (!payload) return undefined;
+  return {
+    reason: payload.reason,
+    message: payload.message,
+    blockers: Array.isArray(payload.metadata?.blockers)
+      ? (payload.metadata.blockers as Blocker[])
+      : [],
+    problems: Array.isArray(payload.metadata?.problems)
+      ? (payload.metadata.problems as InputProblem[])
+      : [],
+  };
 }
 
 /** A guard's refusal in the page's language, by its code; its English message otherwise. */
@@ -120,10 +157,7 @@ export function blockerMessage(
   return translate(`blockers.${blocker.code}`, blocker.message);
 }
 
-function problemMessage(
-  problem: { readonly field?: string; readonly message: string },
-  translate: Translate,
-): string {
+function problemMessage(problem: InputProblem, translate: Translate): string {
   return problem.field
     ? translate(`problems.${problem.field}`, problem.message)
     : problem.message;
@@ -138,26 +172,20 @@ export function errorMessage(
   cause: unknown,
   translate: Translate = asIs,
 ): string {
-  const payload = payloadOf(cause);
-  if (payload) {
-    const blockers = Array.isArray(payload.metadata?.blockers)
-      ? (payload.metadata.blockers as Blocker[])
-      : [];
-    if (blockers.length)
-      return blockers
+  const refusal = refusalOf(cause);
+  if (refusal) {
+    if (refusal.blockers.length)
+      return refusal.blockers
         .map((blocker) => blockerMessage(blocker, translate))
         .join(' ');
-    const problems = Array.isArray(payload.metadata?.problems)
-      ? (payload.metadata.problems as { field?: string; message: string }[])
-      : [];
-    if (problems.length)
-      return problems
+    if (refusal.problems.length)
+      return refusal.problems
         .map((problem) => problemMessage(problem, translate))
         .join(' ');
-    if (typeof payload.message === 'string')
-      return typeof payload.reason === 'string'
-        ? translate(`errors.${payload.reason}`, payload.message)
-        : payload.message;
+    if (typeof refusal.message === 'string')
+      return typeof refusal.reason === 'string'
+        ? translate(`errors.${refusal.reason}`, refusal.message)
+        : refusal.message;
   }
   return cause instanceof Error ? cause.message : String(cause);
 }

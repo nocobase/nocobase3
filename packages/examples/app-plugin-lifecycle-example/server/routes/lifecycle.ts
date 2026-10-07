@@ -11,8 +11,6 @@ import {
   type LifecycleRuntime,
 } from '@nocobase/lifecycle';
 import type { Hono } from 'hono';
-import { z } from 'zod';
-
 import {
   LIFECYCLE_EXAMPLE_DOMAIN,
   outwardView,
@@ -24,6 +22,7 @@ import {
   DescriptionViewSchema,
   FireInput,
   FireViewSchema,
+  RecordParams,
   RecordViewSchema,
   RetryRunInput,
   RunParams,
@@ -38,17 +37,14 @@ export interface LifecycleRoutesSpec {
   readonly noun: string;
 }
 
-/** Record ids are the collection's integer keys, sent as strings. */
-const RecordParams = z.object({
-  recordId: z.string().regex(/^\d+$/).meta({ description: 'The record’s id.' }),
-});
-
 /**
  * The routes a page needs for one lifecycle's records, at the paths
  * `@nocobase/lifecycle/react`'s client calls: the lifecycle's description,
  * one record with what the persona may do and its history, firing a
  * transition, and an operator's retry and cancel of an effect run. A guard
- * that refuses answers `403 GUARD_REJECTED` with the blockers in `metadata`.
+ * that refuses answers `GUARD_REJECTED` with the blockers in `metadata`:
+ * `403` when one of them is about who asks, `400 FAILED_PRECONDITION` when
+ * each is about the record, such as a ticket closed too long ago to reopen.
  */
 export function lifecycleRoutes(
   router: Hono<AuthEnv>,
@@ -114,15 +110,18 @@ export function lifecycleRoutes(
       summary: `Fire a transition on a ${lower}`,
       operationId: `lifecycleExampleFire${noun}Transition`,
       description:
-        'Fires one transition as the persona and answers the record as it left it. Its guards decide who may: a refusal is `GUARD_REJECTED` with the blockers in `metadata.blockers`.',
+        'Fires one transition as the persona and answers the record as it left it. Its guards decide who may and when: a refusal is `GUARD_REJECTED` with the blockers in `metadata.blockers`, each with its `kind`.',
       responses: {
         200: dataResponse(FireViewSchema),
         400: apiErrorResponse(
           400,
-          'The state does not allow it (`INVALID_STATE`), the input is invalid (`INVALID_INPUT`), the transition is unknown (`UNKNOWN_TRANSITION`) or the request id was spent on another (`REQUEST_REUSED`).',
+          'The state does not allow it (`INVALID_STATE`), every guard that refused waits for the record to change (`GUARD_REJECTED`, status `FAILED_PRECONDITION`), the input is invalid (`INVALID_INPUT`), the transition is unknown (`UNKNOWN_TRANSITION`) or the request id was spent on another (`REQUEST_REUSED`, `INVALID_REQUEST_ID`).',
         ),
         401: apiErrorResponse(401),
-        403: apiErrorResponse(403, 'A guard refused (`GUARD_REJECTED`).'),
+        403: apiErrorResponse(
+          403,
+          'A guard refused the persona (`GUARD_REJECTED`).',
+        ),
         404: notFound,
         409: apiErrorResponse(
           409,

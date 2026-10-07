@@ -127,17 +127,43 @@ export const ExpenseDraftInput: z.ZodObject<
   failPayments: failures.default(0),
 });
 
+/**
+ * An edit to a draft: only the fields sent change. Nothing has a default, so
+ * a field left out keeps what the report holds rather than being reset.
+ */
+export const ExpenseChangesInput: z.ZodObject<
+  {
+    title: z.ZodOptional<z.ZodString>;
+    purpose: z.ZodOptional<z.ZodString>;
+    items: z.ZodOptional<z.ZodArray<typeof ExpenseItem>>;
+    failPayments: z.ZodOptional<z.ZodNumber>;
+  },
+  z.core.$strict
+> = z.strictObject({
+  title: z.string().trim().optional(),
+  purpose: z.string().optional(),
+  items: z
+    .array(ExpenseItem)
+    .max(MAX_PAGE_SIZE)
+    .optional()
+    .meta({ description: 'Replaces every line; the total follows them.' }),
+  failPayments: failures.optional(),
+});
+
 export type CreateTicketInput = z.infer<typeof CreateTicketInput>;
 export type ExpenseDraftInput = z.infer<typeof ExpenseDraftInput>;
+export type ExpenseChangesInput = z.infer<typeof ExpenseChangesInput>;
 
-export const TicketParams: z.ZodObject<
-  { ticketId: z.ZodString },
+/**
+ * Record ids are the collection's integer keys, sent as strings. Every route
+ * under a record uses this one parameter, so the document names the path once.
+ */
+export const RecordParams: z.ZodObject<
+  { recordId: z.ZodString },
   z.core.$strip
-> = z.object({ ticketId: z.string().min(1) });
-export const ExpenseParams: z.ZodObject<
-  { expenseId: z.ZodString },
-  z.core.$strip
-> = z.object({ expenseId: z.string().min(1) });
+> = z.object({
+  recordId: z.string().regex(/^\d+$/).meta({ description: 'The record’s id.' }),
+});
 export const RunParams: z.ZodObject<{ runId: z.ZodString }, z.core.$strip> =
   z.object({ runId: z.string().min(1) });
 
@@ -223,6 +249,10 @@ export const TriggersRun: z.ZodType<{ readonly fired: number }> = z.object({
 const BlockerSchema: z.ZodType<Blocker> = z
   .object({
     source: z.enum(['state', 'guard']),
+    kind: z.enum(['permission', 'precondition']).meta({
+      description:
+        '`permission` when this persona may not, `precondition` when the record has to change first.',
+    }),
     code: z.string(),
     message: z.string(),
   })

@@ -178,7 +178,11 @@ describe('support ticket', () => {
         { message: '又坏了' },
         { actor: 'customer-li' },
       ),
-    ).rejects.toMatchObject({ code: 'GUARD_REJECTED' });
+    ).rejects.toMatchObject({
+      code: 'GUARD_REJECTED',
+      // The customer may reopen it; it is the time since it closed that refuses.
+      blockers: [{ code: 'reopenExpired', kind: 'precondition' }],
+    });
   });
 
   it('lets only a customer file a ticket, for themselves, with every field', async () => {
@@ -265,10 +269,11 @@ describe('expense report', () => {
   it('refuses to submit a report without items', async () => {
     const { expenses } = kit();
     const created = expenses.create({ ...report(0), items: [] });
+    // The request is fine; the report is not ready, which is its state.
     await expect(
       expenses.fire(created, 'submit', {}, { actor: 'lin' }),
     ).rejects.toMatchObject({
-      code: 'INVALID_INPUT',
+      code: 'INVALID_STATE',
       message: expect.stringContaining('at least one expense line'),
     });
   });
