@@ -181,14 +181,17 @@ describe('the memory store takes back only what a transaction wrote', () => {
     expect(store.record('rows', outside.id)).toBeDefined();
   });
 
-  it('a transaction opened inside a transaction joins it', async () => {
+  it('a transaction explicitly opened within another nests in it', async () => {
     const store = new MemoryLifecycleStore();
     await expect(
       store.transaction((outer) =>
-        outer.transaction(async (inner) => {
-          (inner.transactionHandle as MemoryRows).insertRecord('rows', {});
-          throw new Error('Inner failure.');
-        }),
+        outer.transaction(
+          async (inner) => {
+            (inner.transactionHandle as MemoryRows).insertRecord('rows', {});
+            throw new Error('Inner failure.');
+          },
+          { within: outer.transactionHandle },
+        ),
       ),
     ).rejects.toThrow('Inner failure.');
     expect(store.records('rows')).toEqual([]);
@@ -230,9 +233,9 @@ describe('runtime.transaction', () => {
       `submit:${String(second.record.id)}`,
     ]);
     expect(h.log.slice(2)).toEqual([
+      'effect:reviewing',
+      'effect:reviewing',
       'afterCommit',
-      'effect:reviewing',
-      'effect:reviewing',
     ]);
   });
 
@@ -286,7 +289,7 @@ describe('runtime.transaction', () => {
     });
   });
 
-  it('a failure after a transition wrote something rolls the whole transaction back, even when caught', async () => {
+  it('a caught hook failure rolls back its savepoint and leaves the outer transaction usable', async () => {
     const store = new MemoryLifecycleStore();
     const runtime = new LifecycleRuntime({ store });
     runtime.register(
@@ -315,7 +318,7 @@ describe('runtime.transaction', () => {
           .catch(() => undefined);
         return 'carried on';
       }),
-    ).rejects.toThrow('No reviewer could be found.');
+    ).resolves.toBe('carried on');
     expect(store.record('reviews', record.id)).toMatchObject({
       status: 'draft',
     });
@@ -498,8 +501,13 @@ describe('transitions only server code fires', () => {
     ).toEqual({
       allowed: false,
       blockers: [
-        expect.objectContaining({ source: 'manual', code: 'NOT_MANUAL' }),
+        expect.objectContaining({
+          source: 'manual',
+          kind: 'permission',
+          code: 'NOT_MANUAL',
+        }),
       ],
+      problems: [],
     });
     // `submit` is announced by the creation; `concluded` never is.
     expect(announced).toEqual(['submit', 'withdraw']);

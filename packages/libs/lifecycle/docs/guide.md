@@ -466,6 +466,7 @@ Changing a definition that is already in production is covered in [design.md](de
 
 | Code                                                   | Status                      | When                                                                                             |
 | ------------------------------------------------------ | --------------------------- | ------------------------------------------------------------------------------------------------ |
+| `NOT_MANUAL`                                           | `PERMISSION_DENIED` (403)   | A human action (`manual: true`) names a system-only transition                                   |
 | `GUARD_REJECTED`                                       | `PERMISSION_DENIED` (403)   | A guard refused; `blockers` says why                                                             |
 | `GUARD_REJECTED`, every blocker a `precondition`       | `FAILED_PRECONDITION` (400) | Nobody may until the record changes, such as while a subtask is open; `blockers` says what       |
 | `INVALID_STATE`                                        | `FAILED_PRECONDITION` (400) | The current state does not allow the transition, or a run is not in a state the operation allows |
@@ -490,14 +491,6 @@ Changing a definition that is already in production is covered in [design.md](de
 | `POST <lifecycle>/{id}/fire` with `{ transition, input, requestId, expectVersion? }` | `RecordView & { replayed }`  |
 | `POST <lifecycle>/{id}/effectRuns/{runId}/retry` with `{ force?, reason? }`          | `RecordView`                 |
 | `POST <lifecycle>/{id}/effectRuns/{runId}/cancel`                                    | `RecordView`                 |
-
-| Request                                                                               | `access.action` | Answer                                                                             |
-| ------------------------------------------------------------------------------------- | --------------- | ---------------------------------------------------------------------------------- |
-| `GET /:lifecycle`                                                                     | `describe`      | `{ description, parameters, diagram }`                                             |
-| `GET /:lifecycle/:id`                                                                 | `read`          | `RecordView`                                                                       |
-| `POST /:lifecycle/:id/fire` with `{ transition, input?, requestId?, expectVersion? }` | `fire`          | `RecordView & { replayed }`; a `manual: false` transition answers 403 `NOT_MANUAL` |
-| `POST /:lifecycle/:id/runs/:runId/retry`                                              | `operate`       | `RecordView`                                                                       |
-| `POST /:lifecycle/:id/runs/:runId/cancel`                                             | `operate`       | `RecordView`                                                                       |
 
 They authenticate and authorize like every other route of the plugin; who may read a record or operate its runs is the plugin's check, ahead of the validators, while the lifecycle's guards decide who may fire what.
 

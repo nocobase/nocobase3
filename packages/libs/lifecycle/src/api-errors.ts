@@ -98,6 +98,7 @@ const FIELDS: Readonly<Partial<Record<LifecycleErrorCode, string>>> =
  * | ------------------------------------------------------------------------------- | --------------------- |
  * | `UNKNOWN_LIFECYCLE`, `RECORD_NOT_FOUND`                                         | `NOT_FOUND`           |
  * | `UNKNOWN_TRANSITION`, `INVALID_INPUT`, `REQUEST_REUSED`, `INVALID_REQUEST_ID`   | `INVALID_ARGUMENT`    |
+ * | `NOT_MANUAL`                                                                  | `PERMISSION_DENIED`   |
  * | `GUARD_REJECTED` with a `permission` blocker                                    | `PERMISSION_DENIED`   |
  * | `GUARD_REJECTED` whose blockers are all `precondition`                          | `FAILED_PRECONDITION` |
  * | `INVALID_STATE`, `UNKNOWN_EFFECT`, `RUN_SETTLED`                                | `FAILED_PRECONDITION` |

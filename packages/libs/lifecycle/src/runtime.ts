@@ -214,6 +214,12 @@ export interface CreateOptions {
   readonly transaction?: unknown;
 }
 
+/**
+ * One store transaction shared by the caller and its hooks. Each fire or
+ * create nests through the public API as a savepoint: a caught refusal
+ * undoes that call, and an uncaught error rolls back the outer transaction.
+ * Events and effects wait for the outermost commit.
+ */
 export interface LifecycleTransaction {
   /** The store's handle for this transaction, such as a `@nocobase/db` connection: write other rows through it. */
   readonly handle: unknown;

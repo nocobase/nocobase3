@@ -121,16 +121,7 @@ function update(
   return [written, undo];
 }
 
-/**
- * A store in process memory, for tests and examples. A transaction keeps a
- * log of what its own writes replaced and puts it back when the work fails,
- * so a refused transition leaves nothing behind here either, while a write
- * made outside the transaction meanwhile — a worker claiming an effect run,
- * an edit to another field of a record the transaction changed — survives
- * the rollback, as it would on a database. Unlike a database, a write
- * outside the transaction does not wait for it, and sees what it has not
- * committed yet.
- */
+/** Rows a second layer reads and writes through an open memory handle. */
 export interface MemoryRows {
   /** Adds a row, the way a create form or a seed would. */
   insertRecord(
@@ -156,6 +147,16 @@ export interface MemoryRows {
  */
 export interface MemoryTransaction extends LifecycleStore, MemoryRows {}
 
+/**
+ * A store in process memory, for tests and examples. A transaction keeps a
+ * log of what its own writes replaced and puts it back when the work fails,
+ * so a refused transition leaves nothing behind here either, while a write
+ * made outside the transaction meanwhile — a worker claiming an effect run,
+ * an edit to another field of a record the transaction changed — survives
+ * the rollback, as it would on a database. Unlike a database, a write
+ * outside the transaction does not wait for it, and sees what it has not
+ * committed yet.
+ */
 export class MemoryLifecycleStore implements LifecycleStore, MemoryRows {
   private state: MemoryState = {
     records: new Map(),
