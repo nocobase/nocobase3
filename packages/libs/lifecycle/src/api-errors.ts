@@ -44,6 +44,18 @@ export interface LifecycleApiErrorOptions {
    * `input.line`. Defaults to the body itself, as for a creation's values.
    */
   readonly inputField?: string;
+  /**
+   * The refusal was thrown by `continueRun()`: the operator asked for a
+   * waiting continuation to be tried, so nothing in the request is wrong
+   * and nobody's permission is in question. Every refusal is then a
+   * `FAILED_PRECONDITION` — the continuation cannot fire yet — with its code
+   * as `reason`, its blockers and problems in `metadata` and no field
+   * violations, except `NO_CONTINUATION`, `UNKNOWN_LIFECYCLE`,
+   * `RECORD_NOT_FOUND` and `CONFLICT`, which keep their usual status. Even a
+   * refusal that is the server's own fault, such as `INVALID_SET`, is
+   * answered this way, since the run waits for it to be fixed.
+   */
+  readonly continuation?: boolean;
 }
 
 const STATUSES: Readonly<
@@ -81,6 +93,15 @@ function statusOf(error: LifecycleError): LifecycleApiStatus | undefined {
   return STATUSES[error.code];
 }
 
+/** The refusals of `continueRun()` that keep their usual status. */
+const CONTINUATION_OWN: ReadonlySet<LifecycleErrorCode> =
+  new Set<LifecycleErrorCode>([
+    'NO_CONTINUATION',
+    'UNKNOWN_LIFECYCLE',
+    'RECORD_NOT_FOUND',
+    'CONFLICT',
+  ]);
+
 /** The body field a refusal is about, when it is one field of the request. */
 const FIELDS: Readonly<Partial<Record<LifecycleErrorCode, string>>> =
   Object.freeze({
@@ -104,11 +125,20 @@ const FIELDS: Readonly<Partial<Record<LifecycleErrorCode, string>>> =
  * | `GUARD_REJECTED` whose blockers are all `precondition`                          | `FAILED_PRECONDITION` |
  * | `INVALID_STATE`, `UNKNOWN_EFFECT`, `RUN_SETTLED`, `NO_CONTINUATION`             | `FAILED_PRECONDITION` |
  * | `CONFLICT`                                                                      | `ABORTED`             |
+ *
+ * With `continuation`, see {@link LifecycleApiErrorOptions.continuation}.
  */
 export function lifecycleErrorFields(
   error: LifecycleError,
   options: LifecycleApiErrorOptions = {},
 ): LifecycleApiErrorFields | undefined {
+  if (options.continuation && !CONTINUATION_OWN.has(error.code))
+    return {
+      status: 'FAILED_PRECONDITION',
+      reason: error.code,
+      message: error.message,
+      metadata: { blockers: error.blockers, problems: error.problems },
+    };
   const status = statusOf(error);
   if (!status) return undefined;
   const at = (field: string): string =>

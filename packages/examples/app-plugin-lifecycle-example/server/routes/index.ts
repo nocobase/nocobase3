@@ -259,7 +259,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
           404: apiErrorResponse(404),
           409: apiErrorResponse(
             409,
-            'The report changed while it was edited (`EXPENSE_CHANGED`).',
+            'Concurrent changes kept winning; the edit was reapplied and gave up (`EXPENSE_CHANGED`).',
           ),
           500: apiErrorResponse(500),
         },

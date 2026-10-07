@@ -4,7 +4,11 @@ import {
 } from '@nocobase/app-plugin-authentication';
 import { createAppPaths } from '@nocobase/app-server/config';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
-import { LifecycleRuntime, MemoryLifecycleStore } from '@nocobase/lifecycle';
+import {
+  LifecycleError,
+  LifecycleRuntime,
+  MemoryLifecycleStore,
+} from '@nocobase/lifecycle';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
@@ -386,6 +390,7 @@ describe('lifecycle example routes', () => {
         attempts: 1,
         failedAt: '2026-10-01T09:00:00.000Z',
         dueAt: '2026-10-01T09:01:00.000Z',
+        abandonedAt: null,
       },
     });
     const continuePath = `/lifecycleExample/expenses/3/effectRuns/${run.id}/continue?actAs=lin`;
@@ -424,6 +429,88 @@ describe('lifecycle example routes', () => {
     expect(elsewhere.status).toBe(404);
     await expect(elsewhere.json()).resolves.toMatchObject({
       error: { reason: 'EFFECT_RUN_NOT_FOUND' },
+    });
+  });
+
+  it('answers a continuation refused again as a failed precondition with its own code', async () => {
+    const { app, store, service } = application(allow);
+    const router = await apiRoutes.createRouter(app);
+    /** A succeeded payment run on report 1 whose continuation waits. */
+    const waiting = (transition: string) =>
+      store.createEffectRun({
+        transitionId: '0',
+        lifecycle: 'expenses',
+        recordId: '1',
+        effect: 'expenses.requestPayment',
+        status: 'succeeded',
+        attempts: 1,
+        maxAttempts: 3,
+        result: { paymentRef: 'PAY-1' },
+        error: null,
+        createdAt: '2026-10-01T09:00:00.000Z',
+        updatedAt: '2026-10-01T09:00:00.000Z',
+        claimedAt: null,
+        runAfter: null,
+        continuation: {
+          transition,
+          outcome: 'succeeded',
+          input: { paymentRef: 'PAY-1' },
+          error: 'Refused.',
+          code: 'GUARD_REJECTED',
+          attempts: 1,
+          failedAt: '2026-10-01T09:00:00.000Z',
+          dueAt: '2026-10-01T09:01:00.000Z',
+          abandonedAt: null,
+        },
+      });
+    const answer = async (runId: string) => {
+      const response = await router.request(
+        post(
+          `/lifecycleExample/expenses/1/effectRuns/${runId}/continue?actAs=lin`,
+          {},
+        ),
+      );
+      return {
+        status: response.status,
+        body: (await response.json()) as {
+          error: {
+            status: string;
+            reason: string;
+            details?: { fieldViolations?: unknown }[];
+            metadata?: unknown;
+          };
+        },
+      };
+    };
+
+    // Not in this release's definition: not a field of this request.
+    const unknown = await answer((await waiting('settle')).id);
+    expect(unknown.status).toBe(400);
+    expect(unknown.body.error).toMatchObject({
+      status: 'FAILED_PRECONDITION',
+      reason: 'UNKNOWN_TRANSITION',
+    });
+    expect(JSON.stringify(unknown.body)).not.toContain('fieldViolations');
+
+    // The system may not approve: the continuation's guard, not the persona's permission.
+    const guarded = await answer((await waiting('approve')).id);
+    expect(guarded.status).toBe(400);
+    expect(guarded.body.error).toMatchObject({
+      status: 'FAILED_PRECONDITION',
+      reason: 'GUARD_REJECTED',
+    });
+    expect(JSON.stringify(guarded.body)).toContain('approverOnly');
+
+    // A definition bug is what the run waits on, not an opaque 500.
+    const buggy = await waiting('paid');
+    vi.spyOn(service.runtime, 'continueRun').mockRejectedValueOnce(
+      new LifecycleError('INVALID_SET', 'May not set "status".'),
+    );
+    const invalid = await answer(buggy.id);
+    expect(invalid.status).toBe(400);
+    expect(invalid.body.error).toMatchObject({
+      status: 'FAILED_PRECONDITION',
+      reason: 'INVALID_SET',
     });
   });
 

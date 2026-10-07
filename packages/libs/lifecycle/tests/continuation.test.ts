@@ -96,6 +96,8 @@ const tasks: Lifecycle<TaskTypes> = defineLifecycle<TaskTypes>({
   states: ['todo', 'working', { name: 'done', final: true }],
   transitions: {
     start: { from: 'todo', to: 'working', effects: [work] },
+    // Sent back to be started over: a new stay in `working` later.
+    reset: { from: 'working', to: 'todo' },
     // The last task moves its order on, in the same commit.
     finish: {
       from: 'working',
@@ -516,7 +518,7 @@ describe('a trigger refused on a sweep', () => {
     expect(logger.error).not.toHaveBeenCalled();
   });
 
-  it('says so on every sweep when a lifecycle call in its onTransition is refused', async () => {
+  it('says so on the 1st, 2nd, 4th… sweep when a lifecycle call in its onTransition is refused', async () => {
     const { logger, runtime, store, reminder } = sweepSetup({
       from: 'waiting',
       to: 'expired',
@@ -528,19 +530,158 @@ describe('a trigger refused on a sweep', () => {
           })
           .then(() => undefined),
     });
-    for (let sweep = 0; sweep < 2; sweep += 1)
+    for (let sweep = 0; sweep < 5; sweep += 1)
       await expect(runtime.runTriggers()).resolves.toBe(0);
     expect(store.record('reminders', reminder.id)?.status).toBe('waiting');
-    expect(logger.warn).toHaveBeenCalledTimes(2);
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.stringContaining('The order is blocked.'),
-      {
+    // Not on every sweep: a blocked parent may stay blocked for days.
+    expect(logger.warn.mock.calls.map(([, details]) => details)).toEqual(
+      [1, 2, 4].map((sweeps) => ({
         lifecycle: 'reminders',
         recordId: String(reminder.id),
         transition: 'expire',
         code: 'GUARD_REJECTED',
-      },
+        sweeps,
+      })),
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('The order is blocked.'),
+      expect.anything(),
     );
     expect(logger.error).not.toHaveBeenCalled();
+  });
+
+  it('counts again from the first sweep once the refusal changes', async () => {
+    const { logger, runtime, store, reminder } = sweepSetup({
+      from: 'waiting',
+      to: 'expired',
+      onTransition: ({ record, tx }) =>
+        tx
+          .fire('orders', String(record.orderId), 'complete', {
+            actor: SYSTEM_ACTOR,
+          })
+          .then(() => undefined),
+    });
+    for (let sweep = 0; sweep < 3; sweep += 1) await runtime.runTriggers();
+    expect(logger.warn).toHaveBeenCalledTimes(2);
+    // The order is gone now: another refusal, said at once.
+    const order = store.record('orders', String(reminder.orderId));
+    store.patchRecord('orders', String(order?.id), { status: 'closed' });
+    await runtime.runTriggers();
+    expect(logger.warn).toHaveBeenCalledTimes(3);
+    expect(logger.warn).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.objectContaining({ code: 'INVALID_STATE', sweeps: 1 }),
+    );
+  });
+});
+
+describe('a continuation bound to the stay its run was queued for', () => {
+  /** Sends the task back and starts it again: the same state, a new stay. */
+  async function startOver(context: ReturnType<typeof setup>): Promise<string> {
+    await context.runtime.fire('tasks', context.task.id, 'reset', {
+      actor: SYSTEM_ACTOR,
+    });
+    const again = await context.runtime.fire(
+      'tasks',
+      context.task.id,
+      'start',
+      { actor: SYSTEM_ACTOR },
+    );
+    return again.effectRuns[0].id;
+  }
+
+  it('is not used for a new stay in the same state once the record left and came back', async () => {
+    const context = setup();
+    context.store.patchRecord('orders', context.order.id, { blocked: true });
+    const runId = await startWork(context);
+    await context.runtime.runEffect(runId);
+    expect(await context.store.findEffectRun(runId)).toMatchObject({
+      continuation: { transition: 'finish', code: 'GUARD_REJECTED' },
+    });
+
+    // Sent back and submitted again: in `working` again, for a new round
+    // whose own work has not been done yet.
+    const second = await startOver(context);
+    context.store.patchRecord('orders', context.order.id, { blocked: false });
+    context.clock.now = new Date(context.clock.now.getTime() + 60_000);
+    context.trace.length = 0;
+    await expect(context.runtime.reclaim()).resolves.toBe(0);
+
+    // The old outcome did not finish the new round, and nothing waits on it.
+    expect(context.store.record('tasks', context.task.id)?.status).toBe(
+      'working',
+    );
+    expect(context.store.record('orders', context.order.id)?.status).toBe(
+      'open',
+    );
+    expect(await context.store.findEffectRun(runId)).toMatchObject({
+      status: 'succeeded',
+      continuation: null,
+    });
+    expect(context.trace).toEqual([]);
+    expect(context.logger.warn).toHaveBeenLastCalledWith(
+      expect.stringContaining('no longer continues with "finish"'),
+      expect.objectContaining({ runId, code: 'INVALID_STATE' }),
+    );
+    // The new round's own run continues it.
+    await context.runtime.runEffect(second);
+    expect(context.store.record('tasks', context.task.id)?.status).toBe('done');
+  });
+
+  it('is refused by continueRun() with INVALID_STATE, and dropped', async () => {
+    const context = setup();
+    context.store.patchRecord('orders', context.order.id, { blocked: true });
+    const runId = await startWork(context);
+    await context.runtime.runEffect(runId);
+    await startOver(context);
+    context.store.patchRecord('orders', context.order.id, { blocked: false });
+
+    const refused = await context.runtime.continueRun(runId).then(
+      () => undefined,
+      (error: unknown) => error as LifecycleError,
+    );
+    expect(refused).toMatchObject({ code: 'INVALID_STATE' });
+    expect(refused?.message).toContain('has moved on with "start"');
+    expect(context.store.record('tasks', context.task.id)?.status).toBe(
+      'working',
+    );
+    expect(await context.store.findEffectRun(runId)).toMatchObject({
+      continuation: null,
+    });
+  });
+
+  it('does not continue a record that left and came back while the effect ran', async () => {
+    const context = setup();
+    const runId = await startWork(context);
+    const second = await startOver(context);
+
+    await expect(context.runtime.runEffect(runId)).resolves.toMatchObject({
+      status: 'succeeded',
+      continuation: null,
+    });
+    expect(context.store.record('tasks', context.task.id)?.status).toBe(
+      'working',
+    );
+    expect(context.logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('could not continue with "finish"'),
+      expect.objectContaining({ runId, code: 'INVALID_STATE' }),
+    );
+    await context.runtime.runEffect(second);
+    expect(context.store.record('tasks', context.task.id)?.status).toBe('done');
+  });
+
+  it('still continues after an edit that only advanced the version', async () => {
+    const context = setup();
+    context.store.patchRecord('orders', context.order.id, { blocked: true });
+    const runId = await startWork(context);
+    await context.runtime.runEffect(runId);
+    // An edit form advances the version without a transition.
+    context.store.patchRecord('tasks', context.task.id, {
+      lifecycleVersion: 7,
+    });
+    context.store.patchRecord('orders', context.order.id, { blocked: false });
+    context.clock.now = new Date(context.clock.now.getTime() + 60_000);
+    await expect(context.runtime.reclaim()).resolves.toBe(1);
+    expect(context.store.record('tasks', context.task.id)?.status).toBe('done');
   });
 });

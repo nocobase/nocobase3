@@ -63,10 +63,13 @@ export interface EffectRun {
   /**
    * The transition the run's outcome still has to fire, or null when there
    * is none. Set when the effect's `onSuccess` or `onFailure` was refused
-   * for a reason a deploy or a definition change can remove, such as
+   * for a reason time or a deploy can remove — most often a lifecycle call
+   * in its `onTransition` or a hook that was refused, such as a parent not
+   * ready to move, or a definition this process does not have yet, such as
    * `UNKNOWN_TRANSITION` or `INVALID_SET`: the outcome is recorded and the
    * effect never runs again, while `reclaim()` and `continueRun()` try the
-   * continuation again until it fires or the record moves on.
+   * continuation again until it fires, the record moves on, or the sweep
+   * gives up on it (see {@link PendingContinuation.abandonedAt}).
    */
   readonly continuation: PendingContinuation | null;
 }
@@ -81,9 +84,12 @@ export interface PendingContinuation {
   readonly input: JsonObject;
   /** Why the last try was refused. */
   readonly error: string;
-  /** The `LifecycleError` code of that refusal. */
+  /**
+   * The `LifecycleError` code of that refusal, or `ERROR` for an exception
+   * that was not one.
+   */
   readonly code: string;
-  /** How many times it has been tried. */
+  /** How many times it has been tried; a `CONFLICT` does not count. */
   readonly attempts: number;
   /** When the last try was refused. */
   readonly failedAt: string;
@@ -92,6 +98,25 @@ export interface PendingContinuation {
    * with `attempts`. `continueRun()` does not wait for it.
    */
   readonly dueAt: string;
+  /**
+   * When the sweep gave up on it, after `continuations.maxAttempts` tries,
+   * or null while it waits. A continuation given up on is never tried by
+   * the sweep again and no longer keeps `prune()` from deleting its run;
+   * `continueRun()` still tries it, and clears it once it fires.
+   */
+  readonly abandonedAt: string | null;
+}
+
+/**
+ * When the sweep is due to try a run's continuation: its `dueAt` while it
+ * waits, and null when the run has none or it was given up on. A store
+ * keeps it where a query and a conditional write can compare it, such as
+ * the Repository store's `continuationDueAt` column.
+ */
+export function waitingDueAt(
+  continuation: PendingContinuation | null,
+): string | null {
+  return continuation && !continuation.abandonedAt ? continuation.dueAt : null;
 }
 
 export type NewTransitionEntry = Omit<TransitionEntry, 'id'>;
@@ -139,6 +164,14 @@ export interface RecordCondition {
 export interface EffectRunCondition {
   readonly status: EffectRunStatus;
   readonly attempts?: number;
+  /**
+   * The run's waiting continuation must still be due at this instant, or,
+   * for null, none may wait (see {@link waitingDueAt}). A write that clears
+   * or rewrites a continuation names the one it read, so one acting on an
+   * older read — another sweep's, before that sweep's refusal pushed the due
+   * time back or dropped it — writes nothing.
+   */
+  readonly continuationDueAt?: string | null;
 }
 
 export interface EffectRunQuery {
@@ -149,7 +182,11 @@ export interface EffectRunQuery {
   readonly claimedBefore?: string;
   /** Runs last changed before this instant. */
   readonly updatedBefore?: string;
-  /** True for the runs with a pending continuation only, false for those without one. */
+  /**
+   * True for the runs whose continuation waits to be tried again, false for
+   * the others: those with none, and those whose continuation the sweep
+   * gave up on, which have one with `abandonedAt` set.
+   */
   readonly continuationPending?: boolean;
   /**
    * Only runs whose pending continuation is due at or before this instant,
@@ -161,8 +198,9 @@ export interface EffectRunQuery {
 }
 
 /**
- * Which finished runs `deleteEffectRuns` removes. A run with a pending
- * continuation is never removed: its outcome has yet to move the record.
+ * Which finished runs `deleteEffectRuns` removes. A run whose continuation
+ * waits is never removed: its outcome has yet to move the record. One whose
+ * continuation was given up on is removed as any other.
  */
 export interface EffectRunPruneQuery {
   readonly statuses: readonly EffectRunStatus[];
@@ -284,6 +322,6 @@ export interface LifecycleStore {
   ): Promise<boolean>;
   /** Oldest first. */
   listEffectRuns(query: EffectRunQuery): Promise<EffectRun[]>;
-  /** Removes finished runs without a pending continuation; returns how many. */
+  /** Removes finished runs without a waiting continuation; returns how many. */
   deleteEffectRuns(query: EffectRunPruneQuery): Promise<number>;
 }

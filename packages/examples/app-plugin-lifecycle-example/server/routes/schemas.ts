@@ -317,6 +317,10 @@ const Run: z.ZodType<EffectRun> = z
         attempts: z.number(),
         failedAt: z.iso.datetime(),
         dueAt: z.iso.datetime(),
+        abandonedAt: z.iso.datetime().nullable().meta({
+          description:
+            'When the sweep gave up on it after its last try; null while it waits. A continuation given up on is still tried by `continue`.',
+        }),
       })
       .nullable()
       .meta({

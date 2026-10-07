@@ -12,7 +12,7 @@ import type {
   TransactionOptions,
   TransitionEntry,
 } from './store.js';
-import { transitionRequestKey } from './store.js';
+import { transitionRequestKey, waitingDueAt } from './store.js';
 import type { LifecycleRecord, RecordId } from './types.js';
 
 /** The sweep order: oldest change first, then by id, as a database index would. */
@@ -32,6 +32,10 @@ function compareIds(a: RecordId, b: RecordId): number {
   const left = String(a);
   const right = String(b);
   return left === right ? 0 : left < right ? -1 : 1;
+}
+
+function isDueBy(dueAt: string | null, by: string): boolean {
+  return dueAt !== null && dueAt <= by;
 }
 
 interface MemoryState {
@@ -452,7 +456,9 @@ export class MemoryLifecycleStore implements LifecycleStore, MemoryRows {
       !current ||
       current.status !== condition.status ||
       (condition.attempts !== undefined &&
-        current.attempts !== condition.attempts)
+        current.attempts !== condition.attempts) ||
+      (condition.continuationDueAt !== undefined &&
+        waitingDueAt(current.continuation) !== condition.continuationDueAt)
     )
       return Promise.resolve(false);
     this.log(
@@ -478,15 +484,15 @@ export class MemoryLifecycleStore implements LifecycleStore, MemoryRows {
         (query.updatedBefore === undefined ||
           run.updatedAt < query.updatedBefore) &&
         (query.continuationPending === undefined ||
-          (run.continuation !== null) === query.continuationPending) &&
+          (waitingDueAt(run.continuation) !== null) ===
+            query.continuationPending) &&
         (query.continuationDueBy === undefined ||
-          (run.continuation !== null &&
-            run.continuation.dueAt <= query.continuationDueBy)),
+          isDueBy(waitingDueAt(run.continuation), query.continuationDueBy)),
     );
     if (query.continuationDueBy !== undefined)
       runs.sort((a, b) => {
-        const left = a.continuation?.dueAt ?? '';
-        const right = b.continuation?.dueAt ?? '';
+        const left = waitingDueAt(a.continuation) ?? '';
+        const right = waitingDueAt(b.continuation) ?? '';
         return left === right
           ? Number(a.id) - Number(b.id)
           : left < right
@@ -505,7 +511,7 @@ export class MemoryLifecycleStore implements LifecycleStore, MemoryRows {
       if (
         query.statuses.includes(run.status) &&
         run.updatedAt < query.updatedBefore &&
-        run.continuation === null
+        waitingDueAt(run.continuation) === null
       ) {
         this.log(write(this.state.effectRuns, id, undefined));
         deleted += 1;

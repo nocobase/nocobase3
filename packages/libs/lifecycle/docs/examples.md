@@ -878,7 +878,7 @@ Before deploying, check that every value already in `status` is a state of the d
 
 ### 23. An operations page
 
-An operator sees the failed and dead runs across all records, retries or cancels them, and old finished runs are pruned.
+An operator sees the failed and dead runs across all records, and the runs whose continuation waits, retries, continues or cancels them, and old finished runs are pruned.
 
 ```ts
 // The plugin's own route: the record routes only operate the runs of one record.
@@ -886,10 +886,15 @@ router.get(
   '/expenses/effectRuns',
   requireOperator, // the permission first, then the declaration and the validators
   describeRoute({ tags, summary: 'List effect runs', operationId: 'expensesListEffectRuns', responses }),
-  apiValidator('query', ListRunsQuery), // { status: 'failed' | 'dead' | 'queued', pageSize }
+  apiValidator('query', ListRunsQuery), // { status?: 'failed' | 'dead' | 'queued', waiting?: boolean, pageSize }
   async (c) => {
-    const { status, pageSize } = c.req.valid('query');
-    const runs = await runtime.listEffectRuns({ lifecycle: 'expenses', status, limit: pageSize });
+    const { status, waiting, pageSize } = c.req.valid('query');
+    const runs = await runtime.listEffectRuns({
+      lifecycle: 'expenses',
+      ...(status ? { status } : {}),
+      ...(waiting ? { continuationPending: true } : {}),
+      limit: pageSize,
+    });
     return c.json({ data: runs, meta: { total: runs.length } });
   },
 );
@@ -908,11 +913,22 @@ function FailedRuns() {
     <Row key={run.id}>
       {run.effect} · {run.error} · {run.attempts}/{run.maxAttempts}
       {run.registered ? null : <Badge>unknown effect</Badge>}
-      <Button
-        onClick={() => client.retryRun(run.lifecycle, run.recordId, run.id)}
-      >
-        Retry
-      </Button>
+      {run.continuation ? (
+        // Its outcome is recorded; what follows it waits. Retry would refuse.
+        <Button
+          onClick={() =>
+            client.continueRun(run.lifecycle, run.recordId, run.id)
+          }
+        >
+          Continue {run.continuation.transition}: {run.continuation.error}
+        </Button>
+      ) : (
+        <Button
+          onClick={() => client.retryRun(run.lifecycle, run.recordId, run.id)}
+        >
+          Retry
+        </Button>
+      )}
       <Button
         onClick={() => client.cancelRun(run.lifecycle, run.recordId, run.id)}
       >
@@ -923,7 +939,7 @@ function FailedRuns() {
 }
 ```
 
-Retry and cancel go through the record routes, behind the plugin's operator permission ([section 26](#26-permissions-on-the-record-routes)). A run marked `registered: false` names an effect this process does not know — usually a renamed effect — and `retryRun()` refuses it with `UNKNOWN_EFFECT`; register the old name again or cancel it. A `dead` run ended without recording an outcome on every attempt, typically because the process crashed in it: find out why before retrying. A retry grants a fresh budget of attempts and counts on from the ones before. A run whose `onFailure` already moved the record on is refused with `RUN_SETTLED`; recover through the record's transitions, or pass `{ force: true, reason }` to `client.retryRun()` when the failed attempts are known to have done nothing. A run whose `continuation` is set recorded its outcome but could not fire its `onSuccess` or `onFailure` as the running definition stands — a rolling deploy, or a bug in `set` — so the record has not moved: the sweep tries it again until it fires, and `runtime.continueRun(id)` tries it at once once the fix is deployed; it never runs the effect again.
+Retry, continue and cancel go through the record routes, behind the plugin's operator permission ([section 26](#26-permissions-on-the-record-routes)). A run marked `registered: false` names an effect this process does not know — usually a renamed effect: while it is queued, `retryRun()` refuses it with `INVALID_STATE`, as every queued run, and once it has failed, with `UNKNOWN_EFFECT`; register the old name again or cancel it. A `dead` run ended without recording an outcome on every attempt, typically because the process crashed in it: find out why before retrying. A retry grants a fresh budget of attempts and counts on from the ones before. A run whose `onFailure` already moved the record on is refused with `RUN_SETTLED`; recover through the record's transitions, or pass `{ force: true, reason }` to `client.retryRun()` when the failed attempts are known to have done nothing. A run whose `continuation` is set recorded its outcome but could not fire its `onSuccess` or `onFailure` yet, so the record has not moved. Most often a lifecycle call its `onTransition` or a hook made was refused — a parent not ready to move — and otherwise the running definition cannot fire it — a rolling deploy, or a bug in `set`. Such a run may be `succeeded`, so a page that lists only failed runs never shows it: list `continuationPending: true` as well, and offer Continue rather than Retry, which refuses a failed one with `RUN_SETTLED`. The sweep tries it again until it fires or the record moves on, and gives up after ten tries, marking it `abandonedAt`, which `continuationPending: true` no longer lists; `runtime.continueRun(id)` tries one at once, given up on or not, once the cause is fixed. It never runs the effect again.
 
 ### 24. Duplicate requests and stale pages
 
@@ -1149,6 +1165,6 @@ The kit covers definitions; the Repository store, migrations, routes and sweeps 
 
 ## From a recipe to a working plugin
 
-Create records with `runtime.create()` and change their state with `runtime.fire()`; keep the state, timestamp and version fields out of ordinary CRUD routes. Declare the business and log tables in a self-contained migration, mount the routes behind authentication and `authorize`, start `createLifecycleJobs()`, configure the page hook once with `createLifecycleHook()`, and test refusals and failures with the kit. The [guide's checklist](guide.md#before-going-live) covers what remains before going live.
+Create records with `runtime.create()` and change their state with `runtime.fire()`; keep the state and timestamp fields out of ordinary CRUD routes, and let an edit route touch the version only by incrementing it on the version it read, as [the guide](guide.md#advance-the-version-outside-the-lifecycle) describes. Declare the business and log tables in a self-contained migration, mount the routes behind authentication and `authorize`, start `createLifecycleJobs()`, configure the page hook once with `createLifecycleHook()`, and test refusals and failures with the kit. The [guide's checklist](guide.md#before-going-live) covers what remains before going live.
 
 For complete source, read [the help desk and expense plugin](../../../examples/app-plugin-lifecycle-example/README.md), starting with its `server/lifecycles/`, and [the office flows plugin](../../../examples/app-plugin-office-flows-example/README.md) for parent-child coordination, distribution and countersigning. They include the application helpers these recipes leave out.

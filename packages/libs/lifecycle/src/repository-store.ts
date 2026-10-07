@@ -23,7 +23,7 @@ import type {
   TransactionOptions,
   TransitionEntry,
 } from './store.js';
-import { transitionRequestKey } from './store.js';
+import { transitionRequestKey, waitingDueAt } from './store.js';
 import type {
   JsonObject,
   JsonValue,
@@ -173,8 +173,17 @@ function toContinuation(value: unknown): PendingContinuation | null {
   const stored = json<JsonValue>(value, null);
   if (typeof stored !== 'object' || stored === null || Array.isArray(stored))
     return null;
-  const { transition, outcome, input, error, code, attempts, failedAt, dueAt } =
-    stored;
+  const {
+    transition,
+    outcome,
+    input,
+    error,
+    code,
+    attempts,
+    failedAt,
+    dueAt,
+    abandonedAt,
+  } = stored;
   if (
     typeof transition !== 'string' ||
     (outcome !== 'succeeded' && outcome !== 'failed') ||
@@ -197,22 +206,23 @@ function toContinuation(value: unknown): PendingContinuation | null {
         : typeof failedAt === 'string'
           ? failedAt
           : '',
+    abandonedAt: typeof abandonedAt === 'string' ? abandonedAt : null,
   };
 }
 
 /**
  * The columns a run's continuation is written to: the continuation itself,
  * and `continuationDueAt`, its `dueAt` as a plain timestamp that is null
- * exactly when nothing is pending, so a query finds the pending runs, and
- * the due ones in the order they fell due, on every dialect without
- * filtering on JSON.
+ * exactly when nothing waits — no continuation, or one the sweep gave up on
+ * — so a query finds the waiting runs, and the due ones in the order they
+ * fell due, on every dialect without filtering on JSON.
  */
 function continuationColumns(
   continuation: PendingContinuation | null,
 ): Record<string, unknown> {
   return {
     continuation,
-    continuationDueAt: continuation?.dueAt ?? null,
+    continuationDueAt: waitingDueAt(continuation),
   };
 }
 
@@ -401,14 +411,26 @@ class RepositoryLifecycleStore implements LifecycleStore {
     condition: EffectRunCondition,
     changes: EffectRunChanges,
   ): Promise<boolean> {
+    const due = condition.continuationDueAt;
     const result = await this.repository(this.names.effectRuns).updateMany({
-      filter: {
-        id: key(id),
-        status: condition.status,
-        ...(condition.attempts === undefined
-          ? {}
-          : { attempts: condition.attempts }),
-      },
+      filter: (filter) =>
+        filter.and([
+          filter.number('id').eq(key(id)),
+          filter.string('status').eq(condition.status),
+          ...(condition.attempts === undefined
+            ? []
+            : [filter.number('attempts').eq(condition.attempts)]),
+          // A timestamp takes no equality filter of its own: equal is
+          // neither before nor after. Null means nothing waits.
+          ...(due === undefined
+            ? []
+            : due === null
+              ? [filter.date('continuationDueAt').empty()]
+              : [
+                  filter.date('continuationDueAt').notBefore(due),
+                  filter.date('continuationDueAt').notAfter(due),
+                ]),
+        ]),
       values: asRow({
         ...changes,
         ...(changes.continuation === undefined
@@ -477,7 +499,7 @@ class RepositoryLifecycleStore implements LifecycleStore {
             query.statuses.map((status) => filter.string('status').eq(status)),
           ),
           filter.date('updatedAt').before(query.updatedBefore),
-          // Its outcome has yet to move the record.
+          // Its outcome has yet to move the record, unless it was given up on.
           filter.date('continuationDueAt').empty(),
         ]),
     });
@@ -505,8 +527,9 @@ class RepositoryLifecycleStore implements LifecycleStore {
  *
  * Each effect run also stores `continuationDueAt`, a nullable `datetimeTz`
  * column alongside the nullable `continuation` (json): the `dueAt` of a
- * pending continuation, and null when there is none, which is how the sweep
- * finds the pending runs that are due without filtering on JSON.
+ * waiting continuation, and null when none waits, which is how the sweep
+ * finds the waiting runs that are due without filtering on JSON, and what a
+ * write that clears or rewrites a continuation is conditioned on.
  */
 export function createRepositoryLifecycleStore(
   database: DatabaseManager,

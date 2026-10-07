@@ -297,4 +297,64 @@ describe('a state hook that moves its own record on', () => {
     ]);
     expect(history.effectRuns.map((run) => run.effect)).toEqual(['enter.c']);
   });
+
+  it('carries on when a hook only advances the version, as a fence does', async () => {
+    const runtime = new LifecycleRuntime({
+      store: createRepositoryLifecycleStore(database),
+      clock: () => new Date('2026-10-01T09:00:00.000Z'),
+    });
+    const ran: string[] = [];
+    runtime.register(
+      defineLifecycle<{ record: LifecycleRecord; state: 'a' | 'b' | 'c' }>({
+        name: 'steps',
+        initial: 'a',
+        states: ['a', 'b', { name: 'c', final: true }],
+        transitions: {
+          start: { from: 'a', to: 'b' },
+          onward: { from: 'b', to: 'c' },
+        },
+        onEnterState: {
+          b: [
+            async ({ tx, record }) => {
+              await (tx.handle as DatabaseConnection)
+                .repository('steps')
+                .updateMany({
+                  filter: { id: Number(record.id) },
+                  values: {
+                    lifecycleVersion: Number(record.lifecycleVersion) + 1,
+                  },
+                });
+              ran.push('fence');
+            },
+            () => void ran.push('second'),
+          ],
+        },
+        onEnter: {
+          b: [
+            defineEffect({
+              name: 'enter.b',
+              run: () => void ran.push('effect:b'),
+            }),
+          ],
+        },
+      }),
+    );
+    const { record } = await runtime.create(
+      'steps',
+      {},
+      { actor: { id: 'lin' } },
+    );
+
+    const fired = await runtime.fire('steps', record.id, 'start', {
+      actor: { id: 'lin' },
+    });
+
+    expect(ran).toEqual(['fence', 'second', 'effect:b']);
+    expect(fired.record).toMatchObject({ status: 'b' });
+    expect(fired.effectRuns.map((run) => run.effect)).toEqual(['enter.b']);
+    const stored = await database
+      .repository('steps')
+      .findOne({ filter: { id: Number(record.id) } });
+    expect(Number(stored?.lifecycleVersion)).toBe(3);
+  });
 });

@@ -24,15 +24,17 @@ import {
   versionOf,
   type ExtraGuard,
 } from './plan.js';
-import type {
-  EffectRun,
-  EffectRunChanges,
-  EffectRunQuery,
-  IdleRecordCursor,
-  LifecycleStore,
-  PendingContinuation,
-  TransactionOptions,
-  TransitionEntry,
+import {
+  waitingDueAt,
+  type EffectRun,
+  type EffectRunChanges,
+  type EffectRunCondition,
+  type EffectRunQuery,
+  type IdleRecordCursor,
+  type LifecycleStore,
+  type PendingContinuation,
+  type TransactionOptions,
+  type TransitionEntry,
 } from './store.js';
 import {
   SYSTEM_ACTOR,
@@ -85,7 +87,9 @@ export interface LifecycleRuntimeOptions {
  * How the sweep retries waiting continuations. After the n-th refused try a
  * continuation waits `backoffMs × factor^(n-1)`, capped at `maxMs`, before
  * the sweep tries it again, and each sweep tries at most `batchSize` of the
- * due ones, those due longest first.
+ * due ones, those due longest first. A `CONFLICT` is not counted and is
+ * tried again after `backoffMs`. After `maxAttempts` counted tries the sweep
+ * gives up on it: see {@link PendingContinuation.abandonedAt}.
  */
 export interface ContinuationSweepOptions {
   /** Defaults to 100. */
@@ -96,6 +100,8 @@ export interface ContinuationSweepOptions {
   readonly factor?: number;
   /** Defaults to an hour. */
   readonly maxMs?: number;
+  /** Defaults to 10, which the default backoff reaches after about four hours. */
+  readonly maxAttempts?: number;
 }
 
 /**
@@ -180,10 +186,11 @@ export interface EffectRunView extends EffectRun {
 
 export interface RetryRunOptions {
   /**
-   * Retry even though the run's `onFailure` has already moved the record on.
-   * Only when it is known that the failed attempts had no effect: a payment
-   * the provider confirms was never made. A success then still continues
-   * only if the record's state allows `onSuccess`.
+   * Retry even though the run's `onFailure` has already moved the record on,
+   * or its continuation still waits to, which is then dropped. Only when it
+   * is known that the failed attempts had no effect: a payment the provider
+   * confirms was never made. A success then still continues only if the
+   * record's state allows `onSuccess`.
    */
   readonly force?: boolean;
   /** Why the retry was forced, for the log. */
@@ -417,6 +424,15 @@ function continuationKey(
   return `$run:${runId}:${outcome}`;
 }
 
+const CONFLICTS: ReadonlySet<LifecycleErrorCode> = new Set<LifecycleErrorCode>([
+  'CONFLICT',
+]);
+
+/** A trigger on a record, as its refusals are counted. */
+function triggerKey(lifecycle: string, trigger: string, id: RecordId): string {
+  return JSON.stringify([lifecycle, trigger, String(id)]);
+}
+
 /** What a sweep expects when another sweep or a person got there first. */
 const RACED: ReadonlySet<LifecycleErrorCode> = new Set<LifecycleErrorCode>([
   ...MOVED_ON,
@@ -447,27 +463,50 @@ function isLogworthy(attempts: number): boolean {
   return attempts > 0 && (attempts & (attempts - 1)) === 0;
 }
 
-/** How one try of a pending continuation ended, short of a conflict or an outage, which throw. */
+/** How one try of a pending continuation ended. */
 type ContinuationTry =
   /** It fired, or its log entry shows it already had. */
   | { readonly kind: 'continued' }
-  /** The record moved on: the continuation is dropped. */
+  /** The record moved on, or left the stay the run served: the continuation is dropped. */
   | { readonly kind: 'movedOn'; readonly error: LifecycleError }
-  /** Refused again for a reason a deploy can remove: it stays pending. */
+  /**
+   * Refused again for a reason time or a deploy can remove — or undone as a
+   * whole by a `CONFLICT` or an error that is not a refusal — and kept as
+   * `continuation` says, unless the run changed meanwhile and nothing was
+   * `recorded`.
+   */
   | {
       readonly kind: 'refused';
-      readonly error: LifecycleError;
+      readonly error: unknown;
       readonly previous: PendingContinuation;
-      readonly attempts: number;
+      readonly continuation: PendingContinuation;
+      readonly recorded: boolean;
     }
   /** The run changed since it was read — retried, or continued elsewhere. */
   | { readonly kind: 'changed' };
+
+/** The code a continuation keeps for an exception that was not a refusal. */
+const CONTINUATION_ERROR = 'ERROR';
+
+/** How many trigger refusals raised inside a transition are counted at once, for the log. */
+const TRIGGER_REFUSALS_KEPT = 1000;
 
 function isRefusal(
   error: unknown,
   codes: ReadonlySet<LifecycleErrorCode>,
 ): error is LifecycleError {
   return error instanceof LifecycleError && codes.has(error.code);
+}
+
+function isObject(value: unknown): value is object {
+  return (
+    (typeof value === 'object' && value !== null) || typeof value === 'function'
+  );
+}
+
+/** A record of a lifecycle, as the transitions a transaction made are noted. */
+function moveKey(lifecycle: string, id: RecordId): string {
+  return JSON.stringify([lifecycle, String(id)]);
 }
 
 function joining(transaction: unknown): TransactionOptions | undefined {
@@ -507,6 +546,21 @@ export class LifecycleRuntime {
   private readonly subscriptions: Subscription[] = [];
   /** Attempts running in this process, so `cancelRun()` can abort them. */
   private readonly attempts = new Map<string, AbortController>();
+  /**
+   * The records each running transition's transaction moved on, by the
+   * transaction's handle: what a hook fired through `tx`, or through a
+   * lifecycle call given that handle as its `transaction`. See `runSteps()`.
+   */
+  private readonly moves = new WeakMap<object, Set<string>>();
+  /**
+   * How many sweeps in a row a trigger was refused on a record by a
+   * lifecycle call inside its transition, and with which code, so the log
+   * says so on the 1st, 2nd, 4th… sweep. Bounded: the oldest are forgotten.
+   */
+  private readonly triggerRefusals = new Map<
+    string,
+    { readonly code: string; readonly count: number }
+  >();
 
   public constructor(options: LifecycleRuntimeOptions) {
     this.store = options.store;
@@ -520,6 +574,7 @@ export class LifecycleRuntime {
       backoffMs: options.continuations?.backoffMs ?? 60_000,
       factor: options.continuations?.factor ?? 2,
       maxMs: options.continuations?.maxMs ?? 3_600_000,
+      maxAttempts: options.continuations?.maxAttempts ?? 10,
     };
   }
 
@@ -610,7 +665,9 @@ export class LifecycleRuntime {
     const registered = this.get(name);
     checkRequestId(options.requestId);
     const now = this.clock();
-    return this.store.transaction(async (store) => {
+    const inner: { handle?: unknown } = {};
+    const result = await this.store.transaction(async (store) => {
+      inner.handle = store.transactionHandle;
       const outcome: { decided?: Decision } = {};
       // Registered before deciding, so after the commit this transition is
       // told about before anything its onTransition started.
@@ -630,6 +687,12 @@ export class LifecycleRuntime {
       );
       return outcome.decided.result;
     }, joining(options.transaction));
+    this.noteMoves(
+      options.transaction,
+      inner.handle,
+      result.replayed ? undefined : moveKey(name, id),
+    );
+    return result;
   }
 
   /** Runs work on the store; each tx call nests as a savepoint. */
@@ -679,19 +742,27 @@ export class LifecycleRuntime {
   }
 
   /**
-   * Runs a transition's hooks in order and, after each, reads the record
-   * again: a hook may have fired it onward through `tx`. Returns the record
-   * as it then is once it is no longer at `version`, without running the
-   * steps after that one; undefined when every step ran and it is still at
-   * `version`. A transition without hooks reads nothing.
+   * Runs a transition's hooks in order. A hook has moved the record on once
+   * a lifecycle call it made on this transaction — `tx.fire()`, or a call
+   * given its handle as `transaction` — completed a transition of this
+   * lifecycle on this record, directly or through the calls that one made in
+   * turn. Returns the record as it then is, read once, without running the
+   * steps after that one; undefined when every step ran without moving it.
+   * Only transitions count: a hook that advances the version itself, as a
+   * fence or an edit does, or that fires another lifecycle sharing the
+   * record's version field, has not moved this lifecycle's record on.
    */
   private async runSteps(
     store: LifecycleStore,
     lifecycle: Lifecycle<LifecycleTypes>,
     id: RecordId,
-    version: number,
     steps: readonly Step[],
   ): Promise<LifecycleRecord | undefined> {
+    if (!steps.length) return undefined;
+    const handle = store.transactionHandle;
+    const moved = new Set<string>();
+    if (isObject(handle)) this.moves.set(handle, moved);
+    const key = moveKey(lifecycle.name, id);
     for (const step of steps) {
       try {
         await step();
@@ -699,10 +770,28 @@ export class LifecycleRuntime {
         if (error instanceof LifecycleError) raisedInStep.add(error);
         throw error;
       }
-      const found = await store.findRecord(lifecycle.collection, id);
-      if (found && versionOf(lifecycle, found) !== version) return found;
+      if (moved.has(key)) return store.findRecord(lifecycle.collection, id);
     }
     return undefined;
+  }
+
+  /**
+   * After a lifecycle call joined `outer` and committed into it: what it
+   * moved — `key`, its own record, unless it moved nothing — and what the
+   * calls made inside it moved, are told to the transition running on
+   * `outer`, if one is. A call refused or rolled back never gets here.
+   */
+  private noteMoves(
+    outer: unknown,
+    inner: unknown,
+    key: string | undefined,
+  ): void {
+    if (!isObject(outer)) return;
+    const log = this.moves.get(outer);
+    if (!log) return;
+    if (key !== undefined) log.add(key);
+    const nested = isObject(inner) ? this.moves.get(inner) : undefined;
+    if (nested) for (const each of nested) log.add(each);
   }
 
   /**
@@ -875,7 +964,9 @@ export class LifecycleRuntime {
         );
     const now = this.clock();
     const at = now.toISOString();
-    return this.store.transaction(async (store) => {
+    const inner: { handle?: unknown } = {};
+    const result = await this.store.transaction(async (store) => {
+      inner.handle = store.transactionHandle;
       await checkCreation(lifecycle, {
         values,
         state,
@@ -935,7 +1026,6 @@ export class LifecycleRuntime {
         store,
         lifecycle,
         record.id,
-        1,
         hooks.map(
           (hook): Step =>
             () =>
@@ -965,6 +1055,9 @@ export class LifecycleRuntime {
       outcome.created = created;
       return created.result;
     }, joining(options.transaction));
+    // A creation moves no record that existed, but its hooks may have.
+    this.noteMoves(options.transaction, inner.handle, undefined);
+    return result;
   }
 
   /** The names of the registered lifecycles. */
@@ -1190,6 +1283,17 @@ export class LifecycleRuntime {
         );
         if (!recorded) return undefined;
         if (next === undefined) return null;
+        // The outcome belongs to the stay the run was queued for. A record
+        // that has left it since — even to return to the same state — is in
+        // a stay this outcome knows nothing about.
+        const ended = await this.stayEnded(store, registered, run);
+        if (ended) {
+          this.logger.warn(
+            `Effect "${run.effect}" could not continue with "${next}": ${ended.message}`,
+            { runId, code: ended.code },
+          );
+          return null;
+        }
         const continued: { decided?: Decision } = {};
         // Registered before deciding, as fire() does, so after the commit
         // the continuation is told about before anything its onTransition
@@ -1244,22 +1348,28 @@ export class LifecycleRuntime {
           const waits = `${message}. The outcome is recorded and the continuation is tried again by the sweep.`;
           if (nested) this.logger.warn(waits, { runId, code: error.code });
           else this.logger.error(waits, { runId, code: error.code, error });
+          const waiting = this.refusedContinuation(
+            {
+              transition: next,
+              outcome: status,
+              input,
+              error: '',
+              code: '',
+              attempts: 0,
+              failedAt: finishedAt,
+              dueAt: finishedAt,
+              abandonedAt: null,
+            },
+            error,
+            finishedAt,
+            true,
+          );
           await store.updateEffectRun(
             runId,
             { status, attempts: attempt },
-            {
-              continuation: {
-                transition: next,
-                outcome: status,
-                input,
-                error: error.message,
-                code: error.code,
-                attempts: 1,
-                failedAt: finishedAt,
-                dueAt: this.continuationDue(finishedAt, 1),
-              },
-            },
+            { continuation: waiting },
           );
+          if (waiting.abandonedAt) this.gaveUp(runId, waiting);
           return null;
         }
       });
@@ -1325,9 +1435,10 @@ export class LifecycleRuntime {
    * effect. The attempt count goes on from where it was: an earlier attempt
    * still finishing somewhere cannot pass for a new one.
    *
-   * A failed run whose `onFailure` is still pending is refused the same
-   * way, since its continuation is due to move the record on: continue it
-   * with `continueRun()`, or retry it with `force`, which drops it.
+   * A failed run whose `onFailure` is still pending, or was given up on by
+   * the sweep, is refused the same way, since its continuation is due to
+   * move the record on: continue it with `continueRun()`, or retry it with
+   * `force`, which drops it.
    *
    * Those are the only settled runs it refuses; it also refuses a run that
    * is not failed, dead or cancelled with `INVALID_STATE`, and one whose
@@ -1377,14 +1488,24 @@ export class LifecycleRuntime {
         'RUN_SETTLED',
         `Effect run "${runId}" is to move the record on with "${continuation.transition}", which is waiting to be tried again; continue it with continueRun(), or retry with force once its attempts are known to have had no effect.`,
       );
-    if (continued ?? continuation)
+    if (continued)
       this.logger.warn(
-        `Effect run "${runId}" is retried by force although "${(continued ?? continuation)?.transition ?? ''}" already followed from it.`,
+        `Effect run "${runId}" is retried by force although "${continued.transition}" already followed from it.`,
+        { runId, reason: options.reason ?? null },
+      );
+    else if (continuation)
+      this.logger.warn(
+        `Effect run "${runId}" is retried by force; the continuation "${continuation.transition}" it owed had not run and is dropped.`,
         { runId, reason: options.reason ?? null },
       );
     const reset = await this.store.updateEffectRun(
       runId,
-      { status: run.status, attempts: run.attempts },
+      {
+        status: run.status,
+        attempts: run.attempts,
+        // Not if a sweep tried the continuation meanwhile.
+        continuationDueAt: waitingDueAt(continuation),
+      },
       {
         status: 'queued',
         maxAttempts: run.attempts + (effect.retry?.attempts ?? 1),
@@ -1402,28 +1523,33 @@ export class LifecycleRuntime {
   /**
    * Tries a run's pending continuation once, now, rather than waiting for
    * the next `reclaim()`: once the deploy or the definition fix that it
-   * waited for is live. Returns the run as it then is, its continuation
-   * cleared, or undefined when there is no such run. The effect never runs
-   * again. A refusal is thrown as the `LifecycleError` it is: one saying the
-   * record moved on (`RECORD_NOT_FOUND`, `INVALID_STATE`, `GUARD_REJECTED`)
-   * also drops the continuation, any other leaves it pending with the new
-   * error, and a `CONFLICT` or a failing store leaves it as it was. A run
-   * with nothing pending is refused with `NO_CONTINUATION`, and one whose
-   * effect this process does not know with `UNKNOWN_EFFECT`.
+   * waited for is live, or once the sweep has given up on it. Returns the
+   * run as it then is, its continuation cleared, or undefined when there is
+   * no such run. The effect never runs again, and the effect need not be
+   * known here, only its lifecycle. A refusal is thrown as the error it is:
+   * one saying the record moved on (`RECORD_NOT_FOUND`, `INVALID_STATE`,
+   * `GUARD_REJECTED`) also drops the continuation, and so does
+   * `INVALID_STATE` when the record has left the stay the run was queued
+   * for, even to enter the same state again; any other refusal, or an error
+   * that is not one, leaves it pending with the new error and counts the
+   * try, a `CONFLICT` without counting it, and a continuation the sweep gave
+   * up on stays given up on. A run with nothing pending is refused with
+   * `NO_CONTINUATION`, and one whose lifecycle this process does not know
+   * with `UNKNOWN_LIFECYCLE`.
    */
   public async continueRun(runId: string): Promise<EffectRun | undefined> {
     const run = await this.store.findEffectRun(runId);
     if (!run) return undefined;
-    const registered = this.lifecycles.get(run.lifecycle);
     if (!run.continuation)
       throw new LifecycleError(
         'NO_CONTINUATION',
         `Effect run "${runId}" has no continuation waiting to be tried again.`,
       );
-    if (!registered || !this.knows(run))
+    const registered = this.lifecycles.get(run.lifecycle);
+    if (!registered)
       throw new LifecycleError(
-        'UNKNOWN_EFFECT',
-        `Effect run "${runId}" names "${run.lifecycle}/${run.effect}", which is not registered here.`,
+        'UNKNOWN_LIFECYCLE',
+        `Effect run "${runId}" belongs to lifecycle "${run.lifecycle}", which is not registered here.`,
       );
     const tried = await this.tryContinuation(run, registered);
     if (tried.kind === 'movedOn') {
@@ -1433,7 +1559,15 @@ export class LifecycleRuntime {
       );
       throw tried.error;
     }
-    if (tried.kind === 'refused') throw tried.error;
+    if (tried.kind === 'refused') {
+      if (
+        tried.recorded &&
+        tried.continuation.abandonedAt &&
+        !tried.previous.abandonedAt
+      )
+        this.gaveUp(runId, tried.continuation);
+      throw tried.error;
+    }
     return this.store.findEffectRun(runId);
   }
 
@@ -1465,7 +1599,11 @@ export class LifecycleRuntime {
     return this.store.findEffectRun(runId);
   }
 
-  /** Deletes finished runs last changed before `olderThan`; returns how many. */
+  /**
+   * Deletes finished runs last changed before `olderThan`; returns how many.
+   * A run whose continuation waits is kept; one whose continuation the
+   * sweep gave up on is deleted as any other run of its status.
+   */
   public prune(options: PruneOptions): Promise<number> {
     const olderThan =
       typeof options.olderThan === 'string'
@@ -1519,6 +1657,9 @@ export class LifecycleRuntime {
                 actor: SYSTEM_ACTOR,
                 expect: { changedBefore },
               });
+              this.triggerRefusals.delete(
+                triggerKey(lifecycle.name, trigger.name, record.id),
+              );
               firedHere += 1;
             } catch (error) {
               // Another sweep or a person got there first, or the guard said
@@ -1526,18 +1667,26 @@ export class LifecycleRuntime {
               // nothing is logged, since a guard may refuse the same record
               // on every sweep by design. A refusal from inside the
               // transition — a lifecycle call its onTransition or a hook made
-              // — is said aloud instead, so it does not fail unseen forever.
+              // — is said aloud instead, so it does not fail unseen forever,
+              // on the 1st, 2nd, 4th… sweep it recurs on.
               if (isRefusal(error, RACED)) {
-                if (raisedInStep.has(error))
-                  this.logger.warn(
-                    `Trigger "${trigger.name}" skipped "${trigger.transition}" on ${lifecycle.name} record "${String(record.id)}": ${error.message}`,
-                    {
-                      lifecycle: lifecycle.name,
-                      recordId: String(record.id),
-                      transition: trigger.transition,
-                      code: error.code,
-                    },
+                if (raisedInStep.has(error)) {
+                  const sweeps = this.countTriggerRefusal(
+                    triggerKey(lifecycle.name, trigger.name, record.id),
+                    error.code,
                   );
+                  if (isLogworthy(sweeps))
+                    this.logger.warn(
+                      `Trigger "${trigger.name}" skipped "${trigger.transition}" on ${lifecycle.name} record "${String(record.id)}": ${error.message}`,
+                      {
+                        lifecycle: lifecycle.name,
+                        recordId: String(record.id),
+                        transition: trigger.transition,
+                        code: error.code,
+                        sweeps,
+                      },
+                    );
+                }
                 continue;
               }
               // A broken definition or a failing store: keep sweeping the
@@ -1600,7 +1749,10 @@ export class LifecycleRuntime {
    * of them and those due longest first, and returns how many fired. A
    * continuation refused again with the error it was refused with before is
    * logged as a warning on its 2nd, 4th, 8th… try; a different refusal is
-   * logged as an error, since something has changed.
+   * logged as an error, since something has changed, and so is giving up on
+   * it. A run whose lifecycle this process does not know — a rolling
+   * deploy — is put off by its current backoff without counting a try, so
+   * it leaves the batch to the runs behind it.
    */
   private async continuePending(): Promise<number> {
     const pending = await this.store.listEffectRuns({
@@ -1609,20 +1761,22 @@ export class LifecycleRuntime {
     });
     let continued = 0;
     for (const run of pending) {
-      const registered = this.lifecycles.get(run.lifecycle);
       const { continuation } = run;
-      // Left for a process that knows the effect, as a queued run is.
-      if (!registered || !continuation || !this.knows(run)) continue;
-      const about = `Effect run "${run.id}" could not continue with "${continuation.transition}"`;
+      if (!continuation) continue;
+      const registered = this.lifecycles.get(run.lifecycle);
+      if (!registered) {
+        await this.putOff(run, continuation);
+        continue;
+      }
       let tried: ContinuationTry;
       try {
         tried = await this.tryContinuation(run, registered);
       } catch (error) {
-        // A conflict, or a failing store: the next sweep tries again.
-        this.logger.warn(`${about} on this sweep; it is tried again.`, {
-          runId: run.id,
-          error,
-        });
+        // The store failed even to record the failure: the next sweep tries again.
+        this.logger.warn(
+          `Effect run "${run.id}" could not continue with "${continuation.transition}" on this sweep; it is tried again.`,
+          { runId: run.id, error },
+        );
         continue;
       }
       if (tried.kind === 'continued') continued += 1;
@@ -1631,34 +1785,94 @@ export class LifecycleRuntime {
           `Effect run "${run.id}" no longer continues with "${continuation.transition}": ${tried.error.message}`,
           { runId: run.id, code: tried.error.code },
         );
-      else if (tried.kind === 'refused') {
-        const details = {
-          runId: run.id,
-          code: tried.error.code,
-          attempts: tried.attempts,
-        };
-        const message = `${about}: ${tried.error.message}`;
-        if (
-          tried.error.code !== tried.previous.code ||
-          tried.error.message !== tried.previous.error
-        )
-          this.logger.error(message, { ...details, error: tried.error });
-        else if (isLogworthy(tried.attempts))
-          this.logger.warn(message, details);
-      }
+      else if (tried.kind === 'refused' && tried.recorded)
+        this.reportRefusal(run.id, tried);
     }
     return continued;
   }
 
+  /** Logs a refused try of the sweep, as `continuePending()` describes. */
+  private reportRefusal(
+    runId: string,
+    tried: Extract<ContinuationTry, { kind: 'refused' }>,
+  ): void {
+    const { previous, continuation } = tried;
+    if (continuation.abandonedAt) {
+      this.gaveUp(runId, continuation);
+      return;
+    }
+    const details = {
+      runId,
+      code: continuation.code,
+      attempts: continuation.attempts,
+    };
+    const message = `Effect run "${runId}" could not continue with "${continuation.transition}": ${continuation.error}`;
+    const counted = continuation.attempts !== previous.attempts;
+    if (
+      continuation.code !== previous.code ||
+      continuation.error !== previous.error
+    ) {
+      // A conflict is a race, not a fault.
+      if (counted)
+        this.logger.error(message, { ...details, error: tried.error });
+      else this.logger.warn(message, details);
+    } else if (counted && isLogworthy(continuation.attempts))
+      this.logger.warn(message, details);
+  }
+
+  /** Logs once that the sweep gave up on a run's continuation. */
+  private gaveUp(runId: string, continuation: PendingContinuation): void {
+    this.logger.error(
+      `Effect run "${runId}" gave up on continuing with "${continuation.transition}" after ${String(continuation.attempts)} tries: ${continuation.error}. The sweep no longer tries it; continueRun() still can.`,
+      { runId, code: continuation.code, attempts: continuation.attempts },
+    );
+  }
+
+  /**
+   * Puts off a run whose lifecycle this process does not know by the
+   * backoff it is at, without counting a try: an unregistered lifecycle
+   * says nothing about the continuation, and counting it would give up on
+   * continuations a rolling deploy is about to serve.
+   */
+  private async putOff(
+    run: EffectRun,
+    continuation: PendingContinuation,
+  ): Promise<void> {
+    const at = this.clock().toISOString();
+    try {
+      await this.store.updateEffectRun(
+        run.id,
+        {
+          status: run.status,
+          attempts: run.attempts,
+          continuationDueAt: continuation.dueAt,
+        },
+        {
+          continuation: {
+            ...continuation,
+            dueAt: this.continuationDue(at, Math.max(continuation.attempts, 1)),
+          },
+        },
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Effect run "${run.id}" names lifecycle "${run.lifecycle}", which is not registered here, and could not be put off.`,
+        { runId: run.id, error },
+      );
+    }
+  }
+
   /**
    * One try of a run's pending continuation, in a transaction of its own:
-   * the continuation is cleared on the condition that the run is still as
-   * it was read, and its transition is decided nested, so a refusal undoes
-   * only the transition and what its `onTransition` wrote. It is logged
-   * under the request id the run's outcome would have used, so a
-   * continuation that already fired replays rather than firing twice. A
-   * conflict, or anything that is not a refusal, rolls the whole try back
-   * and is thrown.
+   * the continuation is cleared on the condition that the run, and the
+   * continuation it holds, are still as they were read, and its transition
+   * is decided nested, so a refusal undoes only the transition and what its
+   * `onTransition` wrote. It is logged under the request id the run's
+   * outcome would have used, so a continuation that already fired replays
+   * rather than firing twice, and it is dropped once the record has left
+   * the stay the run was queued for. A conflict, or anything that is not a
+   * refusal, rolls the whole try back, and is then recorded on the
+   * continuation in a write of its own, pushing its due time back.
    */
   private async tryContinuation(
     run: EffectRun,
@@ -1669,60 +1883,159 @@ export class LifecycleRuntime {
     const requestId = continuationKey(run.id, pending.outcome);
     const now = this.clock();
     const at = now.toISOString();
-    const condition = { status: run.status, attempts: run.attempts };
-    return this.store.transaction(async (store): Promise<ContinuationTry> => {
-      const cleared = await store.updateEffectRun(run.id, condition, {
-        continuation: null,
-        updatedAt: at,
-      });
-      if (!cleared) return { kind: 'changed' };
-      if (
-        await store.findTransitionByRequest(
-          run.lifecycle,
-          run.recordId,
-          requestId,
-        )
-      )
-        return { kind: 'continued' };
-      const continued: { decided?: Decision } = {};
-      store.afterCommit(() => {
-        const { decided } = continued;
-        return decided && !decided.result.replayed
-          ? this.settle(registered, decided, SYSTEM_ACTOR)
-          : undefined;
-      });
-      try {
-        continued.decided = await store.transaction(
-          (nested) =>
-            this.decide(
-              nested,
-              registered,
+    const read: EffectRunCondition = {
+      status: run.status,
+      attempts: run.attempts,
+      continuationDueAt: waitingDueAt(pending),
+    };
+    try {
+      return await this.store.transaction(
+        async (store): Promise<ContinuationTry> => {
+          const cleared = await store.updateEffectRun(run.id, read, {
+            continuation: null,
+            updatedAt: at,
+          });
+          if (!cleared) return { kind: 'changed' };
+          if (
+            await store.findTransitionByRequest(
+              run.lifecycle,
               run.recordId,
-              pending.transition,
-              { actor: SYSTEM_ACTOR, input: pending.input, requestId },
-              now,
-            ),
-          { within: store.transactionHandle },
-        );
-        return { kind: 'continued' };
-      } catch (error) {
-        if (!(error instanceof LifecycleError) || error.code === 'CONFLICT')
-          throw error;
-        if (recordMovedOn(error)) return { kind: 'movedOn', error };
-        const attempts = pending.attempts + 1;
-        await store.updateEffectRun(run.id, condition, {
-          continuation: {
-            ...pending,
-            error: error.message,
-            code: error.code,
-            attempts,
-            failedAt: at,
-            dueAt: this.continuationDue(at, attempts),
-          },
+              requestId,
+            )
+          )
+            return { kind: 'continued' };
+          const ended = await this.stayEnded(store, registered, run);
+          if (ended) return { kind: 'movedOn', error: ended };
+          const continued: { decided?: Decision } = {};
+          store.afterCommit(() => {
+            const { decided } = continued;
+            return decided && !decided.result.replayed
+              ? this.settle(registered, decided, SYSTEM_ACTOR)
+              : undefined;
+          });
+          try {
+            continued.decided = await store.transaction(
+              (nested) =>
+                this.decide(
+                  nested,
+                  registered,
+                  run.recordId,
+                  pending.transition,
+                  { actor: SYSTEM_ACTOR, input: pending.input, requestId },
+                  now,
+                ),
+              { within: store.transactionHandle },
+            );
+            return { kind: 'continued' };
+          } catch (error) {
+            if (!(error instanceof LifecycleError) || error.code === 'CONFLICT')
+              throw error;
+            if (recordMovedOn(error)) return { kind: 'movedOn', error };
+            const continuation = this.refusedContinuation(
+              pending,
+              error,
+              at,
+              true,
+            );
+            // Cleared above, in this transaction: nothing waits now.
+            await store.updateEffectRun(
+              run.id,
+              { ...read, continuationDueAt: null },
+              { continuation },
+            );
+            return {
+              kind: 'refused',
+              error,
+              previous: pending,
+              continuation,
+              recorded: true,
+            };
+          }
+        },
+      );
+    } catch (error) {
+      // Undone as a whole, the clearing included. Record the try on the
+      // continuation as it was read, so the sweep backs off rather than
+      // trying it again at once; a conflict is a race and is not counted.
+      const continuation = this.refusedContinuation(
+        pending,
+        error,
+        at,
+        !isRefusal(error, CONFLICTS),
+      );
+      let recorded: boolean;
+      try {
+        recorded = await this.store.updateEffectRun(run.id, read, {
+          continuation,
+          updatedAt: at,
         });
-        return { kind: 'refused', error, previous: pending, attempts };
+      } catch {
+        // The store itself is failing: the error that started it is what to report.
+        throw error;
       }
-    });
+      return {
+        kind: 'refused',
+        error,
+        previous: pending,
+        continuation,
+        recorded,
+      };
+    }
+  }
+
+  /**
+   * A continuation after one more refused try at `at`: the refusal it
+   * records, the try counted unless `counted` is false, its next due time,
+   * and the instant the sweep gives up on it once it has been tried
+   * `maxAttempts` times. One already given up on stays given up on.
+   */
+  private refusedContinuation(
+    pending: PendingContinuation,
+    error: unknown,
+    at: string,
+    counted: boolean,
+  ): PendingContinuation {
+    const attempts = counted ? pending.attempts + 1 : pending.attempts;
+    return {
+      ...pending,
+      error: errorText(error),
+      code: error instanceof LifecycleError ? error.code : CONTINUATION_ERROR,
+      attempts,
+      failedAt: at,
+      dueAt: counted
+        ? this.continuationDue(at, attempts)
+        : new Date(Date.parse(at) + this.continuations.backoffMs).toISOString(),
+      abandonedAt:
+        pending.abandonedAt ??
+        (counted && attempts >= this.continuations.maxAttempts ? at : null),
+    };
+  }
+
+  /**
+   * Whether the record has left the stay `run` was queued for: a transition
+   * of its lifecycle logged after the run's own, other than one the run's
+   * outcome fired. The answer is the refusal a continuation gets for it. An
+   * edit that advances the version outside the lifecycle logs nothing and
+   * does not end the stay.
+   */
+  private async stayEnded(
+    store: LifecycleStore,
+    registered: Registered,
+    run: EffectRun,
+  ): Promise<LifecycleError | undefined> {
+    const last = (await store.listTransitions(run.lifecycle, run.recordId)).at(
+      -1,
+    );
+    if (
+      !last ||
+      last.id === run.transitionId ||
+      last.requestId?.startsWith(`$run:${run.id}:`) === true
+    )
+      return undefined;
+    return new LifecycleError(
+      'INVALID_STATE',
+      `The ${registered.lifecycle.collection} record "${run.recordId}" has moved on with "${last.transition}" since the transition effect run "${run.id}" was queued for, so what follows from that run no longer applies to it.`,
+    );
   }
 
   /** When a continuation refused `attempts` times, the last at `at`, is due again. */
@@ -1730,6 +2043,19 @@ export class LifecycleRuntime {
     const { backoffMs, factor, maxMs } = this.continuations;
     const delay = Math.min(backoffMs * factor ** (attempts - 1), maxMs);
     return new Date(Date.parse(at) + delay).toISOString();
+  }
+
+  /** Counts one more sweep a trigger was refused on a record; see `triggerRefusals`. */
+  private countTriggerRefusal(key: string, code: string): number {
+    const previous = this.triggerRefusals.get(key);
+    const count = previous?.code === code ? previous.count + 1 : 1;
+    this.triggerRefusals.delete(key);
+    this.triggerRefusals.set(key, { code, count });
+    if (this.triggerRefusals.size > TRIGGER_REFUSALS_KEPT) {
+      const oldest = this.triggerRefusals.keys().next();
+      if (!oldest.done) this.triggerRefusals.delete(oldest.value);
+    }
+    return count;
   }
 
   /**
@@ -2002,13 +2328,7 @@ export class LifecycleRuntime {
     // A hook or onTransition that fires this record onward through tx has
     // ended the stay this transition began: what is left of the transition
     // would set up, owe and announce a state the record is no longer in.
-    const moved = await this.runSteps(
-      store,
-      lifecycle,
-      id,
-      plan.nextVersion,
-      steps,
-    );
+    const moved = await this.runSteps(store, lifecycle, id, steps);
     // The transition itself still happened, so its own effects are owed;
     // only the entered state's onEnter effects belong to the stay that ended.
     if (moved)

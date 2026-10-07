@@ -130,4 +130,47 @@ describe('lifecycleErrorFields', () => {
     // Without a blocker to say otherwise, a guard refusal is about permission.
     expect(refusal()).toBe('PERMISSION_DENIED');
   });
+
+  it('answers a refused continuation as a failed precondition, keeping its code as the reason', () => {
+    const guarded = new LifecycleError(
+      'GUARD_REJECTED',
+      'The order is blocked.',
+      {
+        blockers: [
+          {
+            source: 'guard',
+            kind: 'permission',
+            code: 'ORDER_BLOCKED',
+            message: 'The order is blocked.',
+          },
+        ],
+      },
+    );
+    for (const error of [
+      guarded,
+      new LifecycleError('UNKNOWN_TRANSITION', 'No "finish".'),
+      new LifecycleError('INVALID_SET', 'May not set "status".'),
+      new LifecycleError('INVALID_INPUT', 'Bad.', {
+        problems: [{ field: 'reference', message: 'Required.' }],
+      }),
+      new LifecycleError('INVALID_STATE', 'Moved on.'),
+    ])
+      expect(lifecycleErrorFields(error, { continuation: true })).toEqual({
+        status: 'FAILED_PRECONDITION',
+        reason: error.code,
+        message: error.message,
+        metadata: { blockers: error.blockers, problems: error.problems },
+      });
+    for (const [code, status] of [
+      ['NO_CONTINUATION', 'FAILED_PRECONDITION'],
+      ['UNKNOWN_LIFECYCLE', 'NOT_FOUND'],
+      ['RECORD_NOT_FOUND', 'NOT_FOUND'],
+      ['CONFLICT', 'ABORTED'],
+    ] as const)
+      expect(
+        lifecycleErrorFields(new LifecycleError(code, 'No.'), {
+          continuation: true,
+        }),
+      ).toMatchObject({ status, reason: code });
+  });
 });

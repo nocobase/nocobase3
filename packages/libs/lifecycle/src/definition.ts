@@ -63,9 +63,13 @@ export interface TransitionHookContext<T extends LifecycleTypes> {
  * stage, a run waiting in it — and may fire or create other records, or this
  * one, through `tx`.
  *
- * A hook that fires this record onward ends the transition that ran it: the
- * hooks and `onTransition` still to come do not run, the `onEnter` effects
- * of the state it entered are not queued, and that state announces nothing.
+ * A hook that fires this record onward ends the transition that ran it —
+ * through `tx`, through a lifecycle call given its transaction handle, or
+ * through a call those made in turn: the hooks and `onTransition` still to
+ * come do not run, the `onEnter` effects of the state it entered are not
+ * queued, and that state announces nothing. Only a transition of this
+ * lifecycle on this record counts; advancing the record's version, or firing
+ * another lifecycle that shares it, does not end anything.
  * The transition still happened, so its own `effects` are queued; `fire()`
  * or `create()` returns the record as the hook's transition left it, with
  * this transition's log entry and those effect runs. It stays in the

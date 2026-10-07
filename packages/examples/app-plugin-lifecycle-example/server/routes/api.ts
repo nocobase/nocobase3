@@ -2,6 +2,7 @@ import { ApiError, type ApiErrorStatus } from '@nocobase/app-server/router';
 import {
   LifecycleError,
   lifecycleErrorFields,
+  type LifecycleApiErrorOptions,
   type RecordView,
 } from '@nocobase/lifecycle';
 
@@ -24,14 +25,16 @@ const EXAMPLE_STATUS: Record<ExampleError['code'], ApiErrorStatus> = {
 /**
  * The plugin's own refusals and the lifecycle's, as the standard error body.
  * `inputField` names where a transition's input sits in the request body, so
- * a field problem is reported where the caller sent it.
+ * a field problem is reported where the caller sent it; `continuation` marks
+ * a refusal `continueRun()` threw, which is the continuation's, not the
+ * request's.
  */
-export function toApiError(error: unknown, inputField?: string): unknown {
+export function toApiError(
+  error: unknown,
+  options: LifecycleApiErrorOptions = {},
+): unknown {
   if (error instanceof LifecycleError) {
-    const fields = lifecycleErrorFields(
-      error,
-      inputField ? { inputField } : {},
-    );
+    const fields = lifecycleErrorFields(error, options);
     // A broken definition is the server's fault: the application answers 500.
     return fields
       ? new ApiError({ ...fields, domain: LIFECYCLE_EXAMPLE_DOMAIN })

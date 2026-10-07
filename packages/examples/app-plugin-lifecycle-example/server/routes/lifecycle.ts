@@ -41,7 +41,7 @@ export interface LifecycleRoutesSpec {
  * The routes a page needs for one lifecycle's records, at the paths
  * `@nocobase/lifecycle/react`'s client calls: the lifecycle's description,
  * one record with what the persona may do and its history, firing a
- * transition, and an operator's retry and cancel of an effect run. A guard
+ * transition, and an operator's retry, continue and cancel of an effect run. A guard
  * that refuses answers `GUARD_REJECTED` with the blockers in `metadata`:
  * `403` when one of them is about who asks, `400 FAILED_PRECONDITION` when
  * each is about the record, such as a ticket closed too long ago to reopen.
@@ -161,7 +161,7 @@ export function lifecycleRoutes(
         });
       } catch (error) {
         // The transition's input sits under `input` in this body.
-        throw toApiError(error, 'input');
+        throw toApiError(error, { inputField: 'input' });
       }
     },
   );
@@ -188,7 +188,7 @@ export function lifecycleRoutes(
       summary: `Retry an effect run of a ${lower}`,
       operationId: `lifecycleExampleRetry${noun}EffectRun`,
       description:
-        'Runs a failed, dead or cancelled run again. A run whose `onFailure` already moved the record on is refused with `RUN_SETTLED` unless `force` is set.',
+        'Runs a failed, dead or cancelled run again. A run whose `onFailure` already moved the record on, or whose continuation still waits to and is continued instead, is refused with `RUN_SETTLED` unless `force` is set, which drops a waiting continuation.',
       responses: {
         200: dataResponse(RecordViewSchema, 'The record afterwards.'),
         400: apiErrorResponse(
@@ -227,15 +227,14 @@ export function lifecycleRoutes(
       summary: `Continue an effect run of a ${lower}`,
       operationId: `lifecycleExampleContinue${noun}EffectRun`,
       description:
-        "Tries the run's waiting continuation at once — the `onSuccess` or `onFailure` its outcome could not fire yet — without running the effect again. A refusal is answered as the continuation's own: one saying the record moved on also drops the continuation.",
+        "Tries the run's waiting continuation at once — the `onSuccess` or `onFailure` its outcome could not fire yet, or one the sweep gave up on — without running the effect again. Nothing in this request can be wrong, so a refusal of the continuation is a failed precondition whose reason is the refusal's own code; one saying the record moved on, or left the stay the run was queued for, also drops the continuation.",
       responses: {
         200: dataResponse(RecordViewSchema, 'The record afterwards.'),
         400: apiErrorResponse(
           400,
-          'Nothing waits (`NO_CONTINUATION`), the effect is unknown here (`UNKNOWN_EFFECT`), or the continuation was refused again.',
+          'Nothing waits (`NO_CONTINUATION`), or the continuation was refused again, with its code as the reason, such as `GUARD_REJECTED`, `INVALID_STATE`, `UNKNOWN_TRANSITION` or `INVALID_SET`, and its blockers and problems in `metadata`.',
         ),
         401: apiErrorResponse(401),
-        403: apiErrorResponse(403, "The continuation's guard refused again."),
         404: apiErrorResponse(404, 'No such record, or no such run on it.'),
         409: apiErrorResponse(
           409,
@@ -252,7 +251,12 @@ export function lifecycleRoutes(
       const actor = { id: actAs };
       await runtime.view(lifecycle, recordId, actor);
       await runOf(recordId, runId);
-      await runtime.continueRun(runId);
+      try {
+        await runtime.continueRun(runId);
+      } catch (error) {
+        // The continuation's refusal, not the request's.
+        throw toApiError(error, { continuation: true });
+      }
       return context.json({
         data: outwardView(await runtime.view(lifecycle, recordId, actor)),
       });

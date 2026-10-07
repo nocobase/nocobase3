@@ -234,11 +234,16 @@ export interface UseLifecycleResult {
    * carrying the blockers or problems.
    */
   readonly fire: (transition: string, input?: JsonObject) => Promise<FireView>;
-  /** Rejects with `RUN_SETTLED` when the run's `onFailure` already moved the record on, unless forced. */
+  /**
+   * Rejects with `RUN_SETTLED` when the run's `onFailure` already moved the
+   * record on, or its continuation still waits to — continue that one
+   * instead — unless forced.
+   */
   readonly retryRun: (runId: string, request?: RetryRequest) => Promise<void>;
   /**
-   * Tries the run's waiting continuation at once. Rejects with its refusal
-   * when it is refused again, and with `NO_CONTINUATION` when none waits.
+   * Tries the run's waiting continuation at once, one the sweep gave up on
+   * included. Rejects with its refusal when it is refused again, and with
+   * `NO_CONTINUATION` when none waits.
    */
   readonly continueRun: (runId: string) => Promise<void>;
   readonly cancelRun: (runId: string) => Promise<void>;

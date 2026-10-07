@@ -14,7 +14,10 @@ import {
   MemoryLifecycleStore,
   SYSTEM_ACTOR,
   lifecycleErrorFields,
+  type ContinuationSweepOptions,
   type EffectDispatcher,
+  type EffectRun,
+  type EffectRunQuery,
   type Lifecycle,
   type LifecycleLogger,
   type LifecycleRecord,
@@ -28,8 +31,17 @@ interface Task extends LifecycleRecord {
 interface Services {
   /** What the effects did, in order. */
   readonly calls: string[];
-  /** Whether `finish` is broken, as a bug in its `set` would make it. */
-  readonly flags: { broken: boolean; fail: boolean };
+  /**
+   * Whether `finish` is broken, as a bug in its `set` would make it; whether
+   * the effect fails; what `finish` throws, if anything; and how many times
+   * `finish` was decided.
+   */
+  readonly flags: {
+    broken: boolean;
+    fail: boolean;
+    throws?: Error;
+    tries: number;
+  };
 }
 
 interface TaskTypes {
@@ -78,7 +90,13 @@ const tasks: Lifecycle<TaskTypes> = defineLifecycle<TaskTypes>({
       from: 'working',
       to: 'done',
       accept: ['reference'],
-      set: ({ services }) => brokenSet(services),
+      set: ({ services }) => {
+        services.flags.tries += 1;
+        return brokenSet(services);
+      },
+      onTransition: ({ services }) => {
+        if (services.flags.throws) throw services.flags.throws;
+      },
     },
     giveUp: {
       from: 'working',
@@ -100,7 +118,7 @@ class HeldDispatcher implements EffectDispatcher {
   }
 }
 
-function setup(options: { readonly batchSize?: number } = {}) {
+function setup(options: ContinuationSweepOptions = {}) {
   const store = new MemoryLifecycleStore();
   const clock = { now: new Date('2026-10-01T09:00:00.000Z') };
   /** Moves the fake clock on by `ms`. */
@@ -114,7 +132,7 @@ function setup(options: { readonly batchSize?: number } = {}) {
   };
   const services: Services = {
     calls: [],
-    flags: { broken: true, fail: false },
+    flags: { broken: true, fail: false, tries: 0 },
   };
   const heard: string[] = [];
   const runtime = new LifecycleRuntime({
@@ -122,9 +140,7 @@ function setup(options: { readonly batchSize?: number } = {}) {
     dispatcher,
     logger,
     clock: () => clock.now,
-    ...(options.batchSize === undefined
-      ? {}
-      : { continuations: { batchSize: options.batchSize } }),
+    continuations: options,
   });
   runtime.register(tasks, { services });
   runtime.on('completed', {}, ({ transition }) => void heard.push(transition));
@@ -141,6 +157,7 @@ function setup(options: { readonly batchSize?: number } = {}) {
     runtime,
     task,
     advance,
+    now: (): Date => clock.now,
   };
 }
 
@@ -322,7 +339,7 @@ describe('a continuation that cannot be fired as defined', () => {
     // The new process shares the store and runs the fixed definition.
     const services: Services = {
       calls: [],
-      flags: { broken: false, fail: false },
+      flags: { broken: false, fail: false, tries: 0 },
     };
     const deployed = new LifecycleRuntime({
       store: context.store,
@@ -491,5 +508,349 @@ describe('a continuation whose record moved on', () => {
       expect.stringContaining('no longer continues with "finish"'),
       expect.objectContaining({ runId, code: 'INVALID_STATE' }),
     );
+  });
+});
+
+/** Starts a record of `lifecycle` and runs its effect once, leaving its continuation waiting. */
+async function pendingOn(
+  context: Context,
+  runtime: LifecycleRuntime,
+  lifecycle: string,
+): Promise<string> {
+  const record = context.store.insertRecord(lifecycle, {
+    status: 'todo',
+    lifecycleVersion: 0,
+  });
+  const started = await runtime.fire(lifecycle, record.id, 'start', {
+    actor: SYSTEM_ACTOR,
+  });
+  await runtime.runEffect(started.effectRuns[0].id);
+  return started.effectRuns[0].id;
+}
+
+describe('a sweep over runs this process does not fully know', () => {
+  it('continues a run whose effect is no longer declared, since only its lifecycle is needed', async () => {
+    const context = setup();
+    const runId = await workOnce(context);
+    // The next release removed the effect, and fixed `finish`.
+    const withoutWork = defineLifecycle<TaskTypes>({
+      name: 'tasks',
+      initial: 'todo',
+      states: [
+        'todo',
+        'working',
+        { name: 'done', final: true },
+        { name: 'stuck', final: true },
+        { name: 'dropped', final: true },
+      ],
+      transitions: {
+        start: { from: 'todo', to: 'working' },
+        finish: { from: 'working', to: 'done', accept: ['reference'] },
+        giveUp: { from: 'working', to: 'stuck' },
+        drop: { from: 'working', to: 'dropped' },
+      },
+    });
+    const deployed = new LifecycleRuntime({
+      store: context.store,
+      dispatcher: context.dispatcher,
+      clock: () => new Date('2026-10-01T10:00:00.000Z'),
+    });
+    deployed.register(withoutWork);
+    await expect(deployed.listEffectRuns({})).resolves.toMatchObject([
+      { id: runId, registered: false },
+    ]);
+    await expect(deployed.reclaim()).resolves.toBe(1);
+    expect(context.store.record('tasks', context.task.id)).toMatchObject({
+      status: 'done',
+      reference: 'R-1',
+    });
+  });
+
+  it('puts off the runs of a lifecycle it does not know, so they cannot hold the batch', async () => {
+    const context = setup();
+    const chores = defineLifecycle<TaskTypes>({
+      name: 'chores',
+      initial: 'todo',
+      states: [
+        'todo',
+        'working',
+        { name: 'done', final: true },
+        { name: 'stuck', final: true },
+      ],
+      transitions: {
+        start: { from: 'todo', to: 'working', effects: [work] },
+        finish: {
+          from: 'working',
+          to: 'done',
+          set: ({ services }) => brokenSet(services),
+        },
+        giveUp: { from: 'working', to: 'stuck' },
+      },
+    });
+    context.runtime.register(chores, { services: context.services });
+    // Two chores wait first, then a task.
+    const waiting = [
+      await pendingOn(context, context.runtime, 'chores'),
+      await pendingOn(context, context.runtime, 'chores'),
+    ];
+    context.advance(1_000);
+    await pendingOn(context, context.runtime, 'tasks');
+
+    // A process that knows tasks but not chores, two runs per sweep.
+    const services: Services = {
+      calls: [],
+      flags: { broken: false, fail: false, tries: 0 },
+    };
+    const now = new Date('2026-10-01T09:05:00.000Z');
+    const other = new LifecycleRuntime({
+      store: context.store,
+      dispatcher: context.dispatcher,
+      clock: () => now,
+      continuations: { batchSize: 2 },
+    });
+    other.register(tasks, { services });
+    // The chores take this sweep's batch, and are put off without a try.
+    await expect(other.reclaim()).resolves.toBe(0);
+    // So the next sweep reaches the task behind them.
+    await expect(other.reclaim()).resolves.toBe(1);
+    const [task] = await context.store.listEffectRuns({ lifecycle: 'tasks' });
+    expect(context.store.record('tasks', task.recordId)?.status).toBe('done');
+    for (const id of waiting)
+      expect(await context.store.findEffectRun(id)).toMatchObject({
+        continuation: {
+          attempts: 1,
+          code: 'INVALID_SET',
+          // Its current backoff, a minute, from the sweep that put it off.
+          dueAt: '2026-10-01T09:06:00.000Z',
+        },
+      });
+  });
+
+  it('refuses continueRun() only when the lifecycle is unknown here', async () => {
+    const context = setup();
+    const runId = await workOnce(context);
+    const other = new LifecycleRuntime({ store: context.store });
+    const refused = await other.continueRun(runId).then(
+      () => undefined,
+      (error: unknown) => error as LifecycleError,
+    );
+    expect(refused).toMatchObject({ code: 'UNKNOWN_LIFECYCLE' });
+  });
+});
+
+/**
+ * The store, but its next list of due continuations is `rows`, as a sweep
+ * that read them earlier would see.
+ */
+function readingEarlier(
+  store: MemoryLifecycleStore,
+  rows: readonly EffectRun[],
+): MemoryLifecycleStore {
+  let served = false;
+  return new Proxy(store, {
+    get(target, property) {
+      if (property === 'listEffectRuns' && !served)
+        return (query: EffectRunQuery) => {
+          if (query.continuationDueBy === undefined)
+            return target.listEffectRuns(query);
+          served = true;
+          return Promise.resolve([...rows]);
+        };
+      const value: unknown = Reflect.get(target, property, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+}
+
+describe('two sweeps reading the same waiting continuation', () => {
+  it('lets only the first act: the second finds it rewritten and writes nothing', async () => {
+    const context = setup();
+    const runId = await workOnce(context);
+    context.advance(MINUTE);
+    // Both sweeps read the due runs before either wrote.
+    const read = await context.store.listEffectRuns({
+      continuationDueBy: context.now().toISOString(),
+    });
+    await context.runtime.reclaim();
+    const rewritten = await context.store.findEffectRun(runId);
+    expect(rewritten).toMatchObject({
+      continuation: { attempts: 2, dueAt: '2026-10-01T09:03:00.000Z' },
+    });
+    const tries = context.services.flags.tries;
+
+    const late = new LifecycleRuntime({
+      store: readingEarlier(context.store, read),
+      dispatcher: context.dispatcher,
+      clock: context.now,
+    });
+    late.register(tasks, { services: context.services });
+    await expect(late.reclaim()).resolves.toBe(0);
+
+    // No second try ahead of its backoff, and the count is not lost.
+    expect(context.services.flags.tries).toBe(tries);
+    expect(await context.store.findEffectRun(runId)).toEqual(rewritten);
+  });
+});
+
+describe('a continuation that fails with something other than a refusal', () => {
+  it('backs off, counting the try, rather than being tried on every sweep', async () => {
+    const context = setup();
+    const runId = await workOnce(context);
+    context.services.flags.broken = false;
+    context.services.flags.throws = new Error('The ledger is down.');
+    context.advance(MINUTE);
+    await expect(context.runtime.reclaim()).resolves.toBe(0);
+    expect(await context.store.findEffectRun(runId)).toMatchObject({
+      continuation: {
+        attempts: 2,
+        code: 'ERROR',
+        error: 'The ledger is down.',
+        failedAt: '2026-10-01T09:01:00.000Z',
+        dueAt: '2026-10-01T09:03:00.000Z',
+      },
+    });
+    // Rolled back as a whole: the record did not move.
+    expect(context.store.record('tasks', context.task.id)?.status).toBe(
+      'working',
+    );
+    const tries = context.services.flags.tries;
+    await context.runtime.reclaim();
+    await context.runtime.reclaim();
+    expect(context.services.flags.tries).toBe(tries);
+    // Said once, as the new error it is.
+    expect(context.logger.error).toHaveBeenCalledTimes(2);
+    expect(context.logger.error).toHaveBeenLastCalledWith(
+      expect.stringContaining('The ledger is down.'),
+      expect.objectContaining({ runId, code: 'ERROR', attempts: 2 }),
+    );
+
+    context.services.flags.throws = undefined;
+    context.advance(2 * MINUTE);
+    await expect(context.runtime.reclaim()).resolves.toBe(1);
+    expect(context.store.record('tasks', context.task.id)?.status).toBe('done');
+  });
+
+  it('tries a conflict again soon, without counting it', async () => {
+    const context = setup();
+    const runId = await workOnce(context);
+    context.services.flags.broken = false;
+    context.services.flags.throws = new LifecycleError(
+      'CONFLICT',
+      'Someone else wrote it.',
+    );
+    context.advance(MINUTE);
+    await context.runtime.reclaim();
+    expect(await context.store.findEffectRun(runId)).toMatchObject({
+      continuation: {
+        attempts: 1,
+        code: 'CONFLICT',
+        dueAt: '2026-10-01T09:02:00.000Z',
+      },
+    });
+    expect(context.logger.error).toHaveBeenCalledTimes(1);
+    expect(context.logger.warn).toHaveBeenLastCalledWith(
+      expect.stringContaining('Someone else wrote it.'),
+      expect.objectContaining({ runId, code: 'CONFLICT' }),
+    );
+  });
+
+  it('is thrown by continueRun() and recorded the same way', async () => {
+    const context = setup();
+    const runId = await workOnce(context);
+    context.services.flags.broken = false;
+    context.services.flags.throws = new Error('The ledger is down.');
+    await expect(context.runtime.continueRun(runId)).rejects.toThrow(
+      'The ledger is down.',
+    );
+    expect(await context.store.findEffectRun(runId)).toMatchObject({
+      continuation: { attempts: 2, code: 'ERROR' },
+    });
+  });
+});
+
+describe('a continuation the sweep gives up on', () => {
+  /** Waits out each backoff until the third try, the last of three. */
+  async function giveUp(context: Context): Promise<string> {
+    const runId = await workOnce(context);
+    context.advance(MINUTE);
+    await context.runtime.reclaim();
+    context.advance(2 * MINUTE);
+    await context.runtime.reclaim();
+    return runId;
+  }
+
+  it('is given up on after maxAttempts tries, said once, and not tried again', async () => {
+    const context = setup({ maxAttempts: 3 });
+    const runId = await giveUp(context);
+    const run = await context.store.findEffectRun(runId);
+    expect(run).toMatchObject({
+      status: 'succeeded',
+      continuation: {
+        transition: 'finish',
+        attempts: 3,
+        abandonedAt: '2026-10-01T09:03:00.000Z',
+      },
+    });
+    expect(context.logger.error).toHaveBeenCalledTimes(2);
+    expect(context.logger.error).toHaveBeenLastCalledWith(
+      expect.stringContaining('gave up on continuing with "finish" after 3'),
+      expect.objectContaining({ runId, attempts: 3 }),
+    );
+
+    const tries = context.services.flags.tries;
+    context.advance(24 * 60 * MINUTE);
+    await expect(context.runtime.reclaim()).resolves.toBe(0);
+    expect(context.services.flags.tries).toBe(tries);
+    expect(context.logger.error).toHaveBeenCalledTimes(2);
+
+    // An operations page tells the given-up from the waiting.
+    await expect(
+      context.runtime.listEffectRuns({ continuationPending: true }),
+    ).resolves.toEqual([]);
+    await expect(
+      context.runtime.listEffectRuns({ continuationPending: false }),
+    ).resolves.toMatchObject([
+      { id: runId, continuation: { abandonedAt: '2026-10-01T09:03:00.000Z' } },
+    ]);
+  });
+
+  it('can still be continued by hand, and stays given up on while refused', async () => {
+    const context = setup({ maxAttempts: 3 });
+    const runId = await giveUp(context);
+    await expect(context.runtime.continueRun(runId)).rejects.toMatchObject({
+      code: 'INVALID_SET',
+    });
+    expect(await context.store.findEffectRun(runId)).toMatchObject({
+      continuation: { attempts: 4, abandonedAt: '2026-10-01T09:03:00.000Z' },
+    });
+    // Giving up is said once only.
+    expect(context.logger.error).toHaveBeenCalledTimes(2);
+
+    context.services.flags.broken = false;
+    await expect(context.runtime.continueRun(runId)).resolves.toMatchObject({
+      continuation: null,
+    });
+    expect(context.store.record('tasks', context.task.id)?.status).toBe('done');
+  });
+
+  it('no longer keeps prune() from deleting its run', async () => {
+    const context = setup({ maxAttempts: 3 });
+    const runId = await giveUp(context);
+    await expect(
+      context.runtime.prune({ olderThan: '2026-12-01T00:00:00.000Z' }),
+    ).resolves.toBe(1);
+    expect(await context.store.findEffectRun(runId)).toBeUndefined();
+  });
+
+  it('is given up on after ten tries by default', async () => {
+    const context = setup();
+    const runId = await workOnce(context);
+    for (let sweep = 0; sweep < 12; sweep += 1) {
+      context.advance(60 * MINUTE);
+      await context.runtime.reclaim();
+    }
+    expect(await context.store.findEffectRun(runId)).toMatchObject({
+      continuation: { attempts: 10, abandonedAt: expect.any(String) },
+    });
   });
 });

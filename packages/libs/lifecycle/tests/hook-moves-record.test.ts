@@ -11,6 +11,7 @@ import {
   LifecycleRuntime,
   MemoryLifecycleStore,
   type LifecycleRecord,
+  type MemoryRows,
 } from '../src/index.js';
 
 type State = 'a' | 'b' | 'c';
@@ -249,5 +250,239 @@ describe('a hook that moves its own record on', () => {
     expect(fired.record).toMatchObject({ status: 'c' });
     expect(fired.effectRuns.map((run) => run.effect)).toEqual(['started']);
     expect(ran).toEqual(['started']);
+  });
+});
+
+describe('a hook that changes its record without moving it', () => {
+  type Stage = 'draft' | 'review' | 'done';
+  interface StageTypes {
+    record: LifecycleRecord;
+    state: Stage;
+  }
+
+  it('carries on when it advances the version itself, as a fence or an edit does', async () => {
+    const store = new MemoryLifecycleStore();
+    const runtime = new LifecycleRuntime({ store });
+    const ran: string[] = [];
+    runtime.register(
+      defineLifecycle<StageTypes>({
+        name: 'reports',
+        initial: 'draft',
+        states: ['draft', 'review', { name: 'done', final: true }],
+        transitions: {
+          submit: { from: 'draft', to: 'review' },
+          approve: { from: 'review', to: 'done' },
+        },
+        onEnterState: {
+          review: [
+            // A fence: stale answers for an earlier stay are refused by the version.
+            ({ tx, record }) => {
+              (tx.handle as MemoryRows).patchRecord('reports', record.id, {
+                lifecycleVersion: Number(record.lifecycleVersion) + 1,
+              });
+              ran.push('fence');
+            },
+            () => void ran.push('second'),
+          ],
+        },
+        onEnter: {
+          review: [
+            defineEffect<StageTypes>({
+              name: 'reports.notify',
+              run: () => void ran.push('effect:review'),
+            }),
+          ],
+        },
+      }),
+    );
+    const { record } = await runtime.create(
+      'reports',
+      {},
+      { actor: { id: 'person' } },
+    );
+
+    const fired = await runtime.fire('reports', record.id, 'submit', {
+      actor: { id: 'person' },
+    });
+
+    expect(ran).toEqual(['fence', 'second', 'effect:review']);
+    expect(fired.record).toMatchObject({ status: 'review' });
+    expect(fired.effectRuns.map((run) => run.effect)).toEqual([
+      'reports.notify',
+    ]);
+    expect(store.record('reports', record.id)).toMatchObject({
+      status: 'review',
+      lifecycleVersion: 3,
+    });
+  });
+
+  it('carries on when it fires another lifecycle sharing the record and its version field', async () => {
+    const store = new MemoryLifecycleStore();
+    const runtime = new LifecycleRuntime({ store });
+    const ran: string[] = [];
+    runtime.register(
+      defineLifecycle<{ record: LifecycleRecord; state: 'unpaid' | 'paid' }>({
+        name: 'orderPayments',
+        collection: 'orders',
+        stateField: 'paymentStatus',
+        changedAtField: 'paymentStatusChangedAt',
+        versionField: 'lifecycleVersion',
+        initial: 'unpaid',
+        states: ['unpaid', { name: 'paid', final: true }],
+        transitions: { settle: { from: 'unpaid', to: 'paid' } },
+      }),
+    );
+    runtime.register(
+      defineLifecycle<{ record: LifecycleRecord; state: 'packed' | 'shipped' }>(
+        {
+          name: 'orders',
+          collection: 'orders',
+          versionField: 'lifecycleVersion',
+          initial: 'packed',
+          states: ['packed', { name: 'shipped', final: true }],
+          transitions: { ship: { from: 'packed', to: 'shipped' } },
+          onEnterState: {
+            shipped: [
+              // Cash on delivery: shipping settles the payment of the same order.
+              async ({ tx, record }) => {
+                await tx.fire('orderPayments', record.id, 'settle', {
+                  actor: { id: 'system' },
+                });
+                ran.push('settled');
+              },
+              () => void ran.push('second'),
+            ],
+          },
+          onEnter: {
+            shipped: [
+              defineEffect({
+                name: 'orders.track',
+                run: () => void ran.push('effect:shipped'),
+              }),
+            ],
+          },
+        },
+      ),
+    );
+    const order = store.insertRecord('orders', {
+      status: 'packed',
+      paymentStatus: 'unpaid',
+      lifecycleVersion: 0,
+    });
+
+    const fired = await runtime.fire('orders', order.id, 'ship', {
+      actor: { id: 'person' },
+    });
+
+    expect(ran).toEqual(['settled', 'second', 'effect:shipped']);
+    expect(fired.effectRuns.map((run) => run.effect)).toEqual(['orders.track']);
+    expect(store.record('orders', order.id)).toMatchObject({
+      status: 'shipped',
+      paymentStatus: 'paid',
+      lifecycleVersion: 2,
+    });
+  });
+
+  it('still stops when a lifecycle call it made moved the record on further down', async () => {
+    const store = new MemoryLifecycleStore();
+    const runtime = new LifecycleRuntime({ store });
+    const ran: string[] = [];
+    runtime.register(
+      defineLifecycle<{ record: LifecycleRecord; state: 'open' | 'closed' }>({
+        name: 'child',
+        initial: 'open',
+        states: ['open', { name: 'closed', final: true }],
+        transitions: { close: { from: 'open', to: 'closed' } },
+        onEnterState: {
+          // The child closes its parent as soon as it exists.
+          open: async ({ tx, record }) => {
+            await tx.fire('parent', String(record.parentId), 'onward', {
+              actor: { id: 'system' },
+            });
+          },
+        },
+      }),
+    );
+    runtime.register(
+      defineLifecycle<{ record: LifecycleRecord; state: State }>({
+        name: 'parent',
+        initial: 'a',
+        states: ['a', 'b', { name: 'c', final: true }],
+        transitions: {
+          start: { from: 'a', to: 'b' },
+          onward: { from: 'b', to: 'c' },
+        },
+        onEnterState: {
+          b: [
+            async ({ tx, record }) => {
+              await tx.create(
+                'child',
+                { parentId: String(record.id) },
+                { actor: { id: 'system' } },
+              );
+            },
+            () => void ran.push('second'),
+          ],
+        },
+        onEnter: {
+          b: [defineEffect({ name: 'enter.b', run: () => void ran.push('b') })],
+        },
+      }),
+    );
+    const { record } = await runtime.create(
+      'parent',
+      {},
+      { actor: { id: 'person' } },
+    );
+
+    const fired = await runtime.fire('parent', record.id, 'start', {
+      actor: { id: 'person' },
+    });
+
+    expect(ran).toEqual([]);
+    expect(fired.record).toMatchObject({ status: 'c' });
+    expect(fired.effectRuns).toEqual([]);
+  });
+
+  it('still stops when the hook fires its record onward through the handle rather than tx', async () => {
+    const store = new MemoryLifecycleStore();
+    const runtime = new LifecycleRuntime({ store });
+    const ran: string[] = [];
+    runtime.register(
+      defineLifecycle<{ record: LifecycleRecord; state: State }>({
+        name: 'work',
+        initial: 'a',
+        states: ['a', 'b', { name: 'c', final: true }],
+        transitions: {
+          start: {
+            from: 'a',
+            to: 'b',
+            onTransition: async ({ record, transactionHandle }) => {
+              await runtime.fire('work', record.id, 'onward', {
+                actor: { id: 'system' },
+                transaction: transactionHandle,
+              });
+            },
+          },
+          onward: { from: 'b', to: 'c' },
+        },
+        onEnterState: { b: () => void ran.push('enter:b') },
+        onEnter: {
+          b: [defineEffect({ name: 'enter.b', run: () => void ran.push('b') })],
+        },
+      }),
+    );
+    const { record } = await runtime.create(
+      'work',
+      {},
+      { actor: { id: 'person' } },
+    );
+
+    const fired = await runtime.fire('work', record.id, 'start', {
+      actor: { id: 'person' },
+    });
+
+    expect(ran).toEqual([]);
+    expect(fired.record).toMatchObject({ status: 'c' });
   });
 });
