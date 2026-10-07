@@ -192,7 +192,10 @@ describe('a packaged cli', () => {
         { cwd: work },
       );
       expect(whoami.code).toBe(3);
-      expect(whoami.stderr).toContain('the run has ended');
+      // oclif wraps the message at the terminal width, and the path in it varies.
+      expect(
+        whoami.stderr.replace(/\s*›\s*/gu, ' ').replace(/\s+/gu, ' '),
+      ).toContain('the run has ended');
     } finally {
       removeDir(work);
     }
