@@ -1,3 +1,4 @@
+import { RepositoryError } from '@nocobase/db';
 import type {
   DatabaseConnection,
   Repository,
@@ -118,47 +119,55 @@ function filterOf(match: Match): RepositoryFilter<RepositoryRecord> {
 }
 
 function databaseRows(connection: DatabaseConnection): Rows {
-  const repository = (collection: string): Repository =>
-    (() => {
-      try {
-        return connection.repository(collection);
-      } catch (cause) {
-        throw new Error(
-          `The approval host must migrate collection "${collection}" and provide lifecycle transition and effect-run collections to its Repository store. See @nocobase/app-plugin-approval/README.md.`,
-          { cause },
-        );
-      }
-    })();
+  const run = async <R>(
+    collection: string,
+    work: (repository: Repository) => Promise<R>,
+  ): Promise<R> => {
+    try {
+      return await work(connection.repository(collection));
+    } catch (cause) {
+      if (
+        !(cause instanceof RepositoryError) ||
+        cause.code !== 'COLLECTION_NOT_FOUND'
+      )
+        throw cause;
+      throw new Error(
+        `The approval host must migrate collection "${collection}" and provide lifecycle transition and effect-run collections to its Repository store. See @nocobase/app-plugin-approval/README.md.`,
+        { cause },
+      );
+    }
+  };
   return {
-    insert: async (collection, values) =>
-      toRow(
-        (
-          await repository(collection).createOne({
-            values: values as RepositoryRecord,
-          })
-        ).record,
+    insert: (collection, values) =>
+      run(collection, async (repository) =>
+        toRow(
+          (await repository.createOne({ values: values as RepositoryRecord }))
+            .record,
+        ),
       ),
-    get: async (collection, id) => {
-      const row = await repository(collection).findOne({
-        filter: { id: key(id) },
-      });
-      return row ? toRow(row) : undefined;
-    },
-    find: async (collection, match) =>
-      (
-        await repository(collection).findMany({
-          // An empty match reads every row; the Repository takes no empty filter.
-          ...(Object.keys(match).length ? { filter: filterOf(match) } : {}),
-          sort: (sort) => sort.field('id').asc(),
-        })
-      ).map(toRow),
-    update: async (collection, id, match, values) => {
-      const { updatedCount } = await repository(collection).updateMany({
-        filter: filterOf({ ...match, id: key(id) }),
-        values: values as RepositoryRecord,
-      });
-      return updatedCount > 0;
-    },
+    get: (collection, id) =>
+      run(collection, async (repository) => {
+        const row = await repository.findOne({ filter: { id: key(id) } });
+        return row ? toRow(row) : undefined;
+      }),
+    find: (collection, match) =>
+      run(collection, async (repository) =>
+        (
+          await repository.findMany({
+            // An empty match reads every row; the Repository takes no empty filter.
+            ...(Object.keys(match).length ? { filter: filterOf(match) } : {}),
+            sort: (sort) => sort.field('id').asc(),
+          })
+        ).map(toRow),
+      ),
+    update: (collection, id, match, values) =>
+      run(collection, async (repository) => {
+        const { updatedCount } = await repository.updateMany({
+          filter: filterOf({ ...match, id: key(id) }),
+          values: values as RepositoryRecord,
+        });
+        return updatedCount > 0;
+      }),
   };
 }
 

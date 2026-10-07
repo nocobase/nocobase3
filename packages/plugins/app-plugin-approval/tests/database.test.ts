@@ -19,6 +19,8 @@ import {
 } from '@nocobase/lifecycle';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { rowsOf } from '../server/rows.js';
+
 import packageMetadata from '../package.json' with { type: 'json' };
 import {
   APPROVAL_COLLECTIONS,
@@ -123,6 +125,14 @@ describeMigration('202610060001_approval_create_collections', {
     for (const name of Object.values(APPROVAL_COLLECTIONS))
       await expectCollection(name).not.toExist();
   },
+});
+
+it('explains a missing host collection when a Repository resolves it lazily', async () => {
+  await expect(
+    rowsOf(database.connection()).get('missingApprovalHostRows', '1'),
+  ).rejects.toThrow(
+    'The approval host must migrate collection "missingApprovalHostRows"',
+  );
 });
 
 describe('an approval on the Repository store', () => {
