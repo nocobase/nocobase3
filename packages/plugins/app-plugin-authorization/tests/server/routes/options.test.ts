@@ -5,6 +5,7 @@ import {
   type CompositeResource,
 } from '@nocobase/authorization/core';
 import type { DatabaseConnection, DatabaseManager } from '@nocobase/db';
+import { type TestDatabase } from '@nocobase/app-testing/server';
 import { createI18nMiddleware, I18nRuntime } from '@nocobase/i18n/server';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -20,16 +21,18 @@ import { mountedRouter } from '../../helpers/mounted-router.js';
 import { createOrdersDatabase } from '../../helpers/orders-database.js';
 import { testRulePlugin } from '../../helpers/rule-plugin.js';
 
+let testDatabase: TestDatabase;
 let database: DatabaseManager;
 let connection: DatabaseConnection;
 
 beforeAll(async () => {
-  database = await createOrdersDatabase();
+  testDatabase = await createOrdersDatabase();
+  database = testDatabase.database;
   connection = database.connection();
 });
 
 afterAll(async () => {
-  await database.destroy();
+  await testDatabase.destroy();
 });
 
 function authorization(): AppAuthorization {
@@ -81,7 +84,7 @@ async function options(
   locale?: string,
 ): Promise<AuthorizationOptionsResponse> {
   const response = await router.request(
-    '/api/authz/permission-sets/options',
+    '/api/authorization/permissionSets/options',
     locale ? { headers: { 'accept-language': locale } } : undefined,
   );
   expect(response.status).toBe(200);
@@ -197,7 +200,7 @@ describe('the options and subject routes', () => {
     const router = await localizedRouter(authz);
     const data = (
       (await (
-        await router.request('/api/authz/sharing-rules/options')
+        await router.request('/api/authorization/sharingRules/options')
       ).json()) as { data: AuthorizationOptionsResponse }
     ).data;
     expect(data.subjectTypes).toContainEqual({
@@ -206,13 +209,14 @@ describe('the options and subject routes', () => {
       selection: { type: 'collection' },
     });
     const listed = await router.request(
-      '/api/authz/sharing-rules/subjects/department?search=sales&page=2&pageSize=20',
+      '/api/authorization/sharingRules/subjects/department?q=sales&page=2&pageSize=20',
     );
     expect(await listed.json()).toEqual({
-      data: { items: [{ id: 'sales', title: 'sales:2:20' }], total: 42 },
+      data: [{ id: 'sales', title: 'sales:2:20' }],
+      meta: { page: 2, pageSize: 20, total: 42 },
     });
     const resolved = await router.request(
-      '/api/authz/sharing-rules/subjects/department/resolve',
+      '/api/authorization/sharingRules/subjects/department/resolve',
       {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -225,14 +229,21 @@ describe('the options and subject routes', () => {
     expect(
       (
         await router.request(
-          '/api/authz/sharing-rules/subjects/department?pageSize=101',
+          '/api/authorization/sharingRules/subjects/department?pageSize=101',
         )
       ).status,
     ).toBe(400);
-    expect(
-      (await router.request('/api/authz/sharing-rules/subjects/unknown'))
-        .status,
-    ).toBe(404);
+    const unknown = await router.request(
+      '/api/authorization/sharingRules/subjects/unknown',
+    );
+    expect(unknown.status).toBe(404);
+    await expect(unknown.json()).resolves.toMatchObject({
+      error: {
+        status: 'NOT_FOUND',
+        reason: 'UNKNOWN_SUBJECT_TYPE',
+        domain: 'authorization',
+      },
+    });
   });
 
   it('passes translation descriptors in subject titles and descriptions through unchanged', async () => {
@@ -255,14 +266,15 @@ describe('the options and subject routes', () => {
     });
     const router = await localizedRouter(authz);
     const listed = await router.request(
-      '/api/authz/sharing-rules/subjects/department',
+      '/api/authorization/sharingRules/subjects/department',
       { headers: { 'accept-language': 'zh-CN' } },
     );
     expect(await listed.json()).toEqual({
-      data: { items: [{ id: 'sales', title, description }], total: 1 },
+      data: [{ id: 'sales', title, description }],
+      meta: { page: 1, pageSize: 20, total: 1 },
     });
     const resolved = await router.request(
-      '/api/authz/sharing-rules/subjects/department/resolve',
+      '/api/authorization/sharingRules/subjects/department/resolve',
       {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -274,9 +286,12 @@ describe('the options and subject routes', () => {
     });
   });
 
-  it.each(['permission-sets', 'sharing-rules'])(
+  it.each([
+    ['permission-sets', 'permissionSets'],
+    ['sharing-rules', 'sharingRules'],
+  ])(
     'gates %s subject searches and resolution before callbacks run',
-    async (settings) => {
+    async (settings, path) => {
       const authz = authorization();
       const list = vi.fn().mockResolvedValue({ items: [], total: 0 });
       const resolve = vi.fn().mockResolvedValue([]);
@@ -294,13 +309,13 @@ describe('the options and subject routes', () => {
         );
       const router = await localizedRouter(authz, require);
       expect(
-        (await router.request(`/api/authz/${settings}/subjects/department`))
+        (await router.request(`/api/authorization/${path}/subjects/department`))
           .status,
       ).toBe(403);
       expect(
         (
           await router.request(
-            `/api/authz/${settings}/subjects/department/resolve`,
+            `/api/authorization/${path}/subjects/department/resolve`,
             {
               method: 'POST',
               headers: { 'content-type': 'application/json' },

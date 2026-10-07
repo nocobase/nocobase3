@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-jobs-example",
   "displayName": "Jobs Example App Plugin",
   "description": "Example app plugin running a recurring schedule and one-off background jobs on the application's jobs service.",
-  "version": "0.1.0-beta.1",
+  "version": "1.0.0-beta.3",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -48,7 +48,8 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "hono": "catalog:"
+    "hono": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@nocobase/dev-config": "workspace:*",
@@ -68,6 +69,7 @@
     "@base-ui/react": "catalog:",
     "@nocobase/app-client": "workspace:^",
     "@nocobase/app-plugin-authentication": "workspace:^",
+    "@nocobase/app-plugin-authorization": "workspace:^",
     "@nocobase/app-server": "workspace:^",
     "@nocobase/i18n": "workspace:^",
     "@nocobase/jobs": "workspace:^",

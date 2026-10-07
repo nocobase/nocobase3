@@ -2,6 +2,8 @@ export {
   defineEffect,
   defineLifecycle,
   describeLifecycle,
+  type CreateContext,
+  type CreateDefinition,
   type EffectContext,
   type EffectDefinition,
   type EffectRetry,
@@ -21,14 +23,19 @@ export {
   type TriggerDefinition,
 } from './definition.js';
 export {
+  EffectFailure,
   LifecycleError,
   type Blocker,
+  type BlockerKind,
+  type EffectFailureOptions,
   type InputProblem,
   type LifecycleErrorCode,
   type LifecycleErrorDetails,
 } from './errors.js';
 export {
+  checkCreation,
   guardBlockers,
+  inputProblems,
   planTransition,
   stateOf,
   transitionsFrom,
@@ -42,6 +49,7 @@ export {
   LifecycleRuntime,
   type AnnounceEvent,
   type AvailableTransition,
+  type CanOptions,
   type CreateOptions,
   type EventFilter,
   type EffectDispatcher,
@@ -54,6 +62,7 @@ export {
   type LifecycleLogger,
   type LifecycleRuntimeOptions,
   type PruneOptions,
+  type RetryRunOptions,
   type RecordHistory,
   type RecordView,
   type RegisterOptions,
@@ -72,9 +81,22 @@ export type {
   NewEffectRun,
   NewTransitionEntry,
   RecordCondition,
+  TransactionOptions,
   TransitionEntry,
 } from './store.js';
 export { toMermaid, type MermaidOptions } from './mermaid.js';
+export {
+  lifecycleDescriptionView,
+  type FireView,
+  type LifecycleDescriptionView,
+} from './views.js';
+export {
+  lifecycleErrorFields,
+  type LifecycleApiErrorFields,
+  type LifecycleApiErrorOptions,
+  type LifecycleApiFieldViolation,
+  type LifecycleApiStatus,
+} from './api-errors.js';
 export { MemoryLifecycleStore } from './memory-store.js';
 export { LIFECYCLE_COLLECTIONS } from './collections.js';
 export {

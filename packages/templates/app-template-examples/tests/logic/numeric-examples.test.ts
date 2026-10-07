@@ -1,7 +1,11 @@
 // @vitest-environment node
 import path from 'node:path';
-import { createDatabaseManager, databaseManagerToken } from '@nocobase/db';
-import sqlite from '@nocobase/db-sqlite';
+import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
+import {
+  createTestDatabase,
+  withoutDecimalPadding,
+  type TestDatabase,
+} from '@nocobase/app-testing/server';
 import { Auth, authenticationToken } from '@nocobase/app-plugin-authentication';
 import type { Application } from '@nocobase/app-server/application';
 import { ServiceContainer } from '@nocobase/service-provider';
@@ -9,15 +13,8 @@ import { Hono } from 'hono';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { numericExamplesRoutes } from '../../server/routes/numeric-examples.js';
 
-const createDatabase = () =>
-  createDatabaseManager({
-    default: 'main',
-    drivers: { sqlite },
-    connections: {
-      main: { dialect: 'sqlite', filename: ':memory:' },
-    },
-  });
-let database: ReturnType<typeof createDatabase>;
+let testDatabase: TestDatabase;
+let database: DatabaseManager;
 let router: Hono;
 const source = (kind: string) => ({
   connection: 'main',
@@ -25,7 +22,8 @@ const source = (kind: string) => ({
   packageName: 'analytics-test',
 });
 beforeEach(async () => {
-  database = createDatabase();
+  testDatabase = await createTestDatabase();
+  database = testDatabase.database;
   await database.createMigrator(source('migrations')).latest();
   const container = new ServiceContainer();
   container.instance(databaseManagerToken, database);
@@ -65,12 +63,12 @@ beforeEach(async () => {
   router.get('/main/api/unrelated', (c) => c.text('public'));
 });
 afterEach(async () => {
-  await database?.destroy();
+  await testDatabase?.destroy();
 });
 
 function request(source = 'query', sample = 'all', authenticated = true) {
   return router.request(
-    `/main/api/numeric-examples?source=${source}&sample=${sample}`,
+    `/main/api/numericExamples?source=${source}&sample=${sample}`,
     {
       headers: authenticated ? { 'x-test-user': 'tester' } : {},
     },
@@ -119,7 +117,9 @@ it('seeds exact adjacent integers and preserves edits on repeat runs', async () 
   const repository = database.repository('numericExamples');
   expect(await repository.count()).toBe(7);
   expect(
-    await repository.findOne({ filter: { sample: 'adjacent' } }),
+    withoutDecimalPadding(
+      await repository.findOne({ filter: { sample: 'adjacent' } }),
+    ),
   ).toMatchObject({ bigintValue: '9007199254740993', decimalValue: '0.125' });
   await repository.updateOne({
     filter: { sample: 'small' },
@@ -140,11 +140,32 @@ it('seeds exact adjacent integers and preserves edits on repeat runs', async () 
 
 it('requires authentication, validates options, and exposes no writes', async () => {
   expect((await request('query', 'all', false)).status).toBe(401);
-  expect((await request('raw')).status).toBe(400);
+  const invalid = await request('raw');
+  expect(invalid.status).toBe(400);
+  expect(await invalid.json()).toMatchObject({
+    error: {
+      reason: 'INVALID_INPUT',
+      fieldViolations: [expect.objectContaining({ field: 'source' })],
+    },
+  });
   expect((await request('query', 'unknown')).status).toBe(400);
+  // `orderBy` is AIP-132: known fields only, each at most once, ` desc` the only suffix.
+  for (const orderBy of ['sample', 'id asc', 'id desc,id', 'id,', '-id']) {
+    const refused = await router.request(
+      `/main/api/numericExamples?orderBy=${encodeURIComponent(orderBy)}`,
+      { headers: { 'x-test-user': 'tester' } },
+    );
+    expect(refused.status).toBe(400);
+    expect(await refused.json()).toMatchObject({
+      error: {
+        reason: 'INVALID_INPUT',
+        fieldViolations: [expect.objectContaining({ field: 'orderBy' })],
+      },
+    });
+  }
   expect(
     (
-      await router.request('/main/api/numeric-examples', {
+      await router.request('/main/api/numericExamples', {
         method: 'POST',
         headers: { 'x-test-user': 'tester' },
       })
@@ -154,7 +175,15 @@ it('requires authentication, validates options, and exposes no writes', async ()
   const unavailable = await numericExamplesRoutes.createRouter({
     container: new ServiceContainer(),
   } as Application);
-  expect((await unavailable.request('/numeric-examples')).status).toBe(503);
+  const response = await unavailable.request('/numericExamples');
+  expect(response.status).toBe(503);
+  expect(await response.json()).toMatchObject({
+    error: {
+      status: 'UNAVAILABLE',
+      reason: 'DATABASE_UNAVAILABLE',
+      domain: 'examples',
+    },
+  });
 });
 
 it.each(['query', 'repository'])(
@@ -163,10 +192,10 @@ it.each(['query', 'repository'])(
     await database.createSeeder(source('seeds')).run();
     const response = await request(sourceName);
     expect(response.status).toBe(200);
-    const result = await response.json();
+    const result: unknown = withoutDecimalPadding(await response.json());
     expect(result).toMatchObject({
       data: {
-        dialect: 'sqlite',
+        dialect: testDatabase.dialect,
         source: sourceName,
         rows: expect.arrayContaining([
           expect.objectContaining({
@@ -249,5 +278,26 @@ it.each(['query', 'repository'])(
         min: null,
         max: null,
       });
+  },
+);
+
+it.each(['query', 'repository'])(
+  'orders by every key of an AIP-132 orderBy through %s',
+  async (sourceName) => {
+    await database.createSeeder(source('seeds')).run();
+    const response = await router.request(
+      `/main/api/numericExamples?source=${sourceName}&orderBy=${encodeURIComponent('integerValue desc,id')}`,
+      { headers: { 'x-test-user': 'tester' } },
+    );
+    expect(response.status).toBe(200);
+    const { rows } = (await response.json()).data as {
+      rows: { id: number | string; integerValue: number | null }[];
+    };
+    const ranked = rows.filter((row) => row.integerValue !== null);
+    expect(ranked.map((row) => row.integerValue)).toEqual(
+      [...ranked.map((row) => row.integerValue)].sort(
+        (left, right) => (right ?? 0) - (left ?? 0),
+      ),
+    );
   },
 );

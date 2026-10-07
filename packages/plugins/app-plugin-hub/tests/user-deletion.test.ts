@@ -1,12 +1,11 @@
 import { createAuthMiddleware } from 'better-auth/api';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createMigrator, type DatabaseManager } from '@nocobase/db';
 import {
-  createDatabaseManager,
-  createMigrator,
-  type DatabaseManager,
-} from '@nocobase/db';
-import sqlite from '@nocobase/db-sqlite';
+  createTestDatabase,
+  type TestDatabase,
+} from '@nocobase/app-testing/server';
 import {
   createAuthentication,
   createUserAdministrationService,
@@ -41,6 +40,7 @@ import { HubApiKeyService } from '../server/services/api-keys.js';
 import { DefaultHubService } from '../server/services/hub.js';
 import deletePermissionMigration from '../database/migrations/202609170003_administrator_delete_users.js';
 
+let testDatabase: TestDatabase;
 let db: DatabaseManager;
 let auth: ReturnType<typeof createAuthentication>;
 let authz: ReturnType<typeof createAppAuthorization>;
@@ -53,11 +53,8 @@ let registered = false;
 const secret = 'test-only-user-deletion-secret-at-least-32';
 beforeEach(async () => {
   registered = false;
-  db = createDatabaseManager({
-    drivers: { sqlite },
-    default: 'main',
-    connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
-  });
+  testDatabase = await createTestDatabase();
+  db = testDatabase.database;
   for (const plugin of ['authentication', 'authorization', 'api-keys', 'hub']) {
     const directory = `../../app-plugin-${plugin}/database/migrations`;
     await createMigrator({
@@ -138,7 +135,7 @@ beforeEach(async () => {
   );
 });
 afterEach(async () => {
-  await db.destroy();
+  await testDatabase.destroy();
 });
 async function router(actorId?: string) {
   const container = new ServiceContainer();
@@ -182,31 +179,28 @@ async function router(actorId?: string) {
   }
   return apiRoutes.createRouter({ container } as AppPluginApplication);
 }
-function deletion(confirm: unknown = true) {
-  return {
-    method: 'DELETE',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ confirm }),
-  };
+/** Deleting a user is a `DELETE` confirmed in the query string; it carries no body. */
+function deletion(userId: string, confirm = true): [string, RequestInit] {
+  return [
+    `/users/${userId}${confirm ? '?confirm=true' : ''}`,
+    { method: 'DELETE' },
+  ];
 }
 
 describe('Hub user deletion', () => {
   it('requires a platform administrator, explicit confirmation, and disallows self deletion', async () => {
+    expect((await (await router()).request(...deletion(target))).status).toBe(
+      401,
+    );
     expect(
-      (await (await router()).request(`/users/${target}`, deletion())).status,
-    ).toBe(401);
-    expect(
-      (await (await router(target)).request('/users/admin-two', deletion()))
-        .status,
+      (await (await router(target)).request(...deletion('admin-two'))).status,
     ).toBe(403);
     const api = await router('admin');
-    expect(
-      (await api.request(`/users/${target}`, deletion(false))).status,
-    ).toBe(400);
-    const self = await api.request('/users/admin', deletion());
-    expect(self.status).toBe(409);
+    expect((await api.request(...deletion(target, false))).status).toBe(400);
+    const self = await api.request(...deletion('admin'));
+    expect(self.status).toBe(400);
     expect(await self.json()).toMatchObject({
-      code: 'SELF_DELETE_NOT_ALLOWED',
+      error: { reason: 'SELF_DELETE_NOT_ALLOWED' },
     });
     expect(await users.get(target)).toBeDefined();
   });
@@ -258,12 +252,9 @@ describe('Hub user deletion', () => {
     expect(await ctx.internalAdapter.findSession(session.token)).not.toBeNull();
     const before = await db.query().selectFrom('hubApps').selectAll().execute();
     const api = await router('admin');
-    expect((await api.request(`/users/${target}`, deletion())).status).toBe(
-      200,
-    );
-    expect((await api.request(`/users/${target}`, deletion())).status).toBe(
-      200,
-    );
+    expect((await api.request(...deletion(target))).status).toBe(204);
+    // The user is gone, so deleting it again names a user that does not exist.
+    expect((await api.request(...deletion(target))).status).toBe(404);
     expect(await users.get(target)).toBeUndefined();
     expect((await users.list({ search: 'Deletion target' })).total).toBe(0);
     const tombstone = await db
@@ -321,7 +312,10 @@ describe('Hub user deletion', () => {
     expect(await normal.verify(generic.secret)).toBeNull();
     await expect(
       keys.verify(publishing.secret, 'other-app', 'deploy'),
-    ).rejects.toMatchObject({ status: 401 });
+    ).rejects.toMatchObject({
+      reason: 'INVALID_API_KEY',
+      status: 'UNAUTHENTICATED',
+    });
     expect(await ctx.internalAdapter.findSession(session.token)).toBeNull();
     await expect(users.enable(target)).rejects.toMatchObject({
       code: 'USER_NOT_FOUND',
@@ -336,7 +330,10 @@ describe('Hub user deletion', () => {
         appIds: [],
         scopes: ['deploy'],
       }),
-    ).rejects.toMatchObject({ status: 401 });
+    ).rejects.toMatchObject({
+      reason: 'INVALID_API_KEY',
+      status: 'UNAUTHENTICATED',
+    });
   });
   it('revokes a login that was already in flight when the user was deleted', async () => {
     const gated = createAuthentication({
@@ -458,7 +455,7 @@ describe('Hub user deletion', () => {
     });
     await expect(
       hub.createApp({ id: 'orphan', name: 'Orphan' }, target),
-    ).rejects.toMatchObject({ code: 'APP_OWNER_UNAVAILABLE' });
+    ).rejects.toMatchObject({ reason: 'APP_OWNER_UNAVAILABLE' });
     expect(
       await db
         .query()
@@ -475,6 +472,12 @@ describe('Hub user deletion', () => {
       .set({ createdBy: target })
       .where('id', '=', 'other-app')
       .execute();
+    // Boots UsersProvider as the application does. Its user subject type is
+    // what makes a deleted administrator stop counting as an active
+    // assignment; without it the guard counts every assigned user as active.
+    // A database that runs both transactions concurrently reaches that guard
+    // with each actor still active, so the guard alone has to decide.
+    await router();
     const results = await Promise.allSettled([
       management.remove('admin', 'admin-two'),
       management.remove('admin-two', 'admin'),

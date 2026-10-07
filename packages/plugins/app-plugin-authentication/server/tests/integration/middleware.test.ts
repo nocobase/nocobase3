@@ -78,7 +78,9 @@ describe('Auth middleware', () => {
           headers: { 'x-test-credential': 'expired' },
         });
         expect(response.status).toBe(status === 'FORBIDDEN' ? 403 : 500);
-        expect(await response.json()).toMatchObject({ code: 'REJECTED' });
+        expect(await response.json()).toMatchObject({
+          error: { reason: 'REJECTED', domain: 'authentication' },
+        });
       }
     }
   });
@@ -104,7 +106,12 @@ describe('Auth middleware', () => {
       const response = await send('/private', headers);
       expect(response.status).toBe(403);
       expect(await response.json()).toMatchObject({
-        code: 'INVALID_CSRF_ORIGIN',
+        error: {
+          code: 403,
+          status: 'PERMISSION_DENIED',
+          reason: 'INVALID_CSRF_ORIGIN',
+          domain: 'authentication',
+        },
       });
     }
     expect((await send('/optional', {})).status).toBe(403);

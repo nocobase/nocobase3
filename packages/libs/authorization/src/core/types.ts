@@ -51,13 +51,17 @@ export interface AuthorizationDecision<
 }
 
 /**
- * Thrown by `require`. It answers `403 { code: 'FORBIDDEN', message }` on its
- * own: `getResponse` is the interface Hono's default error handler honours,
- * and `status` is what request logging reads.
+ * Thrown by `require`. It answers `403` in the standard API error body, status `PERMISSION_DENIED`, reason
+ * `AUTHORIZATION_DENIED` and domain `authorization`, on its own: `getResponse` is the interface Hono's default error
+ * handler honours, and an application's `/api` error handler reads `status`, `reason` and `domain`, as request logging
+ * reads `status`.
  */
 export class AuthorizationDeniedError extends Error {
   readonly decision: AuthorizationDecision;
   readonly status = 403;
+  /** The standard API error `reason` and `domain`, read by the application's `/api` error handler. */
+  readonly reason = 'AUTHORIZATION_DENIED';
+  readonly domain = 'authorization';
 
   constructor(decision: AuthorizationDecision) {
     super(decision.reasons.at(-1)?.message ?? 'Authorization denied');
@@ -67,7 +71,15 @@ export class AuthorizationDeniedError extends Error {
 
   getResponse(): Response {
     return Response.json(
-      { code: 'FORBIDDEN', message: this.message },
+      {
+        error: {
+          code: this.status,
+          status: 'PERMISSION_DENIED',
+          reason: this.reason,
+          domain: this.domain,
+          message: this.message,
+        },
+      },
       { status: this.status },
     );
   }

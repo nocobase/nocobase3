@@ -6,12 +6,12 @@ Resolve the existing `authorizationToken` in the application. This reference cov
 
 `authz.middleware()` sets the request's `authz` variable to an `AuthorizationContext` for the signed-in identity. The principal is the authenticated actor; subjects add verified memberships such as teams, and the principal itself also matches grants. Subject ids are literals, including the `*` in `authenticated:*`. A context built by hand with `authz.for(identity)` uses exactly the identity it is given: resolve and include memberships yourself.
 
-| `AuthorizationContext` member              | Result and use                                                                                                                                                                  |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `authorize({ resource, action, params? })` | The full decision: `permit`, `deny`, or `conditional` with `conditions`, and `reasons`                                                                                          |
-| `can(request)`                             | `true` only for `permit`; a business check reports feature availability, not record access                                                                                      |
-| `require(request)`                         | Throws `AuthorizationDeniedError`, which answers `403 { code: 'FORBIDDEN', message }` without an `onError`, unless the decision is `permit`; use for unconditional capabilities |
-| `snapshot()`                               | `{ unrestricted, permissions }` for the client; not an executable data policy                                                                                                   |
+| `AuthorizationContext` member              | Result and use                                                                                                                                                                                                           |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `authorize({ resource, action, params? })` | The full decision: `permit`, `deny`, or `conditional` with `conditions`, and `reasons`                                                                                                                                   |
+| `can(request)`                             | `true` only for `permit`; a business check reports feature availability, not record access                                                                                                                               |
+| `require(request)`                         | Throws `AuthorizationDeniedError`, which the application answers as `403 PERMISSION_DENIED` with reason `AUTHORIZATION_DENIED` without an `onError`, unless the decision is `permit`; use for unconditional capabilities |
+| `snapshot()`                               | `{ unrestricted, permissions }` for the client; not an executable data policy                                                                                                                                            |
 
 Create one context per request and reuse it within that request only, never across identities. Its grant and rule reads are shared by the underlying checks of a business action. Execute a conditional decision only through the adapter that understands its conditions. Unknown types, unregistered catalog items or actions, conditional decisions without conditions and handler failures deny.
 
@@ -37,7 +37,7 @@ The platform protects the root and default sets. Root grants unrestricted access
 
 Generic HTTP management rejects changes to a protected key. Owner-side service calls are trusted and bypass `assertWritable`. `requireActiveAssignment` and `assignableTo` are enforced by the assignment APIs. Relevant failures include `PermissionSetProtectedError`, `PermissionSetLastAssignmentError` and `PermissionSetSubjectNotAllowedError`.
 
-Protected assignment changes run in a database transaction that locks the protected set before checking remaining active assignments. Custom subject `filterActive` callbacks must use the supplied transaction. When a business mutation owns the transaction, bind the service to that connection and notify after commit:
+Protected assignment changes run in a database transaction that locks the protected set before checking remaining active assignments. Custom subject `filterActive` callbacks must use the supplied transaction. When a business mutation owns the transaction, bind the service to that connection and notify through it; the bound service publishes after the commit and not at all on rollback:
 
 ```ts
 const subject = { type: 'user', id: userId };
@@ -45,8 +45,8 @@ await database.transaction(async (connection) => {
   const sets = authz.permissionSets.withTransaction(connection);
   await sets.assertSubjectRemovable(subject);
   await disableUser(connection, userId); // Application-owned mutation.
+  await sets.notifyAssignmentsChanged(subject);
 });
-await authz.permissionSets.notifyAssignmentsChanged(subject);
 ```
 
 Never separate the removal check from the user mutation's transaction. Use the application's existing store; replacing persistence is outside ordinary feature development.

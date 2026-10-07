@@ -9,7 +9,7 @@ beforeEach(async () => {
   f = await createFixture();
 });
 afterEach(async () => {
-  await f.database.destroy();
+  await f.destroy();
 });
 async function seed() {
   await f.database
@@ -26,13 +26,19 @@ async function aggregate(
     await loadAggregate(f.api, { status: 'all', minimumQuantity: 0, ...query })
   ).data;
 }
+// AVG over an integer column is a string in the database's own format: the
+// value is exact, but trailing zeros differ (SQLite '14900', PostgreSQL
+// '14900.000000000000', MySQL '14900.0000'), so match the value, not the scale.
+function exactDecimal(integerPart: string) {
+  return expect.stringMatching(new RegExp(`^${integerPart}(?:\\.0+)?$`));
+}
 it('aggregates all rows, groups products with names, and includes zero relation counts', async () => {
   await seed();
   const result = await aggregate();
   expect(result.summary).toEqual({
     count: 8,
     quantity: '14',
-    averagePrice: '14900',
+    averagePrice: exactDecimal('14900'),
     minimumPrice: 5900,
     maximumPrice: 32900,
   });
@@ -49,16 +55,16 @@ it('aggregates all rows, groups products with names, and includes zero relation 
     name: 'Mechanical Keyboard',
     count: 2,
     quantity: '3',
-    averagePrice: '12400',
+    averagePrice: exactDecimal('12400'),
   });
   expect(result.customers.map((row) => row.orders)).toEqual([2, 1, 1, 0]);
   const statusCalls = f.requests.filter(
     (entry) =>
-      /repositoryExampleOrders:groupBy$/.test(entry.path) &&
+      /repositoryExampleOrders\/groupBy$/.test(entry.path) &&
       JSON.stringify(entry.body).includes('"by":["status"]'),
   );
   expect(statusCalls).toHaveLength(1);
-  expect(statusCalls[0]?.path).toContain(':groupBy');
+  expect(statusCalls[0]?.path).toContain('/groupBy');
   expect(statusCalls[0]?.body).toMatchObject({ by: ['status'] });
 });
 it('applies status to all queries and HAVING only to grouped products', async () => {
@@ -105,7 +111,7 @@ it('requires authentication for both aggregate actions and leaves unrelated rout
     expect(
       (
         await f.router.request(
-          `/main/api/repositoryExampleOrderItems:${action}`,
+          `/main/api/repositoryExampleOrderItems/${action}`,
           {
             method: 'POST',
             headers: { 'content-type': 'application/json' },

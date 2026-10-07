@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-departments-example",
   "displayName": "Departments Example App Plugin",
   "description": "Departments for the authorization example's trading company, wired into authorization as an inherited subject type.",
-  "version": "0.0.2-beta.2",
+  "version": "1.0.0-beta.4",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -68,7 +68,8 @@
   },
   "dependencies": {
     "better-auth": "catalog:",
-    "hono": "catalog:"
+    "hono": "catalog:",
+    "zod": "catalog:"
   },
   "peerDependencies": {
     "@base-ui/react": "catalog:",
@@ -93,7 +94,7 @@
     "@nocobase/app-plugin-authz-restriction-rules": "workspace:*",
     "@nocobase/app-plugin-authz-sharing-rules": "workspace:*",
     "@nocobase/caching": "workspace:*",
-    "@nocobase/db-sqlite": "workspace:*",
+    "@nocobase/app-testing": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@nocobase/logging": "workspace:*",
     "@nocobase/session": "workspace:*",

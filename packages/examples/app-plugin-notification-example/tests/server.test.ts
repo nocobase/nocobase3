@@ -4,53 +4,92 @@ import path from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { Hono, type Context, type Next } from 'hono';
 import { ServiceContainer } from '@nocobase/service-provider';
-import { createDatabaseManager, databaseManagerToken } from '@nocobase/db';
-import sqlite from '@nocobase/db-sqlite';
+import {
+  databaseManagerToken,
+  type DatabaseManager,
+  type MigrationSource,
+} from '@nocobase/db';
+import {
+  createTestDatabase,
+  describeMigration,
+} from '@nocobase/app-testing/server';
 import {
   authenticationToken,
   type AuthEnv,
 } from '@nocobase/app-plugin-authentication';
 import { notificationServiceToken } from '@nocobase/app-plugin-notification/server';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
+import {
+  findUndeclaredApiRoutes,
+  generateApiDocument,
+} from '@nocobase/app-server/router';
 
 import plugin from '../server/index.js';
 import { apiRoutes } from '../server/routes/index.js';
 
-interface SqliteClient {
-  readonly schema: {
-    hasTable(name: string): Promise<boolean>;
-    hasColumn(table: string, column: string): Promise<boolean>;
-  };
-}
+// The routes read the authentication plugin's users, so its migrations run before this plugin's.
+const authenticationMigrations: MigrationSource = {
+  directory: path.resolve(
+    import.meta.dirname,
+    '../../../plugins/app-plugin-authentication/database/migrations',
+  ),
+  packageName: '@nocobase/app-plugin-authentication',
+};
+const exampleMigrations: MigrationSource = {
+  directory: path.resolve(import.meta.dirname, '../database/migrations'),
+  packageName: plugin.packageName,
+};
 
-const databases: Array<{ destroy(): Promise<void> }> = [];
+const disposers: Array<() => Promise<void>> = [];
 
 afterEach(async () => {
-  for (const database of databases.splice(0).reverse())
-    await database.destroy();
+  for (const dispose of disposers.splice(0).reverse()) await dispose();
 });
 
-it('creates the task table and reverses it cleanly', async () => {
-  const database = await createFixture();
-  const connection = database.connection();
-  const client = await connection.client<SqliteClient>();
-
+it('declares its migrations directory', () => {
   expect(plugin.database?.migrations).toBe('./database/migrations');
-  expect(await client.schema.hasTable('notification_example_tasks')).toBe(true);
+});
+
+it('declares every route for the API document', async () => {
+  const router = await apiRoutes.createRouter({
+    container: routeContainer(),
+  } as AppPluginApplication);
+
+  expect(findUndeclaredApiRoutes(router)).toEqual([]);
+  const document = await generateApiDocument(router, {
+    info: { title: 'Notification example', version: '0.0.0' },
+  });
+  const operations = Object.values(document.paths ?? {}).flatMap((item) =>
+    Object.values(item ?? {}),
+  ) as { operationId?: string; tags?: string[] }[];
+  expect(operations.map(({ operationId }) => operationId).sort()).toEqual([
+    'notificationExampleCreateTask',
+    'notificationExampleGetTask',
+    'notificationExampleListAssignees',
+    'notificationExampleListTasks',
+    'notificationExampleUpdateTask',
+  ]);
   expect(
-    await client.schema.hasColumn('notification_example_tasks', 'assignee_id'),
+    operations.every(({ tags }) => tags?.[0] === 'NotificationExample'),
   ).toBe(true);
-
-  await database
-    .createMigrator({
-      directory: path.resolve(import.meta.dirname, '../database/migrations'),
-      packageName: plugin.packageName,
-    })
-    .rollback();
-
-  expect(await client.schema.hasTable('notification_example_tasks')).toBe(
-    false,
+  expect(document.components?.schemas).toHaveProperty(
+    'NotificationExampleTask',
   );
+  expect(document.components?.schemas).toHaveProperty(
+    'NotificationExampleUser',
+  );
+});
+
+describeMigration('202609220001_create_notification_example_tasks', {
+  sources: [authenticationMigrations, exampleMigrations],
+  up: async ({ expectCollection }) => {
+    await expectCollection('notificationExampleTasks').toHaveField(
+      'assigneeId',
+    );
+  },
+  down: async ({ expectCollection }) => {
+    await expectCollection('notificationExampleTasks').not.toExist();
+  },
 });
 
 it('sends task summaries to the related people', async () => {
@@ -65,9 +104,17 @@ it('sends task summaries to the related people', async () => {
   });
   expect(createdResponse.status).toBe(201);
   const created = (await createdResponse.json()) as {
-    data: { id: string; assigneeId: string };
+    data: {
+      id: string;
+      assigneeId: string;
+      createdAt: string;
+      updatedAt: string;
+    };
   };
   expect(created.data.assigneeId).toBe('u2');
+  // Times are RFC 3339 UTC timestamps, zone designator included.
+  for (const time of [created.data.createdAt, created.data.updatedAt])
+    expect(time).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u);
   expect(sent).toHaveBeenCalledWith(
     expect.objectContaining({
       messages: {
@@ -107,9 +154,63 @@ it('sends task summaries to the related people', async () => {
     }),
   );
 
-  expect(
-    (await request(router, 'GET', 'u3', `/tasks/${created.data.id}`)).status,
-  ).toBe(404);
+  // Permission before existence: a foreign task and a missing one answer alike.
+  for (const taskPath of [`/tasks/${created.data.id}`, '/tasks/missing']) {
+    const denied = await request(router, 'GET', 'u3', taskPath);
+    expect(denied.status).toBe(403);
+    await expect(denied.json()).resolves.toMatchObject({
+      error: { reason: 'TASK_ACCESS_DENIED', domain: 'notificationExample' },
+    });
+  }
+  // A malformed id is answered before the query: PostgreSQL, Kingbase and MSSQL would reject it as a `uuid` and answer 500.
+  for (const taskPath of [`/tasks/${created.data.id}`, '/tasks/missing']) {
+    const deniedUpdate = await request(router, 'PATCH', 'u3', taskPath, {
+      status: 'done',
+    });
+    expect(deniedUpdate.status).toBe(403);
+    await expect(deniedUpdate.json()).resolves.toMatchObject({
+      error: { reason: 'TASK_ACCESS_DENIED' },
+    });
+  }
+
+  // An uppercase id names the same task on every dialect, not only where `uuid` is compared natively.
+  const uppercase = await request(
+    router,
+    'GET',
+    'u1',
+    `/tasks/${created.data.id.toUpperCase()}`,
+  );
+  expect(uppercase.status).toBe(200);
+  await expect(uppercase.json()).resolves.toMatchObject({
+    data: { id: created.data.id },
+  });
+
+  const forbiddenReassignment = await request(
+    router,
+    'PATCH',
+    'u2',
+    `/tasks/${created.data.id}`,
+    { assigneeId: 'u3' },
+  );
+  expect(forbiddenReassignment.status).toBe(403);
+  await expect(forbiddenReassignment.json()).resolves.toMatchObject({
+    error: { reason: 'TASK_ASSIGNMENT_FORBIDDEN' },
+  });
+
+  const unknownField = await request(
+    router,
+    'PATCH',
+    'u1',
+    `/tasks/${created.data.id}`,
+    { priority: 'high' },
+  );
+  expect(unknownField.status).toBe(400);
+  await expect(unknownField.json()).resolves.toMatchObject({
+    error: {
+      reason: 'INVALID_INPUT',
+      fieldViolations: [expect.objectContaining({ field: '' })],
+    },
+  });
 
   const reassignedResponse = await request(
     router,
@@ -154,14 +255,10 @@ it('paginates tasks visible to the current user', async () => {
   );
   const firstPageBody = (await firstPage.json()) as {
     data: unknown[];
-    total: number;
-    page: number;
-    pageSize: number;
+    meta: { page: number; pageSize: number; total: number };
   };
   expect(firstPageBody).toMatchObject({
-    total: 3,
-    page: 1,
-    pageSize: 2,
+    meta: { total: 3, page: 1, pageSize: 2 },
     data: expect.arrayContaining([
       expect.objectContaining({ title: expect.any(String) }),
     ]),
@@ -176,14 +273,10 @@ it('paginates tasks visible to the current user', async () => {
   );
   const secondPageBody = (await secondPage.json()) as {
     data: unknown[];
-    total: number;
-    page: number;
-    pageSize: number;
+    meta: { page: number; pageSize: number; total: number };
   };
   expect(secondPageBody).toMatchObject({
-    total: 3,
-    page: 2,
-    pageSize: 2,
+    meta: { total: 3, page: 2, pageSize: 2 },
   });
   expect(secondPageBody.data).toHaveLength(1);
 
@@ -191,33 +284,72 @@ it('paginates tasks visible to the current user', async () => {
     request(router, 'GET', 'u3', '/tasks?page=1&pageSize=2').then((response) =>
       response.json(),
     ),
-  ).resolves.toMatchObject({ total: 0, page: 1, pageSize: 2, data: [] });
+  ).resolves.toMatchObject({
+    meta: { total: 0, page: 1, pageSize: 2 },
+    data: [],
+  });
+
+  const defaults = await request(router, 'GET', 'u1', '/tasks');
+  await expect(defaults.json()).resolves.toMatchObject({
+    meta: { page: 1, pageSize: 20, total: 3 },
+  });
+  const oversized = await request(router, 'GET', 'u1', '/tasks?pageSize=101');
+  expect(oversized.status).toBe(400);
+  await expect(oversized.json()).resolves.toMatchObject({
+    error: {
+      reason: 'INVALID_INPUT',
+      fieldViolations: [expect.objectContaining({ field: 'pageSize' })],
+    },
+  });
+});
+
+it('rejects anonymous requests to every task route', async () => {
+  const database = await createFixture();
+  const router = await createRouter(
+    database,
+    vi.fn(async () => undefined),
+  );
+  for (const [method, taskPath] of [
+    ['GET', '/assignees'],
+    ['GET', '/tasks'],
+    ['POST', '/tasks'],
+    ['GET', '/tasks/task-1'],
+    ['PATCH', '/tasks/task-1'],
+  ] as const) {
+    const response = await router.request(
+      `/api/notificationExample${taskPath}`,
+      {
+        method,
+        headers: { 'Content-Type': 'application/json', 'x-anonymous': '1' },
+        ...(method === 'GET' ? {} : { body: '{}' }),
+      },
+    );
+    expect(response.status).toBe(401);
+  }
 });
 
 it('does not expose or accept disabled and deleted users as assignees', async () => {
   const database = await createFixture();
-  await database
-    .connection()
-    .query.updateTable('user')
-    .set({ disabledAt: new Date() })
-    .where('id', '=', 'u2')
-    .execute();
-  await database
-    .connection()
-    .query.updateTable('user')
-    .set({ deletedAt: new Date() })
-    .where('id', '=', 'u3')
-    .execute();
+  const users = database.repository('user');
+  await users.updateOne({
+    filter: { id: 'u2' },
+    values: { disabledAt: new Date() },
+  });
+  await users.updateOne({
+    filter: { id: 'u3' },
+    values: { deletedAt: new Date() },
+  });
   const router = await createRouter(
     database,
     vi.fn(async () => undefined),
   );
 
-  const usersResponse = await request(router, 'GET', 'u1', '/users');
+  const usersResponse = await request(router, 'GET', 'u1', '/assignees');
   expect(usersResponse.status).toBe(200);
-  expect(
-    ((await usersResponse.json()) as { data: Array<{ id: string }> }).data,
-  ).toEqual([{ id: 'u1', name: 'Creator', email: 'creator@example.test' }]);
+  expect(await usersResponse.json()).toEqual({
+    data: [{ id: 'u1', name: 'Creator', email: 'creator@example.test' }],
+    meta: { total: 1 },
+  });
 
   for (const assigneeId of ['u2', 'u3']) {
     const response = await request(router, 'POST', 'u1', '/tasks', {
@@ -227,30 +359,36 @@ it('does not expose or accept disabled and deleted users as assignees', async ()
     });
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toMatchObject({
-      code: 'ASSIGNEE_NOT_FOUND',
+      error: {
+        status: 'INVALID_ARGUMENT',
+        reason: 'ASSIGNEE_NOT_FOUND',
+        domain: 'notificationExample',
+        fieldViolations: [expect.objectContaining({ field: 'assigneeId' })],
+      },
     });
   }
 });
 
-async function createFixture() {
-  const database = createDatabaseManager({
-    drivers: { sqlite },
-    connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
-  });
-  databases.push(database);
+/** A container whose services the routes only resolve while they are declared, for inspecting them. */
+function routeContainer(): ServiceContainer {
+  const container = new ServiceContainer();
+  container.instance(databaseManagerToken, {} as DatabaseManager);
+  container.instance(notificationServiceToken, {} as never);
+  container.instance(authenticationToken, {
+    required: () => async (_context: Context, next: Next) => next(),
+  } as never);
+  return container;
+}
+
+async function createFixture(): Promise<DatabaseManager> {
+  const testDatabase = await createTestDatabase();
+  disposers.push(() => testDatabase.destroy());
+  const { database } = testDatabase;
   await database
-    .createMigrator({
-      directory: path.resolve(
-        import.meta.dirname,
-        '../../../plugins/app-plugin-authentication/database/migrations',
-      ),
-      packageName: '@nocobase/app-plugin-authentication',
-    })
+    .createMigrator({ sources: [authenticationMigrations] })
     .latest();
-  const query = database.connection().query;
-  await query
-    .insertInto('user')
-    .values([
+  await database.repository('user').createMany({
+    values: [
       {
         id: 'u1',
         name: 'Creator',
@@ -272,19 +410,14 @@ async function createFixture() {
         createdAt: new Date(),
         updatedAt: new Date(),
       },
-    ])
-    .execute();
-  await database
-    .createMigrator({
-      directory: path.resolve(import.meta.dirname, '../database/migrations'),
-      packageName: plugin.packageName,
-    })
-    .latest();
+    ],
+  });
+  await database.createMigrator({ sources: [exampleMigrations] }).latest();
   return database;
 }
 
 async function createRouter(
-  database: Awaited<ReturnType<typeof createFixture>>,
+  database: DatabaseManager,
   send: (input: unknown) => Promise<unknown>,
 ): Promise<Hono> {
   const container = new ServiceContainer();
@@ -292,6 +425,16 @@ async function createRouter(
   container.instance(notificationServiceToken, { send });
   container.instance(authenticationToken, {
     required: () => async (context: Context<AuthEnv>, next: Next) => {
+      if (context.req.header('x-anonymous'))
+        return context.json(
+          {
+            error: {
+              status: 'UNAUTHENTICATED',
+              reason: 'AUTHENTICATION_REQUIRED',
+            },
+          },
+          401,
+        );
       const id = context.req.header('x-test-user') ?? 'u1';
       context.set('auth', { user: { id } } as never);
       await next();
@@ -310,7 +453,7 @@ function request(
   pathName: string,
   body?: unknown,
 ): Promise<Response> {
-  return router.request(`/api/notification-example${pathName}`, {
+  return router.request(`/api/notificationExample${pathName}`, {
     method,
     headers: {
       'Content-Type': 'application/json',

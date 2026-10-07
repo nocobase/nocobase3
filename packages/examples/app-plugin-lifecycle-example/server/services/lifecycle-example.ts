@@ -1,4 +1,8 @@
-import type { DatabaseManager, RepositoryRecord } from '@nocobase/db';
+import type {
+  DatabaseManager,
+  FilterBuilder,
+  RepositoryRecord,
+} from '@nocobase/db';
 import type { LifecycleRuntime } from '@nocobase/lifecycle';
 
 import {
@@ -7,7 +11,6 @@ import {
   type ExpenseItem,
 } from '../../shared/expense.js';
 import { person } from '../../shared/people.js';
-import { PRIORITIES, TICKET_CATEGORIES } from '../../shared/ticket.js';
 import { expenseLifecycle } from '../lifecycles/expense.js';
 import { ticketLifecycle } from '../lifecycles/ticket.js';
 import type { ExampleLifecycleName, Plain } from '../tokens.js';
@@ -18,7 +21,7 @@ import type { ExampleLifecycleName, Plain } from '../tokens.js';
  */
 export class ExampleError extends Error {
   public constructor(
-    public readonly code: 'NOT_FOUND' | 'FORBIDDEN' | 'INVALID',
+    public readonly code: 'NOT_FOUND' | 'FORBIDDEN' | 'LOCKED' | 'CONFLICT',
     public readonly reason: string,
     message: string,
   ) {
@@ -32,6 +35,17 @@ function plain(row: Record<string, unknown>): Plain {
   for (const [field, value] of Object.entries(row))
     values[field] = value instanceof Date ? value.toISOString() : value;
   return values;
+}
+
+export interface Paging {
+  /** From 1. */
+  readonly page: number;
+  readonly pageSize: number;
+}
+
+export interface PlainPage {
+  readonly records: readonly Plain[];
+  readonly total: number;
 }
 
 export interface NewTicket {
@@ -49,6 +63,9 @@ export interface ExpenseDraft {
   readonly failPayments: number;
 }
 
+/** An edit: the fields it names change, the others keep their values. */
+export type ExpenseChanges = Partial<ExpenseDraft>;
+
 /**
  * The example's own operations around the runtime: creating and editing
  * records the way a form would, and reading what a page shows. Every state
@@ -62,62 +79,52 @@ export class LifecycleExampleService {
     private readonly clock: () => Date = (): Date => new Date(),
   ) {}
 
-  /** Agents see the whole queue; a customer sees their own tickets. */
-  public async listTickets(actor: string): Promise<Plain[]> {
+  /** Agents see the whole queue; a customer sees their own tickets. Newest first. */
+  public async listTickets(actor: string, page: Paging): Promise<PlainPage> {
     const own = person(actor)?.role !== 'agent';
-    const rows = await this.database
-      .repository(ticketLifecycle.collection)
-      .findMany({
-        ...(own ? { filter: { requesterId: actor } } : {}),
-        sort: (sort) => sort.field('id').desc(),
-        limit: 100,
-      });
-    return rows.map(plain);
+    const repository = this.database.repository(ticketLifecycle.collection);
+    const filter = own ? { filter: { requesterId: actor } } : {};
+    const rows = await repository.findMany({
+      ...filter,
+      sort: (sort) => sort.field('id').desc(),
+      limit: page.pageSize,
+      offset: (page.page - 1) * page.pageSize,
+    });
+    return { records: rows.map(plain), total: await repository.count(filter) };
   }
 
-  /** An applicant sees their own reports; an approver, those waiting for them. */
+  /** An applicant sees their own reports; an approver, those waiting for them. Newest first. */
   public async listExpenses(
     actor: string,
     view: 'mine' | 'approvals',
-  ): Promise<Plain[]> {
-    const rows = await this.database
-      .repository(expenseLifecycle.collection)
-      .findMany({
-        filter:
-          view === 'mine'
-            ? { applicantId: actor }
-            : // Only what is waiting for a decision; a report sent back is with its applicant.
-              (filter) =>
-                filter.and([
-                  filter.string('approverId').eq(actor),
-                  filter.or([
-                    filter.string('status').eq('awaitingManager'),
-                    filter.string('status').eq('awaitingFinance'),
-                  ]),
+    page: Paging,
+  ): Promise<PlainPage> {
+    const repository = this.database.repository(expenseLifecycle.collection);
+    const filter = {
+      filter:
+        view === 'mine'
+          ? { applicantId: actor }
+          : // Only what is waiting for a decision; a report sent back is with its applicant.
+            (filter: FilterBuilder) =>
+              filter.and([
+                filter.string('approverId').eq(actor),
+                filter.or([
+                  filter.string('status').eq('awaitingManager'),
+                  filter.string('status').eq('awaitingFinance'),
                 ]),
-        sort: (sort) => sort.field('id').desc(),
-        limit: 100,
-      });
-    return rows.map(plain);
+              ]),
+    };
+    const rows = await repository.findMany({
+      ...filter,
+      sort: (sort) => sort.field('id').desc(),
+      limit: page.pageSize,
+      offset: (page.page - 1) * page.pageSize,
+    });
+    return { records: rows.map(plain), total: await repository.count(filter) };
   }
 
-  public async createTicket(values: NewTicket, actor: string): Promise<Plain> {
-    if (person(actor)?.role !== 'customer')
-      throw new ExampleError(
-        'FORBIDDEN',
-        'customersOnly',
-        'Only a customer can file a ticket.',
-      );
-    if (!values.subject.trim() || !values.description.trim())
-      throw new ExampleError(
-        'INVALID',
-        'ticketFields',
-        'Give the ticket a subject and a description.',
-      );
-    if (!TICKET_CATEGORIES.includes(values.category))
-      throw new ExampleError('INVALID', 'category', 'Choose a category.');
-    if (!PRIORITIES.includes(values.priority as (typeof PRIORITIES)[number]))
-      throw new ExampleError('INVALID', 'priority', 'Choose a priority.');
+  /** The lifecycle's `create` decides who may file one and what it must hold. */
+  public createTicket(values: NewTicket, actor: string): Promise<Plain> {
     return this.create(
       'tickets',
       {
@@ -129,20 +136,11 @@ export class LifecycleExampleService {
     );
   }
 
-  public async createExpense(
-    values: ExpenseDraft,
-    actor: string,
-  ): Promise<Plain> {
-    if (person(actor)?.role !== 'applicant')
-      throw new ExampleError(
-        'FORBIDDEN',
-        'applicantsOnly',
-        'Only an employee can file an expense report.',
-      );
+  public createExpense(values: ExpenseDraft, actor: string): Promise<Plain> {
     return this.create(
       'expenses',
       {
-        ...this.expenseValues(values),
+        ...this.expenseChanges(values),
         applicantId: actor,
         approverId: null,
       },
@@ -150,43 +148,55 @@ export class LifecycleExampleService {
     );
   }
 
-  /** A report is edited only by its applicant, while it is a draft or sent back. */
+  /**
+   * A report is edited only by its applicant, while it is a draft or sent
+   * back. Only the fields in `changes` are written.
+   */
   public async updateExpense(
     id: string,
-    values: ExpenseDraft,
+    changes: ExpenseChanges,
     actor: string,
-  ): Promise<void> {
-    const current = await this.database
-      .repository(expenseLifecycle.collection)
-      .findOne({ filter: { id: Number(id) } });
+  ): Promise<Plain> {
+    const repository = this.database.repository(expenseLifecycle.collection);
+    const current = await repository.findOne({ filter: { id: Number(id) } });
     if (!current)
       throw new ExampleError(
         'NOT_FOUND',
-        'expenseMissing',
+        'EXPENSE_NOT_FOUND',
         'The expense report does not exist.',
       );
     if (current.applicantId !== actor)
       throw new ExampleError(
         'FORBIDDEN',
-        'ownExpenseOnly',
+        'OWN_EXPENSE_ONLY',
         'Only the applicant can edit this report.',
       );
     if (current.status !== 'draft' && current.status !== 'needsInfo')
       throw new ExampleError(
-        'INVALID',
-        'expenseLocked',
+        'LOCKED',
+        'EXPENSE_LOCKED',
         'A report under review cannot be edited; withdraw it first.',
       );
-    await this.database.repository(expenseLifecycle.collection).updateMany({
+    const values = this.expenseChanges(changes);
+    if (!Object.keys(values).length) return plain(current);
+    const { updatedCount } = await repository.updateMany({
       // The state and version as read: a concurrent submit wins, and this
-      // edit changes nothing.
+      // edit is refused.
       filter: {
         id: Number(id),
         status: String(current.status),
         lifecycleVersion: Number(current.lifecycleVersion ?? 0),
       },
-      values: this.expenseValues(values) as RepositoryRecord,
+      values: values as RepositoryRecord,
     });
+    if (updatedCount === 0)
+      throw new ExampleError(
+        'CONFLICT',
+        'EXPENSE_CHANGED',
+        'The report changed while it was being edited; reload it and try again.',
+      );
+    const updated = await repository.findOne({ filter: { id: Number(id) } });
+    return plain(updated ?? current);
   }
 
   /** The parameters the lifecycle runs with, which pages quote to their users. */
@@ -199,15 +209,19 @@ export class LifecycleExampleService {
     return this.runtime.runTriggers();
   }
 
-  private expenseValues(values: ExpenseDraft): Plain {
-    const items = parseItems(values.items);
-    return {
-      title: values.title,
-      purpose: values.purpose,
-      items,
-      amountCents: totalCents(items),
-      failPayments: values.failPayments,
-    };
+  /** The columns a draft or an edit writes; the total moves with the items. */
+  private expenseChanges(changes: ExpenseChanges): Plain {
+    const values: Plain = {};
+    if (changes.title !== undefined) values.title = changes.title;
+    if (changes.purpose !== undefined) values.purpose = changes.purpose;
+    if (changes.items !== undefined) {
+      const items = parseItems(changes.items);
+      values.items = items;
+      values.amountCents = totalCents(items);
+    }
+    if (changes.failPayments !== undefined)
+      values.failPayments = changes.failPayments;
+    return values;
   }
 
   /** Created through the lifecycle, so a record's history starts at its creation. */

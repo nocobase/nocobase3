@@ -4,16 +4,19 @@ import { mkdtemp, rm, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
-import sqlite from '@nocobase/db-sqlite';
 import {
-  createDatabaseManager,
   databaseManagerToken,
   type DatabaseManager,
   type RepositoryPolicy,
 } from '@nocobase/db';
+import { createTestDatabase } from '@nocobase/app-testing/server';
 import { createDriveManager } from '@nocobase/drive';
 import { driveManagerToken } from '@nocobase/app-server/drive';
 import { createPublicBasePathAdapter } from '@nocobase/app-server/runtime';
+import {
+  findUndeclaredApiRoutes,
+  generateApiDocument,
+} from '@nocobase/app-server/router';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { createApiClient } from '@nocobase/api-client';
 import {
@@ -78,11 +81,9 @@ async function fixture(
 ) {
   const root = await mkdtemp(path.join(tmpdir(), 'file-repository-'));
   cleanup.push(() => rm(root, { recursive: true, force: true }));
-  const db = createDatabaseManager({
-    drivers: { sqlite },
-    connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
-  });
-  cleanup.push(() => db.destroy());
+  const testDatabase = await createTestDatabase();
+  cleanup.push(() => testDatabase.destroy());
+  const db = testDatabase.database;
   await db.builder().createCollection('attachments', (collection) => {
     collection.uuid('id').primary().notNull();
     collection.string('disk', { length: 255 }).notNull();
@@ -142,6 +143,7 @@ async function fixture(
   appRouter.onError((error, c) =>
     c.json({ code: 'TEST_ERROR', message: error.message }, 500),
   );
+  let apiRouter: Hono | undefined;
   for (const contribution of defineFileRepositoryApiRoutes({
     repositories: [
       {
@@ -163,10 +165,12 @@ async function fixture(
       },
     ],
   })) {
-    appRouter.route(
-      contribution.scope === 'api' ? '/api' : '/',
-      await contribution.createRouter({ container, publicBasePath }),
-    );
+    const created = await contribution.createRouter({
+      container,
+      publicBasePath,
+    });
+    if (contribution.scope === 'api') apiRouter = created;
+    appRouter.route(contribution.scope === 'api' ? '/api' : '/', created);
   }
   const mounted = createPublicBasePathAdapter(
     { fetch: (request) => Promise.resolve(appRouter.fetch(request)) },
@@ -179,7 +183,17 @@ async function fixture(
     fetch: (input, init) => router.fetch(new Request(input, init)),
   });
   const client = new ClientFileRepositoryManager(api).repository('attachments');
-  return { root, db, drive, manager, files, router, api, client };
+  return {
+    root,
+    db,
+    drive,
+    manager,
+    files,
+    router,
+    api,
+    client,
+    apiRouter: apiRouter!,
+  };
 }
 const file = (name = 'hello.txt', text = 'hello'): File =>
   new File([text], name, { type: 'text/plain' });
@@ -352,7 +366,7 @@ describe('server repository and Client API', () => {
         await expect(client.findMany()).resolves.toEqual([]);
       } else {
         await expect(client.findMany()).rejects.toMatchObject({
-          code: 'INVALID_FILE_METADATA',
+          reason: 'INVALID_FILE_METADATA',
         });
       }
     },
@@ -415,6 +429,22 @@ describe('server repository and Client API', () => {
     expect(record.contentUrl).toBe(`/main/uploads/attachments/${record.id}`);
     expect((await router.request(record.contentUrl!)).status).toBe(200);
   });
+  it('answers an upload with 201 and the created record', async () => {
+    const { router } = await fixture();
+    for (const action of ['uploadOne', 'uploadMany']) {
+      const body = new FormData();
+      body.append('file', file());
+      const response = await router.request(`/main/api/attachments/${action}`, {
+        method: 'POST',
+        body,
+      });
+      expect(response.status).toBe(201);
+      const { data } = (await response.json()) as {
+        data: { record?: { contentUrl?: string }; records?: unknown[] };
+      };
+      expect(data.record?.contentUrl ?? data.records).toBeDefined();
+    }
+  });
   it('keeps server findMany lazy and async iterable', async () => {
     const { files } = await fixture();
     const query = files.findMany();
@@ -424,20 +454,59 @@ describe('server repository and Client API', () => {
     expect(rows).toHaveLength(1);
   });
   it('refuses a create the Policy does not grant and does not expose unconfigured actions', async () => {
-    const { client, router } = await fixture({
+    const { client, router, drive, root } = await fixture({
       policy: {
         read: true,
         create: false,
         update: true,
         delete: true,
       },
+      actions: { createOne: {}, uploadOne: { maxSize: 512 }, uploadMany: {} },
     });
     await expect(client.createOne({ values: {} })).rejects.toMatchObject({
-      code: 'WRITE_FORBIDDEN',
+      reason: 'WRITE_FORBIDDEN',
     });
+    const put = vi.spyOn(drive.use('local'), 'putStream');
+    // An upload creates a record too, so the same refusal answers 403 rather than an opaque 500, and it is decided
+    // before the body is read: nothing reaches storage, not even an object that would be removed again.
+    for (const action of ['uploadOne', 'uploadMany']) {
+      const body = new FormData();
+      body.append('file', file());
+      const upload = await router.request(`/main/api/attachments/${action}`, {
+        method: 'POST',
+        body,
+      });
+      expect(upload.status).toBe(403);
+      expect(await upload.json()).toMatchObject({
+        error: {
+          status: 'PERMISSION_DENIED',
+          reason: 'WRITE_FORBIDDEN',
+          domain: 'app',
+        },
+      });
+    }
+    // Permission precedes validation: an oversized body or a wrong content type is still refused as 403.
+    const oversized = new FormData();
+    oversized.append('file', file('large.txt', 'x'.repeat(1024)));
+    const tooLarge = await router.request('/main/api/attachments/uploadOne', {
+      method: 'POST',
+      body: oversized,
+    });
+    expect(tooLarge.status).toBe(403);
+    const notMultipart = await router.request(
+      '/main/api/attachments/uploadOne',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+      },
+    );
+    expect(notMultipart.status).toBe(403);
+    expect(put).not.toHaveBeenCalled();
+    await expect(readdir(root)).resolves.not.toContain('objects');
     expect(
       (
-        await router.request('/main/api/attachments:createMany', {
+        await router.request('/main/api/attachments/createMany', {
           method: 'POST',
         })
       ).status,
@@ -455,7 +524,9 @@ describe('server repository and Client API', () => {
     });
     expect(put).not.toHaveBeenCalled();
     await expect(client.findMany()).rejects.toMatchObject({
-      code: 'INVALID_FILE_COLLECTION',
+      status: 500,
+      reason: 'INVALID_FILE_COLLECTION',
+      domain: 'file',
     });
     expect(
       (
@@ -510,37 +581,63 @@ describe('upload boundary and access modes', () => {
     const put = vi.spyOn(drive.use('local'), 'putStream');
     await expect(
       client.uploadOne({ file: file('large.txt', 'x'.repeat(1024)) }),
-    ).rejects.toMatchObject({ status: 413 });
+    ).rejects.toMatchObject({
+      status: 413,
+      reason: 'BODY_TOO_LARGE',
+      domain: 'file',
+    });
     await expect(
       client.uploadMany({
         files: [file('a', 'x'.repeat(400)), file('b', 'x'.repeat(400))],
       }),
-    ).rejects.toMatchObject({ status: 413 });
+    ).rejects.toMatchObject({ status: 413, reason: 'BODY_TOO_LARGE' });
     expect(put).not.toHaveBeenCalled();
     const body = new FormData();
     body.append('file', file());
     body.append('file', file());
-    expect(
-      (
-        await router.request('/main/api/attachments:uploadOne', {
-          method: 'POST',
-          body,
-        })
-      ).status,
-    ).toBe(400);
+    const twoFiles = await router.request('/main/api/attachments/uploadOne', {
+      method: 'POST',
+      body,
+    });
+    expect(twoFiles.status).toBe(400);
+    expect(await twoFiles.json()).toMatchObject({
+      error: {
+        status: 'INVALID_ARGUMENT',
+        reason: 'INVALID_FILE',
+        domain: 'file',
+      },
+    });
     await expect(client.uploadMany({ files: [] })).rejects.toMatchObject({
       status: 400,
+      reason: 'INVALID_FILES',
     });
     const textBody = new FormData();
     textBody.append('file', 'text');
-    expect(
-      (
-        await router.request('/main/api/attachments:uploadMany', {
-          method: 'POST',
-          body: textBody,
-        })
-      ).status,
-    ).toBe(400);
+    const text = await router.request('/main/api/attachments/uploadMany', {
+      method: 'POST',
+      body: textBody,
+    });
+    expect(text.status).toBe(400);
+    expect(await text.json()).toMatchObject({
+      error: { reason: 'INVALID_FILES' },
+    });
+    const notMultipart = await router.request(
+      '/main/api/attachments/uploadOne',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+      },
+    );
+    expect(notMultipart.status).toBe(415);
+    expect(await notMultipart.json()).toMatchObject({
+      error: {
+        code: 415,
+        status: 'INVALID_ARGUMENT',
+        reason: 'UNSUPPORTED_MEDIA_TYPE',
+        domain: 'file',
+      },
+    });
   });
   it('redirects public objects and fails explicitly for unavailable private URLs', async () => {
     const { files, client, router } = await fixture({
@@ -563,9 +660,13 @@ describe('upload boundary and access modes', () => {
     const failure = await privateFixture.router.request(
       privateUpload.record.contentUrl!,
     );
-    expect(failure.status).toBe(500);
+    expect(failure.status).toBe(503);
     expect(await failure.json()).toMatchObject({
-      code: 'STORAGE_URL_UNAVAILABLE',
+      error: {
+        status: 'UNAVAILABLE',
+        reason: 'STORAGE_URL_UNAVAILABLE',
+        domain: 'file',
+      },
     });
   });
   it('uses record.disk and signed URLs, with no-store and no redirect loops', async () => {
@@ -581,7 +682,7 @@ describe('upload boundary and access modes', () => {
     ).toBe('private, no-store');
     expect(signed).toHaveBeenCalledWith(record.key, { expiresIn: '5 mins' });
     signed.mockResolvedValue(`http://localhost${record.contentUrl}`);
-    expect((await router.request(record.contentUrl!)).status).toBe(500);
+    expect((await router.request(record.contentUrl!)).status).toBe(503);
     const publicUrl = vi
       .spyOn(drive.use('public'), 'getUrl')
       .mockResolvedValue('https://cdn.example.test/file');
@@ -604,11 +705,11 @@ describe('upload boundary and access modes', () => {
       );
       const { record } = await client.uploadOne({ file: file() });
       const response = await router.request(record.contentUrl!);
-      expect(response.status).toBe(500);
+      expect(response.status).toBe(503);
       expect(response.headers.get('location')).toBeNull();
       expect(response.headers.get('cache-control')).toBe('private, no-store');
       expect(await response.json()).toMatchObject({
-        code: 'STORAGE_URL_UNAVAILABLE',
+        error: { reason: 'STORAGE_URL_UNAVAILABLE' },
       });
     },
   );
@@ -637,10 +738,10 @@ describe('upload boundary and access modes', () => {
       const { record } = await client.uploadOne({ file: file() });
       const response = await router.request(record.contentUrl!);
       if (expectedBase === null) {
-        expect(response.status).toBe(500);
+        expect(response.status).toBe(503);
         expect(response.headers.get('location')).toBeNull();
         expect(await response.json()).toMatchObject({
-          code: 'STORAGE_URL_UNAVAILABLE',
+          error: { reason: 'STORAGE_URL_UNAVAILABLE' },
         });
       } else {
         expect(response.status).toBe(302);
@@ -675,6 +776,138 @@ describe('upload boundary and access modes', () => {
         repositories: [{ ...entry, actions: { uploadOne: { maxSize: 0 } } }],
       }),
     ).toThrow('maxSize');
+  });
+});
+
+describe('API document', () => {
+  it("declares the upload endpoints beside the exposure's data endpoints", async () => {
+    const { apiRouter } = await fixture({
+      actions: { findMany: {}, uploadOne: {}, uploadMany: { maxSize: 1024 } },
+    });
+
+    expect(findUndeclaredApiRoutes(apiRouter)).toEqual([]);
+    const document = await generateApiDocument(apiRouter, {
+      info: { title: 'test', version: '0.0.0' },
+    });
+    const operations = Object.entries(document.paths ?? {}).flatMap(
+      ([path, item]) =>
+        Object.entries(item ?? {}).map(([method, operation]) => [
+          `${method.toUpperCase()} ${path}`,
+          (operation as { operationId?: string }).operationId,
+          (operation as { tags?: string[] }).tags,
+        ]),
+    );
+    expect(operations).toEqual(
+      expect.arrayContaining([
+        [
+          'POST /api/attachments/uploadOne',
+          'attachmentsUploadOne',
+          ['Attachments'],
+        ],
+        [
+          'POST /api/attachments/uploadMany',
+          'attachmentsUploadMany',
+          ['Attachments'],
+        ],
+        [
+          'POST /api/attachments/findMany',
+          'attachmentsFindMany',
+          ['Attachments'],
+        ],
+      ]),
+    );
+    expect(operations).toHaveLength(3);
+    const upload = document.paths?.['/api/attachments/uploadMany']?.post;
+    expect(upload?.requestBody).toMatchObject({
+      content: {
+        'multipart/form-data': {
+          schema: {
+            properties: {
+              file: { type: 'array', items: { format: 'binary' } },
+            },
+          },
+        },
+      },
+    });
+    expect(Object.keys(upload?.responses ?? {}).sort()).toEqual([
+      '201',
+      '400',
+      '401',
+      '403',
+      '413',
+      '415',
+      '500',
+    ]);
+    expect(upload?.description).toContain('1024 bytes');
+  });
+
+  it('documents every computed field the responses carry, read-only in the record schema', async () => {
+    const { apiRouter, router, db } = await fixture();
+    const document = await generateApiDocument(apiRouter, {
+      info: { title: 'test', version: '0.0.0' },
+    });
+    const record = document.components?.schemas?.AttachmentsRecord as {
+      properties: Record<string, { readOnly?: boolean; type?: string }>;
+    };
+    expect(record.properties.contentUrl).toMatchObject({
+      type: 'string',
+      readOnly: true,
+    });
+    expect(
+      (
+        document.components?.schemas?.AttachmentsCreateValues as {
+          properties: Record<string, unknown>;
+        }
+      ).properties,
+    ).not.toHaveProperty('contentUrl');
+    // The computed fields are the record properties the Collection does not have.
+    const collection = await db.collections().get('attachments');
+    const stored = new Set((collection?.fields ?? []).map(({ name }) => name));
+    const computed = Object.keys(record.properties).filter(
+      (name) => !stored.has(name),
+    );
+    expect(computed).toEqual(['contentUrl']);
+
+    const post = async (action: string, body: unknown) => {
+      const response = await router.request(`/main/api/attachments/${action}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      expect(response.status).toBe(200);
+      return ((await response.json()) as { data: Record<string, unknown> })
+        .data;
+    };
+    const now = new Date().toISOString().slice(0, 23);
+    const created = (await post('createOne', {
+      values: {
+        id: '7b0e8a52-3c1d-4e9a-9f2b-0c6d5e4f3a21',
+        disk: 'local',
+        key: 'manual/report.pdf',
+        filename: 'report.pdf',
+        ext: 'pdf',
+        mimeType: 'application/pdf',
+        size: '42',
+        createdAt: now,
+        updatedAt: now,
+      },
+    })) as { record: Record<string, unknown> };
+    const found = await post('findOne', {
+      filter: { id: '7b0e8a52-3c1d-4e9a-9f2b-0c6d5e4f3a21' },
+    });
+    const [listed] = (await post('findMany', {})) as unknown as Record<
+      string,
+      unknown
+    >[];
+    for (const returned of [created.record, found, listed]) {
+      for (const name of computed)
+        expect({ [name]: returned?.[name] }).toEqual({
+          [name]: expect.any(String),
+        });
+    }
+    expect(found.contentUrl).toBe(
+      '/main/uploads/attachments/7b0e8a52-3c1d-4e9a-9f2b-0c6d5e4f3a21.pdf',
+    );
   });
 });
 

@@ -3,10 +3,6 @@ import {
   normalizeFieldWritePolicy,
   buildUpsertWritePolicy,
   assertWriteEnabled,
-  invalidWritePolicy,
-  type WritePolicy,
-  type FieldWritePolicy,
-  type ThroughWritePolicy,
 } from './write-policy.js';
 import { normalizeRepositoryPolicy } from './policy/normalize.js';
 import { narrowRepositoryPolicy } from './policy/narrow.js';
@@ -53,6 +49,11 @@ import { RepositoryError } from './errors.js';
 import { DefaultRepositoryQuery } from './query.js';
 import { snapshotQueryInput } from './internal/input-snapshot.js';
 import { identityConstraints } from './internal/identity.js';
+import {
+  isManagedField,
+  validatePolicyFields,
+  validateWritePolicyMetadata,
+} from './writable-fields.js';
 import { normalizeNumericMutation } from './numeric-mutation.js';
 import { normalizeBooleanValue } from './boolean.js';
 import { normalizeCharValue } from './char.js';
@@ -85,6 +86,7 @@ import type {
   RepositoryScopeCheck,
   RepositoryReadPlan,
 } from './internal/execution-adapter.js';
+import { normalizeRepositoryEventMeta } from './events/meta.js';
 import type {
   AggregateAst,
   AggregateBuilder,
@@ -684,6 +686,7 @@ export class DefaultRepository<
     const executionFields = includeExecutionFields(collection, requestedFields);
     const result = await this.options.adapter.createOne({
       collection,
+      meta: normalizeRepositoryEventMeta(options.meta, collection.name!),
       fields: executionFields,
       values: mutation.values,
       relations: mutation.relations,
@@ -787,6 +790,7 @@ export class DefaultRepository<
     if (selection) assertBulkReturningIdentity(collection);
     const result = await this.options.adapter.createMany({
       collection,
+      meta: normalizeRepositoryEventMeta(options.meta, collection.name!),
       records,
       fields: selection
         ? includeExecutionFields(collection, selection.fields)
@@ -855,6 +859,7 @@ export class DefaultRepository<
     const requestedFields = selection.fields;
     const result = await this.options.adapter.updateOne({
       collection,
+      meta: normalizeRepositoryEventMeta(options.meta, collection.name!),
       fields: includeExecutionFields(collection, requestedFields),
       filter,
       values: mutation.values,
@@ -1008,6 +1013,7 @@ export class DefaultRepository<
     const requestedFields = selection.fields;
     const result = await this.options.adapter.upsertOne({
       collection,
+      meta: normalizeRepositoryEventMeta(options.meta, collection.name!),
       fields: includeExecutionFields(collection, requestedFields),
       by,
       createValues: createMutation.values,
@@ -1108,6 +1114,7 @@ export class DefaultRepository<
     if (selection) assertBulkReturningIdentity(collection);
     const result = await this.options.adapter.updateMany({
       collection,
+      meta: normalizeRepositoryEventMeta(options.meta, collection.name!),
       filter,
       all: options.all === true,
       values,
@@ -1158,6 +1165,7 @@ export class DefaultRepository<
       : undefined;
     const result = await this.options.adapter.deleteOne({
       collection,
+      meta: normalizeRepositoryEventMeta(options.meta, collection.name!),
       filter,
       ifVersion: options.ifVersion,
       fields: selection
@@ -1218,6 +1226,7 @@ export class DefaultRepository<
     if (selection) assertBulkReturningIdentity(collection);
     const result = await this.options.adapter.deleteMany({
       collection,
+      meta: normalizeRepositoryEventMeta(options.meta, collection.name!),
       filter,
       all: options.all === true,
       fields: selection
@@ -1718,6 +1727,29 @@ const SORTABLE_TYPES = new Set([
   'datetimeTz',
   'time',
 ]);
+
+/**
+ * The filter operators a condition on a scalar Field of `type` accepts, or `undefined` for a type no condition can
+ * name. It is the table every Repository validates conditions against, exported so a description of the filter
+ * grammar, such as an API document, is derived from it rather than copied.
+ */
+export function filterOperatorsForFieldType(
+  type: string,
+): readonly FilterOperator[] | undefined {
+  return Object.hasOwn(OPERATORS_BY_TYPE, type)
+    ? OPERATORS_BY_TYPE[type]
+    : undefined;
+}
+
+/** Whether a Field of `type` may appear in the `{ field: value }` filter shorthand. */
+export function supportsFilterShorthand(type: string): boolean {
+  return FILTER_SHORTHAND_TYPES.has(type);
+}
+
+/** Whether a Field of `type` may be named in a sort. */
+export function isSortableFieldType(type: string): boolean {
+  return SORTABLE_TYPES.has(type);
+}
 
 function normalizeScalarFilter<TRecord extends object>(
   collection: CollectionDefinition,
@@ -3638,100 +3670,6 @@ function primaryFields(collection: CollectionDefinition): string[] {
   );
 }
 
-function validatePolicyFields(
-  collection: CollectionDefinition,
-  policy: FieldWritePolicy,
-  path: readonly (string | number)[],
-  managed: readonly string[] = [],
-): void {
-  for (const [index, name] of (policy.fields || []).entries()) {
-    const field = collection.fields?.find((field) => field.name === name);
-    if (
-      !field ||
-      !isScalarField(field) ||
-      field.type === 'increments' ||
-      field.autoIncrement ||
-      field.db?.generated !== undefined ||
-      collection.optimisticLock?.field === name ||
-      managed.includes(name)
-    ) {
-      invalidWritePolicy(
-        `Field "${name}" is not a writable scalar field of "${collection.name}".`,
-        [...path, 'fields', index],
-      );
-    }
-  }
-}
-
-async function validateWritePolicyMetadata(
-  collections: Pick<ConnectionCollections, 'get'>,
-  collection: CollectionDefinition,
-  policy: true | WritePolicy,
-  path: readonly (string | number)[] = ['writePolicy'],
-): Promise<void> {
-  if (policy === true) return;
-  validatePolicyFields(collection, policy, path);
-  for (const [name, rule] of Object.entries(policy.relations || {})) {
-    const relation = collection.fields?.find((field) => field.name === name);
-    const rulePath = [...path, 'relations', name];
-    if (!relation || isScalarField(relation))
-      invalidWritePolicy(
-        `Relation "${name}" does not exist on "${collection.name}".`,
-        rulePath,
-      );
-    const target = await targetCollection(collections, relation, rulePath);
-    for (const operation of ['create', 'update'] as const) {
-      const config = rule[operation];
-      if (config)
-        await validateWritePolicyMetadata(collections, target, config, [
-          ...rulePath,
-          operation,
-        ]);
-    }
-    if (rule.upsert) {
-      await validateWritePolicyMetadata(
-        collections,
-        target,
-        rule.upsert.create,
-        [...rulePath, 'upsert', 'create'],
-      );
-      await validateWritePolicyMetadata(
-        collections,
-        target,
-        rule.upsert.update,
-        [...rulePath, 'upsert', 'update'],
-      );
-    }
-    for (const operation of ['create', 'connect', 'set'] as const) {
-      const config: ThroughWritePolicy | undefined = rule[operation];
-      if (!config?.through) continue;
-      if (relation.type !== 'belongsToMany' || !relation.through)
-        invalidWritePolicy('through requires a belongsToMany relation.', [
-          ...rulePath,
-          operation,
-          'through',
-        ]);
-      const through = await collections.get(relation.through);
-      if (!through)
-        invalidWritePolicy('Through collection does not exist.', [
-          ...rulePath,
-          operation,
-          'through',
-        ]);
-      validatePolicyFields(
-        through,
-        config.through,
-        [...rulePath, operation, 'through'],
-        [
-          relation.foreignKey,
-          relation.otherKey,
-          ...primaryFields(through),
-        ].filter((name): name is string => typeof name === 'string'),
-      );
-    }
-  }
-}
-
 const MUTATION_LIMITS = { maxDepth: 3, maxNodes: 100 } as const;
 
 interface MutationValidationState {
@@ -5519,12 +5457,7 @@ function validateValues(
         },
       );
     }
-    if (
-      field.type === 'increments' ||
-      field.autoIncrement ||
-      field.db?.generated !== undefined ||
-      collection.optimisticLock?.field === field.name
-    ) {
+    if (isManagedField(collection, field)) {
       invalid(
         'FIELD_NOT_WRITABLE',
         `Field "${key}" is managed by the database or Repository.`,

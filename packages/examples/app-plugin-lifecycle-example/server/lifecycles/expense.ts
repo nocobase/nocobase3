@@ -9,7 +9,7 @@ import {
 } from '@nocobase/lifecycle';
 
 import { itemProblems, parseItems } from '../../shared/expense.js';
-import { FINANCE_DIRECTOR, MANAGERS } from '../../shared/people.js';
+import { FINANCE_DIRECTOR, MANAGERS, person } from '../../shared/people.js';
 import { text } from '../../shared/text.js';
 import { LIFECYCLE_EXAMPLE_COLLECTIONS } from '../scope.js';
 import {
@@ -62,6 +62,8 @@ function routeByAmount({ record, parameters }: Context): ExpenseState {
 
 // A guard's verdict is what the page shows beside a button it greys out:
 // the code is stable for the page to translate, the message says it in English.
+// A refusal about who asks is a permission, the default; one about the
+// record, which the right person could clear, says `kind: 'precondition'`.
 function isApplicant({ record, actor }: Context): GuardVerdict {
   return (
     actor.id === record.applicantId || {
@@ -80,14 +82,18 @@ function isApprover({ record, actor }: Context): GuardVerdict {
   );
 }
 
-/** A report with no items, or an item without a date, cannot be submitted. */
+/**
+ * A report with no items, or an item without a date, cannot be submitted.
+ * The request to submit is fine; the report is not ready, which is the
+ * record's state: `INVALID_STATE`, a failed precondition, not invalid input.
+ */
 function readyToSubmit({ record }: Context): Record<string, unknown> {
   const problems = [
     ...(record.title.trim() ? [] : ['Give the report a title.']),
     ...itemProblems(parseItems(record.items)),
   ];
   if (problems.length)
-    throw new LifecycleError('INVALID_INPUT', problems.join(' '));
+    throw new LifecycleError('INVALID_STATE', problems.join(' '));
   return { approverId: MANAGERS[record.applicantId] ?? FINANCE_DIRECTOR };
 }
 
@@ -110,6 +116,16 @@ export const expenseLifecycle: Lifecycle<ExpenseTypes> =
     name: 'expenses',
     collection: LIFECYCLE_EXAMPLE_COLLECTIONS.expenses,
     initial: 'draft',
+    // Anyone may not file a report: an employee files their own.
+    create: {
+      guard: ({ values, actor }) =>
+        (person(actor.id)?.role === 'applicant' &&
+          values.applicantId === actor.id) || {
+          code: 'applicantsOnly',
+          message:
+            'Only an employee can file an expense report, for themselves.',
+        },
+    },
     states: [
       'draft',
       'awaitingManager',
@@ -200,6 +216,7 @@ export const expenseLifecycle: Lifecycle<ExpenseTypes> =
             MANAGERS[text(record.approverId)] !== undefined || {
               code: 'topApprover',
               message: 'The current approver is already the highest level.',
+              kind: 'precondition',
             }
           );
         },

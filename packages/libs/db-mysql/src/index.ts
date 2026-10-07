@@ -48,7 +48,11 @@ export const mysqlDriver: DatabaseDriverDefinition<
           ? 'datetime(3)'
           : column.type === 'time'
             ? 'time(3)'
-            : undefined,
+            : textDefaultType(column),
+      columnDefault: ({ client, column }) =>
+        textDefaultType(column) === undefined
+          ? undefined
+          : client.raw('(?)', [String(column.defaultValue)]),
     },
     repository: {
       jsonResults: resolveJsonResults(config),
@@ -266,7 +270,36 @@ export const mysqlDriver: DatabaseDriverDefinition<
       );
     }
   },
+  // Every connection runs its transactions at READ COMMITTED, the level PostgreSQL, SQL Server, Oracle and
+  // OceanBase default to and the one NocoBase's code is written against. Under MySQL's REPEATABLE READ default a
+  // transaction's snapshot is taken at its first read — the Collection metadata lookup every transaction starts
+  // with — so a check made after taking a lock still counted rows a concurrent transaction had already removed,
+  // and two administrators could delete each other.
+  configurePool: (_config, pool) => {
+    const afterCreate = pool.afterCreate as
+      ((connection: unknown, done: PoolDone) => void) | undefined;
+    return {
+      ...pool,
+      afterCreate: (connection: MysqlPoolConnection, done: PoolDone) => {
+        connection.query(
+          'set session transaction isolation level read committed',
+          (error) => {
+            if (error) done(error, connection);
+            else if (afterCreate) afterCreate(connection, done);
+            else done(null, connection);
+          },
+        );
+      },
+    };
+  },
 };
+
+type PoolDone = (error: unknown, connection?: unknown) => void;
+
+interface MysqlPoolConnection {
+  query(sql: string, callback: (error: unknown) => void): void;
+}
+
 export type MysqlConnection = MysqlOptions & {
   dialect: 'mysql';
   databaseDriver: typeof mysqlDriver;
@@ -350,4 +383,30 @@ function resolveJsonResults(
 ): JsonResultForm {
   const connection = config.connection as { jsonStrings?: unknown } | undefined;
   return connection?.jsonStrings === true ? 'text' : 'parsed';
+}
+
+const TEXT_TYPES = /^(?:tiny|medium|long)?text$/iu;
+
+/**
+ * The type of a text column that carries a default, or `undefined` for any other column.
+ *
+ * MySQL accepts a default on a TEXT column only in the expression form `default ('…')`, from 8.0.13, and Knex drops
+ * any default on a column it built as TEXT or BLOB without a word. A Collection's `defaultValue` therefore never
+ * reached the table: a Repository still filled it in, but anything else that inserts a row — a migration's `query`,
+ * another service, a person at a SQL prompt — failed on a NOT NULL column. Named as a type, the column is one Knex
+ * did not build, so it keeps the default that `columnDefault` turns into the expression form.
+ */
+function textDefaultType(column: {
+  readonly type: string;
+  readonly defaultValue?: unknown;
+  readonly db?: { readonly nativeType?: string };
+}): string | undefined {
+  const type = column.db?.nativeType ?? (column.type === 'text' ? 'text' : '');
+  const value = column.defaultValue;
+  return TEXT_TYPES.test(type) &&
+    (typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean')
+    ? type
+    : undefined;
 }

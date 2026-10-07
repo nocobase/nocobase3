@@ -1,7 +1,10 @@
 // @vitest-environment node
 import path from 'node:path';
-import { createDatabaseManager, databaseManagerToken } from '@nocobase/db';
-import sqlite from '@nocobase/db-sqlite';
+import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
+import {
+  createTestDatabase,
+  type TestDatabase,
+} from '@nocobase/app-testing/server';
 import { authenticationToken } from '@nocobase/app-plugin-authentication';
 import type { Application } from '@nocobase/app-server/application';
 import {
@@ -12,30 +15,23 @@ import { Hono, type MiddlewareHandler } from 'hono';
 import { beforeEach, afterEach, expect, it } from 'vitest';
 import { articlesRoutes } from '../../server/routes/articles.ts';
 
-const database = () =>
-  createDatabaseManager({
-    default: 'main',
-    drivers: { sqlite },
-    connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
-  });
-let db: ReturnType<typeof database>;
+let testDatabase: TestDatabase;
+let db: DatabaseManager;
 let router: Hono;
 let app: Application;
 beforeEach(async () => {
-  db = database();
-  await db
-    .createMigrator({
-      sources: [
-        {
-          packageName: 'articles',
-          directory: path.resolve(
-            import.meta.dirname,
-            '../../database/main/migrations',
-          ),
-        },
-      ],
-    })
-    .latest();
+  testDatabase = await createTestDatabase({
+    migrations: [
+      {
+        packageName: 'articles',
+        directory: path.resolve(
+          import.meta.dirname,
+          '../../database/main/migrations',
+        ),
+      },
+    ],
+  });
+  db = testDatabase.database;
   const container = new ServiceContainer();
   container.instance(databaseManagerToken, db);
   const required = (): MiddlewareHandler => async (c, next) => {
@@ -54,7 +50,7 @@ beforeEach(async () => {
   router.get('/unrelated', (c) => c.text('public'));
 });
 afterEach(async () => {
-  await db.destroy();
+  await testDatabase?.destroy();
 });
 const body = {
   title: 'A new article',
@@ -81,42 +77,101 @@ it('requires sign-in without permission sets or leaking middleware', async () =>
   expect((await request('/articles')).status).toBe(200);
   expect((await request('/articles', 'POST', body)).status).toBe(201);
   expect((await request('/articles', 'POST', body, null)).status).toBe(401);
-  expect((await request('/articles/1', 'PUT', body, null)).status).toBe(401);
+  expect(
+    (await request('/articles/1', 'PATCH', { title: 'x' }, null)).status,
+  ).toBe(401);
+  expect((await request('/articles/1', 'PUT', body)).status).toBe(404);
   expect((await request('/unrelated', 'GET', undefined, null)).status).toBe(
     200,
   );
 });
 it('creates, filters, edits and publishes articles with server timestamps', async () => {
-  expect((await request('/articles', 'POST', body)).status).toBe(201);
+  const createdResponse = await request('/articles', 'POST', body);
+  expect(createdResponse.status).toBe(201);
+  const created = (await createdResponse.json()) as {
+    data: { id: string; title: string; publishedAt: string | null };
+  };
+  expect(created.data).toMatchObject({
+    id: expect.stringMatching(/^\d+$/),
+    title: 'A new article',
+    publishedAt: null,
+  });
+  const invalid = await request('/articles', 'POST', { ...body, title: '' });
+  expect(invalid.status).toBe(400);
+  expect(await invalid.json()).toMatchObject({
+    error: {
+      status: 'INVALID_ARGUMENT',
+      reason: 'INVALID_INPUT',
+      fieldViolations: [expect.objectContaining({ field: 'title' })],
+    },
+  });
+  const unknownField = await request('/articles', 'POST', {
+    ...body,
+    author: 'x',
+  });
+  expect(unknownField.status).toBe(400);
   expect(
-    (await request('/articles', 'POST', { ...body, title: '' })).status,
-  ).toBe(400);
+    ((await unknownField.json()) as { error: { reason: string } }).error.reason,
+  ).toBe('INVALID_INPUT');
   expect((await request('/articles?page=0')).status).toBe(400);
-  const response = await request('/articles?search=new&status=draft');
+  expect((await request('/articles?pageSize=101')).status).toBe(400);
+  const response = await request('/articles?q=new&status=draft');
   expect(response.status).toBe(200);
   const result = (await response.json()) as {
-    data: { id: number; publishedAt: string | null }[];
-    total: number;
+    data: { id: string; publishedAt: string | null }[];
+    meta: { page: number; pageSize: number; total: number };
   };
-  expect(result.total).toBe(1);
+  expect(result.meta).toEqual({ page: 1, pageSize: 20, total: 1 });
+  expect(result.data[0].id).toBe(created.data.id);
   expect(result.data[0].publishedAt).toBeNull();
-  expect(
-    (
-      await request(`/articles/${result.data[0].id}`, 'PUT', {
-        ...body,
-        status: 'published',
-      })
-    ).status,
-  ).toBe(200);
+  const patched = await request(`/articles/${result.data[0].id}`, 'PATCH', {
+    status: 'published',
+  });
+  expect(patched.status).toBe(200);
+  expect(await patched.json()).toMatchObject({
+    data: {
+      id: created.data.id,
+      title: 'A new article',
+      status: 'published',
+      publishedAt: expect.any(String),
+    },
+  });
   const saved = await db
     .query()
     .selectFrom('articles')
     .selectAll()
     .executeTakeFirst();
   expect(saved?.publishedAt).toBeTruthy();
-  expect((await request('/articles?status=draft')).status).toBe(200);
   expect(await (await request('/articles?status=draft')).json()).toMatchObject({
-    total: 0,
+    data: [],
+    meta: { total: 0 },
+  });
+  const missing = await request('/articles/999', 'PATCH', { title: 'x' });
+  expect(missing.status).toBe(404);
+  expect(await missing.json()).toMatchObject({
+    error: { reason: 'ARTICLE_NOT_FOUND', domain: 'examples' },
+  });
+  expect((await request('/articles/abc', 'PATCH', { title: 'x' })).status).toBe(
+    400,
+  );
+});
+it('pages with page and pageSize', async () => {
+  for (let index = 0; index < 3; index += 1)
+    await request('/articles', 'POST', { ...body, title: `Article ${index}` });
+  const second = (await (
+    await request('/articles?page=2&pageSize=2')
+  ).json()) as { data: unknown[]; meta: unknown };
+  expect(second.data).toHaveLength(1);
+  expect(second.meta).toEqual({ page: 2, pageSize: 2, total: 3 });
+});
+it('answers 503 DATABASE_UNAVAILABLE without a database', async () => {
+  const unavailable = await articlesRoutes.createRouter({
+    container: new ServiceContainer(),
+  } as Application);
+  const response = await unavailable.request('/articles');
+  expect(response.status).toBe(503);
+  expect(await response.json()).toMatchObject({
+    error: { status: 'UNAVAILABLE', reason: 'DATABASE_UNAVAILABLE' },
   });
 });
 it('seeds six articles once and preserves user edits', async () => {

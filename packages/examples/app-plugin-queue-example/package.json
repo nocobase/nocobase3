@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-queue-example",
   "displayName": "Queue Example App Plugin",
   "description": "Example app plugin that publishes to and consumes an application queue.",
-  "version": "0.1.0-beta.8",
+  "version": "1.0.0-beta.10",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -40,7 +40,8 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "hono": "catalog:"
+    "hono": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@nocobase/dev-config": "workspace:*",

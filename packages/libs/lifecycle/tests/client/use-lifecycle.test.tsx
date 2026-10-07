@@ -64,8 +64,8 @@ describe('useLifecycle', () => {
     });
     expect(refusal).toBeInstanceOf(LifecycleRequestError);
     expect(refusal).toMatchObject({
-      code: 'GUARD_REJECTED',
-      blockers: [{ source: 'guard' }],
+      reason: 'GUARD_REJECTED',
+      blockers: [{ source: 'guard', kind: 'permission' }],
     });
     expect(result.current.busy).toBe(false);
   });
@@ -85,7 +85,7 @@ describe('useLifecycle', () => {
     await act(async () => {
       refusal = await result.current.fire('close').catch((error) => error);
     });
-    expect(refusal).toMatchObject({ code: 'CONFLICT' });
+    expect(refusal).toMatchObject({ reason: 'CONFLICT' });
   });
 });
 

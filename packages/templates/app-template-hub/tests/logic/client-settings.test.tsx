@@ -29,6 +29,10 @@ function WorkflowDetailTestPage(): ReactElement {
   return <h2>Workflow detail {useParams().workflowId}</h2>;
 }
 
+// Loading a lazy route and rendering its error boundary can take longer than Testing Library's one-second default on
+// a loaded CI runner. A page that never renders still fails, well inside the 30-second test timeout.
+const ROUTE_LOAD_TIMEOUT = { timeout: 10_000 };
+
 describe('settings centre', () => {
   beforeEach(() => {
     window.matchMedia = vi.fn().mockImplementation((query: string) => ({
@@ -81,9 +85,13 @@ describe('settings centre', () => {
         broken.path,
         surface === 'settings' ? tree : [],
       );
-      expect(await screen.findByText('Unable to load page')).toBeVisible();
+      expect(
+        await screen.findByText('Unable to load page', {}, ROUTE_LOAD_TIMEOUT),
+      ).toBeVisible();
       fireEvent.click(screen.getByRole('link', { name: 'Healthy page' }));
-      expect(await screen.findByText('Healthy content')).toBeVisible();
+      expect(
+        await screen.findByText('Healthy content', {}, ROUTE_LOAD_TIMEOUT),
+      ).toBeVisible();
       expect(screen.queryByText('Unable to load page')).not.toBeInTheDocument();
     },
   );
@@ -190,11 +198,11 @@ describe('settings centre', () => {
     renderSettings('/settings/authorization/default-access');
     await screen.findByText('Default Access page');
 
-    const group = screen.getByText('Authorization').closest('details');
-    expect(group).toHaveAttribute('open');
+    const group = screen.getByRole('button', { name: 'Authorization' });
+    expect(group).toHaveAttribute('aria-expanded', 'true');
 
     fireEvent.click(screen.getByText('Authorization'));
-    expect(group).not.toHaveAttribute('open');
+    expect(group).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('renders an ungrouped page as a flat row rather than a disclosure', async () => {
@@ -485,7 +493,7 @@ describe('settings centre', () => {
     expect(
       screen
         .getByText('Authorization')
-        .closest('summary')
+        .closest('button')
         ?.querySelector('[data-testid="setting-icon"]'),
     ).toBeInTheDocument();
   });

@@ -1,4 +1,4 @@
-import { useApiClient } from '@nocobase/app-client';
+import { ApiClientError, useApiClient } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { FileDown, FileText, LoaderCircle } from 'lucide-react';
 import {
@@ -49,10 +49,8 @@ function messageOf(error: unknown): string {
 
 function isPdfConverterUnavailable(error: unknown): boolean {
   return (
-    error !== null &&
-    typeof error === 'object' &&
-    'code' in error &&
-    error.code === 'PDF_CONVERTER_UNAVAILABLE'
+    error instanceof ApiClientError &&
+    error.reason === 'PDF_CONVERTER_UNAVAILABLE'
   );
 }
 
@@ -79,7 +77,9 @@ export default function TemplatePrintPage(): ReactElement {
   const requestInvoices = useCallback(
     (signal?: AbortSignal) =>
       api.request<{ data: InvoiceListItem[] }>({
-        path: 'template-print-example/invoices',
+        path: 'templatePrintExample/invoices',
+        // The example shows every invoice the caller may print on one page.
+        query: { pageSize: 100 },
         ...(signal ? { signal } : {}),
       }),
     [api],
@@ -109,7 +109,7 @@ export default function TemplatePrintPage(): ReactElement {
       try {
         const formatQuery = format === 'pdf' ? '?format=pdf' : '';
         const stream = await api.stream({
-          path: `template-print-example/invoices/${encodeURIComponent(invoice.id)}/print${formatQuery}`,
+          path: `templatePrintExample/invoices/${encodeURIComponent(invoice.id)}/print${formatQuery}`,
         });
         const responseBlob = await new Response(stream).blob();
         const blob = new Blob([responseBlob], {

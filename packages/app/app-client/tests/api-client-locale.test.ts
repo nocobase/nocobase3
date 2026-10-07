@@ -45,11 +45,38 @@ describe('the language the API client reports', () => {
     await app.start();
     const api = app.services.resolve(apiClientToken);
 
-    await api.request({ path: 'authz/permission-sets/options' });
+    await api.request({ path: 'authorization/permissionSets/options' });
     await runtime.i18n.changeLanguage('zh-CN');
-    await api.request({ path: 'authz/permission-sets/options' });
+    await api.request({ path: 'authorization/permissionSets/options' });
 
     expect(languages(fetch)).toEqual(['en-US', 'zh-CN']);
+    await app.shutdown();
+  });
+});
+
+describe('the fetch the API client sends through', () => {
+  it('is the one the application was created with, instead of the global one', async () => {
+    const globalFetch = vi.fn();
+    vi.stubGlobal('fetch', globalFetch);
+    vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => {} });
+    const fetch = vi.fn((input: RequestInfo | URL) =>
+      Promise.resolve(Response.json({ url: String(input) })),
+    );
+    const runtime = await resolveAppRuntime(definition, {
+      rawConfig: { api: { baseURL: 'http://localhost/main/api' } },
+    });
+    const app = new ClientApplication({
+      runtime,
+      fetch,
+      createRenderConfig: () => defineAppClientRenderConfig({ routes: null }),
+    });
+    await app.start();
+
+    await expect(
+      app.services.resolve(apiClientToken).request({ path: 'users' }),
+    ).resolves.toEqual({ url: 'http://localhost/main/api/users' });
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(globalFetch).not.toHaveBeenCalled();
     await app.shutdown();
   });
 });

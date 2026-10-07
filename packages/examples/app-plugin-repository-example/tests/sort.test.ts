@@ -17,7 +17,7 @@ beforeEach(async () => {
     .run();
 });
 afterEach(async () => {
-  await f.database.destroy();
+  await f.destroy();
 });
 const definition = (key: string) =>
   sortExamples.find((example) => example.key === key)!;
@@ -126,7 +126,7 @@ it.each(sortExamples.filter((example) => example.expectedError))(
   async (example) => {
     expect(() => sortExampleRequest(example)).not.toThrow();
     await expect(runSortExample(f.api, example)).rejects.toMatchObject({
-      code: example.expectedError,
+      reason: example.expectedError,
     });
   },
 );

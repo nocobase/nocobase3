@@ -19,8 +19,10 @@ import type {
   NewEffectRun,
   NewTransitionEntry,
   RecordCondition,
+  TransactionOptions,
   TransitionEntry,
 } from './store.js';
+import { transitionRequestKey } from './store.js';
 import type {
   JsonObject,
   JsonValue,
@@ -77,6 +79,58 @@ function asRow(input: Readonly<Record<string, unknown>>): RepositoryRecord {
   return input as RepositoryRecord;
 }
 
+/** What the driver client of a connection says about the transaction it runs in. */
+interface TransactionClient {
+  readonly isTransaction?: unknown;
+  readonly isCompleted?: () => unknown;
+}
+
+/**
+ * What `within` must be here: a `@nocobase/db` transaction connection on the
+ * connection this store writes to, still running. Anything else would only
+ * look like joining: a root connection opens a transaction of its own that
+ * commits whatever the caller then does — and on SQLite waits for the only
+ * connection, which the caller's transaction holds — and a connection of
+ * another name writes to that database's collections of the same name.
+ */
+async function joinable(
+  handle: unknown,
+  root: DatabaseConnection,
+): Promise<DatabaseConnection> {
+  const candidate = handle as Partial<DatabaseConnection> | null;
+  if (
+    typeof candidate?.transaction !== 'function' ||
+    typeof candidate.afterCommit !== 'function' ||
+    typeof candidate.repository !== 'function' ||
+    typeof candidate.client !== 'function'
+  )
+    throw new Error(
+      'A Repository lifecycle store nests a transaction only within a @nocobase/db connection, such as the one a transaction received.',
+    );
+  const connection = handle as DatabaseConnection;
+  if (connection.name !== root.name)
+    throw new Error(
+      `The transaction to join runs on connection "${connection.name}", but this lifecycle store writes to "${root.name}"; pass a transaction of "${root.name}".`,
+    );
+  if (connection === root)
+    throw new Error(
+      `The connection "${root.name}" itself is not a transaction: pass the connection your transaction callback received, not the one it was opened on.`,
+    );
+  // `@nocobase/db` does not say whether a connection is a transaction, but
+  // its driver client does: a Knex transaction marks itself, and knows when
+  // it has completed. This also catches a policy-bound root connection.
+  const client = await connection.client<TransactionClient | null>();
+  if (client?.isTransaction !== true)
+    throw new Error(
+      `The connection passed to join is not a transaction on "${root.name}": pass the connection your transaction callback received.`,
+    );
+  if (typeof client.isCompleted === 'function' && client.isCompleted() === true)
+    throw new Error(
+      'Transaction query already complete: the transaction to join has already committed or rolled back. Join it from inside its callback.',
+    );
+  return connection;
+}
+
 function toTransition(row: Row): TransitionEntry {
   return {
     id: String(row.id),
@@ -126,13 +180,28 @@ class RepositoryLifecycleStore implements LifecycleStore {
     private readonly begin: <R>(
       work: (store: LifecycleStore) => Promise<R>,
     ) => Promise<R>,
+    private readonly nest: <R>(
+      within: unknown,
+      work: (store: LifecycleStore) => Promise<R>,
+    ) => Promise<R>,
     public readonly transactionHandle?: DatabaseConnection,
   ) {}
 
   public transaction<R>(
     work: (store: LifecycleStore) => Promise<R>,
+    options: TransactionOptions = {},
   ): Promise<R> {
-    return this.begin(work);
+    return options.within === undefined
+      ? this.begin(work)
+      : this.nest(options.within, work);
+  }
+
+  public afterCommit(callback: () => void | Promise<void>): void {
+    if (!this.transactionHandle)
+      throw new Error(
+        'afterCommit is only available inside a transaction, on the store its work receives.',
+      );
+    this.transactionHandle.afterCommit(callback);
   }
 
   public async findRecord(
@@ -222,7 +291,7 @@ class RepositoryLifecycleStore implements LifecycleStore {
     entry: NewTransitionEntry,
   ): Promise<TransitionEntry> {
     const created = await this.repository(this.names.transitions).createOne({
-      values: asRow({ ...entry }),
+      values: asRow({ ...entry, requestKey: transitionRequestKey(entry) }),
     });
     return toTransition(created.record);
   }
@@ -241,8 +310,9 @@ class RepositoryLifecycleStore implements LifecycleStore {
     recordId: string,
     requestId: string,
   ): Promise<TransitionEntry | undefined> {
+    // By the unique key, which equals the request id wherever there is one.
     const row = await this.repository(this.names.transitions).findOne({
-      filter: { lifecycle, recordId, requestId },
+      filter: { lifecycle, recordId, requestKey: requestId, requestId },
     });
     return row ? toTransition(row) : undefined;
   }
@@ -343,9 +413,19 @@ class RepositoryLifecycleStore implements LifecycleStore {
  * A store over `@nocobase/db` Repositories. Inside a transaction its
  * `transactionHandle` is the transaction's `DatabaseConnection`: a service
  * that reads from a guard must use it, because on SQLite the transaction
- * holds the only connection and a read elsewhere would wait for it forever. Records are read and written
- * through the lifecycle's own collection, so its field types are encoded per
- * dialect the way every other write to that collection is.
+ * holds the only connection and a read elsewhere would wait for it forever.
+ * A transaction `within` a caller's transaction connection is a savepoint on
+ * it, so a lifecycle call can join the caller's transaction; the connection
+ * must be a running transaction on the connection this store writes to.
+ * Records are read and written through the lifecycle's own collection, so
+ * its field types are encoded per dialect the way every other write to that
+ * collection is.
+ *
+ * Each log entry also stores `requestKey`, a non-null string column: its
+ * `requestId`, or `$v:<version>` without one (see `transitionRequestKey`).
+ * The log collection declares unique indexes on `(lifecycle, recordId,
+ * version)` and `(lifecycle, recordId, requestKey)`, the same on every
+ * dialect.
  */
 export function createRepositoryLifecycleStore(
   database: DatabaseManager,
@@ -353,7 +433,25 @@ export function createRepositoryLifecycleStore(
 ): LifecycleStore {
   const name = options.connection;
   const names: CollectionNames = options.collections ?? LIFECYCLE_COLLECTIONS;
-  const outer: LifecycleStore = new RepositoryLifecycleStore(
+  // A transaction opened on a transaction connection is a savepoint of it,
+  // whose afterCommit callbacks wait for the outermost commit.
+  const nest = async <R>(
+    within: unknown,
+    work: (store: LifecycleStore) => Promise<R>,
+  ): Promise<R> => {
+    const connection = await joinable(within, database.connection(name));
+    return connection.transaction((transaction) => {
+      const inner: LifecycleStore = new RepositoryLifecycleStore(
+        names,
+        (collection) => transaction.repository(collection),
+        (nested) => nested(inner),
+        nest,
+        transaction,
+      );
+      return work(inner);
+    });
+  };
+  return new RepositoryLifecycleStore(
     names,
     (collection) => database.repository(collection, name),
     (work) =>
@@ -362,10 +460,11 @@ export function createRepositoryLifecycleStore(
           names,
           (collection) => connection.repository(collection),
           (nested) => nested(inner),
+          nest,
           connection,
         );
         return work(inner);
       }, name),
+    nest,
   );
-  return outer;
 }

@@ -5,7 +5,6 @@ import {
   buildGroupByOptions,
 } from '@nocobase/api-client';
 import {
-  createDatabaseManager,
   databaseManagerToken,
   type DatabaseManager,
   buildRepositoryPolicy,
@@ -14,13 +13,29 @@ import {
   RepositoryError,
   type RepositoryQuery,
 } from '@nocobase/db';
-import sqlite from '@nocobase/db-sqlite';
+import {
+  provisionTestDatabases,
+  withoutDecimalPadding,
+  type ProvisionedTestDatabases,
+  type TestDatabase,
+} from '@nocobase/db-testing';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 
 import {
   addRepositoryRequestConstraint,
+  apiErrorHandler,
+  toApiError,
   defineRepositoryApiRoutes,
   type RepositoryApiActions,
   type DefineRepositoryApiRoutesOptions,
@@ -85,15 +100,24 @@ function stubScopedRepository(
 }
 
 describe('Repository API routes', () => {
+  let testDatabases: ProvisionedTestDatabases | undefined;
+  let testDatabase: TestDatabase | undefined;
   let database: DatabaseManager;
   let container: ServiceContainer;
   let router: Hono;
 
+  // One isolated database for the file; every test opens it emptied.
+  beforeAll(async () => {
+    testDatabases = await provisionTestDatabases();
+  });
+
+  afterAll(async () => {
+    await testDatabases?.drop();
+  });
+
   beforeEach(async () => {
-    database = createDatabaseManager({
-      drivers: { sqlite },
-      connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
-    });
+    testDatabase = await testDatabases!.open();
+    database = testDatabase.database;
     container = new ServiceContainer();
     container.instance(databaseManagerToken, database);
     await database.builder().createCollection('orders', (collection) => {
@@ -105,7 +129,7 @@ describe('Repository API routes', () => {
     const contribution = defineRepositoryApiRoutes({
       repositories: [
         {
-          name: 'sales/orders',
+          name: 'salesOrders',
           collection: 'orders',
           policy: orderFields,
           actions: { ...actions, findMany: { maxLimit: 2 } },
@@ -124,7 +148,8 @@ describe('Repository API routes', () => {
   });
 
   afterEach(async () => {
-    await database.destroy();
+    await testDatabase?.destroy();
+    testDatabase = undefined;
   });
 
   it('intersects request constraints with static and principal policies without leaking between requests', async () => {
@@ -181,7 +206,7 @@ describe('Repository API routes', () => {
       }).createRouter({ container }),
     );
     const request = (constrained: boolean) =>
-      guarded.request('/orders:findMany', {
+      guarded.request('/orders/findMany', {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
@@ -215,7 +240,7 @@ describe('Repository API routes', () => {
         await next();
       });
       guarded.route('/', router);
-      const response = await guarded.request('/api/catalog:findOne', {
+      const response = await guarded.request('/api/catalog/findOne', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ filter: { id: 'one' } }),
@@ -272,7 +297,7 @@ describe('Repository API routes', () => {
         values: { amount: { increment: '2' } },
       }),
     ).toMatchObject({ record: { amount: '9007199254740995' } });
-    const rejected = await router.request('/api/balances:updateOne', {
+    const rejected = await router.request('/api/balances/updateOne', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -294,7 +319,7 @@ describe('Repository API routes', () => {
   }
 
   function request(action: string, input: unknown) {
-    return router.request(`/api/sales%2Forders:${action}`, {
+    return router.request(`/api/salesOrders/${action}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(input),
@@ -303,7 +328,7 @@ describe('Repository API routes', () => {
 
   it('executes all remote actions with builders and accepts options helpers over raw HTTP', async () => {
     const api = client();
-    const orders = api.repository<Order>('sales/orders');
+    const orders = api.repository<Order>('salesOrders');
     const created = await orders.createOne({
       values: (v) => ({ id: 'built', status: v.literal('paid') }),
       select: (s) => s.fields('id', 'status', 'version'),
@@ -328,7 +353,7 @@ describe('Repository API routes', () => {
     });
     expect(
       await api.request({
-        path: '/sales%2Forders:findMany',
+        path: '/salesOrders/findMany',
         method: 'POST',
         json: options,
       }),
@@ -438,19 +463,22 @@ describe('Repository API routes', () => {
           },
         },
       }),
-    ).rejects.toMatchObject({ status: 403, code: 'FIELD_WRITE_FORBIDDEN' });
+    ).rejects.toMatchObject({ status: 403, reason: 'FIELD_WRITE_FORBIDDEN' });
     await expect(
       parents.updateOne({
         filter: { id: 'parent' },
         values: { children: { create: { id: 'second' } } },
       }),
-    ).rejects.toMatchObject({ status: 403, code: 'RELATION_WRITE_FORBIDDEN' });
+    ).rejects.toMatchObject({
+      status: 403,
+      reason: 'RELATION_WRITE_FORBIDDEN',
+    });
     await expect(
       api.repository('policyClosed').createOne({
         values: { id: 'closed', children: { create: { id: 'denied' } } },
       }),
-    ).rejects.toMatchObject({ status: 403, code: 'WRITE_FORBIDDEN' });
-    const rejected = await router.request('/api/policyClosed:updateOne', {
+    ).rejects.toMatchObject({ status: 403, reason: 'WRITE_FORBIDDEN' });
+    const rejected = await router.request('/api/policyClosed/updateOne', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -459,9 +487,11 @@ describe('Repository API routes', () => {
       }),
     });
     expect(rejected.status).toBe(403);
-    expect(await rejected.json()).toMatchObject({ code: 'WRITE_FORBIDDEN' });
+    expect(await rejected.json()).toMatchObject({
+      error: { reason: 'WRITE_FORBIDDEN' },
+    });
     for (const action of ['createOne', 'updateOne']) {
-      const response = await router.request(`/api/policyClosed:${action}`, {
+      const response = await router.request(`/api/policyClosed/${action}`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -472,7 +502,7 @@ describe('Repository API routes', () => {
       });
       expect(response.status).toBe(400);
       expect(await response.json()).toMatchObject({
-        code: 'UNSUPPORTED_REPOSITORY_OPTION',
+        error: { reason: 'UNSUPPORTED_REPOSITORY_OPTION' },
       });
     }
     expect(await database.repository('policyParents').count()).toBe(1);
@@ -553,7 +583,7 @@ describe('Repository API routes', () => {
           },
         },
       }),
-    ).rejects.toMatchObject({ status: 403, code: 'FIELD_WRITE_FORBIDDEN' });
+    ).rejects.toMatchObject({ status: 403, reason: 'FIELD_WRITE_FORBIDDEN' });
     expect(await database.repository('policyLinks').count()).toBe(0);
     await owners.updateOne({
       filter: { id: 'parent' },
@@ -604,7 +634,7 @@ describe('Repository API routes', () => {
     router.route('/api', await contribution.createRouter({ container }));
     for (const name of ['falsePolicy']) {
       for (const action of ['createOne', 'updateOne']) {
-        const response = await router.request(`/api/${name}:${action}`, {
+        const response = await router.request(`/api/${name}/${action}`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
@@ -614,7 +644,7 @@ describe('Repository API routes', () => {
         });
         expect(response.status).toBe(403);
         expect(await response.json()).toMatchObject({
-          code: 'WRITE_FORBIDDEN',
+          error: { reason: 'WRITE_FORBIDDEN' },
         });
       }
     }
@@ -622,7 +652,7 @@ describe('Repository API routes', () => {
     // the caller, so a create carrying a field is refused rather than the
     // write itself.
     const nothingAllowed = await router.request(
-      '/api/emptyNodePolicy:createOne',
+      '/api/emptyNodePolicy/createOne',
       {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -631,18 +661,22 @@ describe('Repository API routes', () => {
     );
     expect(nothingAllowed.status).toBe(403);
     expect(await nothingAllowed.json()).toMatchObject({
-      code: 'FIELD_WRITE_FORBIDDEN',
+      error: { reason: 'FIELD_WRITE_FORBIDDEN' },
     });
-    const response = await router.request('/api/fieldsPolicy:createOne', {
+    const response = await router.request('/api/fieldsPolicy/createOne', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ values: { id: 'forbidden', status: 'paid' } }),
     });
     expect(response.status).toBe(403);
     expect(await response.json()).toMatchObject({
-      code: 'FIELD_WRITE_FORBIDDEN',
-      path: ['values', 'status'],
-      details: { field: 'status', allowedFields: ['id'] },
+      error: {
+        reason: 'FIELD_WRITE_FORBIDDEN',
+        metadata: {
+          path: ['values', 'status'],
+          details: { field: 'status', allowedFields: ['id'] },
+        },
+      },
     });
     expect(
       await database
@@ -856,11 +890,11 @@ describe('Repository API routes', () => {
           },
         },
       }),
-    ).rejects.toMatchObject({ status: 400, code: 'INVALID_MUTATION' });
+    ).rejects.toMatchObject({ status: 400, reason: 'INVALID_MUTATION' });
   });
 
   it('supports anonymous client calls for all seven actions against a real database', async () => {
-    const orders = client().repository<Order>('sales/orders');
+    const orders = client().repository<Order>('salesOrders');
     const created = await orders.createOne({
       values: { id: 'one', status: 'draft' },
     });
@@ -892,7 +926,7 @@ describe('Repository API routes', () => {
         values: { status: 'draft' },
         ifVersion: 1,
       }),
-    ).rejects.toMatchObject({ status: 409, code: 'VERSION_CONFLICT' });
+    ).rejects.toMatchObject({ status: 409, reason: 'VERSION_CONFLICT' });
     expect(
       await orders.deleteOne({
         filter: { id: 'one' },
@@ -906,7 +940,7 @@ describe('Repository API routes', () => {
     expect(await orders.exists({ filter: { id: 'one' } })).toBe(false);
     await expect(
       orders.deleteOne({ filter: { id: 'one' } }),
-    ).rejects.toMatchObject({ status: 404, code: 'RECORD_NOT_FOUND' });
+    ).rejects.toMatchObject({ status: 404, reason: 'RECORD_NOT_FOUND' });
   });
 
   it('aggregates all matching rows and groups with HAVING and sort through the HTTP client', async () => {
@@ -917,7 +951,7 @@ describe('Repository API routes', () => {
         { id: 'c', status: 'draft' },
       ],
     });
-    const orders = client().repository<Order>('sales/orders');
+    const orders = client().repository<Order>('salesOrders');
     const aggregate = {
       kind: 'aggregate',
       version: 1,
@@ -930,7 +964,9 @@ describe('Repository API routes', () => {
       ],
     } as const;
     // maxLimit restricts findMany, never the input rows of an aggregate.
-    expect(await orders.aggregate({ aggregate })).toEqual({
+    expect(
+      withoutDecimalPadding(await orders.aggregate({ aggregate })),
+    ).toEqual({
       count: 3,
       total: '3',
       average: '1',
@@ -950,31 +986,33 @@ describe('Repository API routes', () => {
       await orders.aggregate({ filter: { status: 'paid' }, aggregate }),
     ).toMatchObject({ count: 2, total: '2' });
     expect(
-      await orders.groupBy({
-        by: ['status'],
-        aggregate,
-        having: {
-          kind: 'filter',
-          version: 1,
-          root: {
-            kind: 'group',
-            logic: 'and',
-            items: [
-              {
-                kind: 'condition',
-                path: ['count'],
-                operator: '$gte',
-                value: 2,
-              },
-            ],
+      withoutDecimalPadding(
+        await orders.groupBy({
+          by: ['status'],
+          aggregate,
+          having: {
+            kind: 'filter',
+            version: 1,
+            root: {
+              kind: 'group',
+              logic: 'and',
+              items: [
+                {
+                  kind: 'condition',
+                  path: ['count'],
+                  operator: '$gte',
+                  value: 2,
+                },
+              ],
+            },
           },
-        },
-        sort: {
-          kind: 'sort',
-          version: 1,
-          items: [{ kind: 'field', path: ['total'], direction: 'desc' }],
-        },
-      }),
+          sort: {
+            kind: 'sort',
+            version: 1,
+            items: [{ kind: 'field', path: ['total'], direction: 'desc' }],
+          },
+        }),
+      ),
     ).toEqual([
       {
         status: 'paid',
@@ -1060,7 +1098,7 @@ describe('Repository API routes', () => {
       expect((await request(action, input)).status).toBe(400);
     }
     for (const action of ['aggregate', 'groupBy']) {
-      const response = await router.request(`/api/catalog:${action}`, {
+      const response = await router.request(`/api/catalog/${action}`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ aggregate, by: ['status'] }),
@@ -1085,7 +1123,7 @@ describe('Repository API routes', () => {
       total: 9007199254740993n,
     });
     const app = await contribution.createRouter({ container });
-    const response = await app.request('/bigints:aggregate', {
+    const response = await app.request('/bigints/aggregate', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -1110,7 +1148,7 @@ describe('Repository API routes', () => {
         { id: 'c', status: 'paid' },
       ],
     });
-    const orders = client().repository<Order>('sales/orders');
+    const orders = client().repository<Order>('salesOrders');
     expect(await orders.findMany()).toHaveLength(2);
     const sort = {
       kind: 'sort' as const,
@@ -1161,13 +1199,20 @@ describe('Repository API routes', () => {
         { id: 'c', status: 'paid' },
       ],
     });
-    const response = await router.request('/api/sales%2Forders:findMany', {
+    const response = await router.request('/api/salesOrders/findMany', {
       method: 'POST',
       headers: {
         accept: 'application/x-ndjson',
         'content-type': 'application/json',
       },
-      body: JSON.stringify({ filter: { status: 'paid' } }),
+      body: JSON.stringify({
+        filter: { status: 'paid' },
+        sort: {
+          kind: 'sort',
+          version: 1,
+          items: [{ kind: 'field', path: ['id'], direction: 'asc' }],
+        },
+      }),
     });
 
     expect(response.status).toBe(200);
@@ -1205,8 +1250,11 @@ describe('Repository API routes', () => {
     await expect(
       collect(
         client()
-          .repository<Order>('sales/orders')
-          .findMany({ filter: { status: 'paid' } }),
+          .repository<Order>('salesOrders')
+          .findMany({
+            filter: { status: 'paid' },
+            sort: (s) => s.field('id').asc(),
+          }),
       ),
     ).resolves.toEqual([
       { id: 'b', status: 'paid', version: 1 },
@@ -1215,7 +1263,7 @@ describe('Repository API routes', () => {
   });
 
   it('returns preflight Repository errors as HTTP errors before streaming starts', async () => {
-    const response = await router.request('/api/sales%2Forders:findMany', {
+    const response = await router.request('/api/salesOrders/findMany', {
       method: 'POST',
       headers: {
         accept: 'application/x-ndjson',
@@ -1226,8 +1274,7 @@ describe('Repository API routes', () => {
 
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({
-      code: 'FIELD_NOT_FOUND',
-      message: expect.any(String),
+      error: { reason: 'FIELD_NOT_FOUND', message: expect.any(String) },
     });
   });
 
@@ -1244,7 +1291,7 @@ describe('Repository API routes', () => {
     const contribution = defineRepositoryApiRoutes({
       repositories: [
         {
-          name: 'stream-error',
+          name: 'streamError',
           collection: 'orders',
           policy: open,
           actions: { findMany: {} },
@@ -1253,7 +1300,7 @@ describe('Repository API routes', () => {
     });
     router.route('/api', await contribution.createRouter({ container }));
 
-    const response = await router.request('/api/stream-error:findMany', {
+    const response = await router.request('/api/streamError/findMany', {
       method: 'POST',
       headers: {
         accept: 'application/x-ndjson',
@@ -1276,7 +1323,10 @@ describe('Repository API routes', () => {
       {
         type: 'error',
         error: {
-          code: 'INVALID_FILTER',
+          code: 400,
+          status: 'INVALID_ARGUMENT',
+          reason: 'INVALID_FILTER',
+          domain: 'app',
           message: 'Streaming query failed.',
         },
       },
@@ -1302,7 +1352,7 @@ describe('Repository API routes', () => {
       const contribution = defineRepositoryApiRoutes({
         repositories: [
           {
-            name: `policy-status-${code}`,
+            name: `policyStatus${code.replaceAll('_', '')}`,
             collection: 'orders',
             policy: open,
             actions: { count: {} },
@@ -1316,7 +1366,7 @@ describe('Repository API routes', () => {
       );
 
       const response = await scopedRouter.request(
-        `/api/policy-status-${code}:count`,
+        `/api/policyStatus${code.replaceAll('_', '')}/count`,
         {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
@@ -1326,7 +1376,7 @@ describe('Repository API routes', () => {
 
       expect({ code, status: response.status }).toEqual({ code, status });
       expect(response.status).toBe(status);
-      expect(await response.json()).toMatchObject({ code });
+      expect(await response.json()).toMatchObject({ error: { reason: code } });
       vi.restoreAllMocks();
     }
   });
@@ -1341,7 +1391,7 @@ describe('Repository API routes', () => {
     const contribution = defineRepositoryApiRoutes({
       repositories: [
         {
-          name: 'scoped-orders',
+          name: 'scopedOrders',
           collection: 'orders',
           policy: {
             read: { scope: { status: 'paid' }, fields: ['id', 'status'] },
@@ -1356,7 +1406,7 @@ describe('Repository API routes', () => {
     const scopedRouter = new Hono();
     scopedRouter.route('/api', await contribution.createRouter({ container }));
 
-    const listed = await scopedRouter.request('/api/scoped-orders:findMany', {
+    const listed = await scopedRouter.request('/api/scopedOrders/findMany', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: '{}',
@@ -1367,27 +1417,24 @@ describe('Repository API routes', () => {
     expect(body.data.every((record) => record.status === 'paid')).toBe(true);
 
     // A field the policy does not grant is refused, not quietly trimmed.
-    const forbidden = await scopedRouter.request(
-      '/api/scoped-orders:findMany',
-      {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          select: {
-            kind: 'select',
-            version: 1,
-            root: { kind: 'selection', fields: ['id', 'version'] },
-          },
-        }),
-      },
-    );
+    const forbidden = await scopedRouter.request('/api/scopedOrders/findMany', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        select: {
+          kind: 'select',
+          version: 1,
+          root: { kind: 'selection', fields: ['id', 'version'] },
+        },
+      }),
+    });
     expect(forbidden.status).toBe(403);
 
     // And the caller cannot supply a policy of their own: a policy that the
     // request could set would let it grant itself anything.
     for (const key of ['policy', 'scope']) {
       const smuggled = await scopedRouter.request(
-        '/api/scoped-orders:findMany',
+        '/api/scopedOrders/findMany',
         {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
@@ -1396,7 +1443,7 @@ describe('Repository API routes', () => {
       );
       expect(smuggled.status).toBe(400);
       expect(await smuggled.json()).toMatchObject({
-        code: 'UNSUPPORTED_REPOSITORY_OPTION',
+        error: { reason: 'UNSUPPORTED_REPOSITORY_OPTION' },
       });
     }
   });
@@ -1417,7 +1464,7 @@ describe('Repository API routes', () => {
       },
       repositories: [
         {
-          name: 'principal-orders',
+          name: 'principalOrders',
           collection: 'orders',
           policy: (principal) => ({
             read: { scope: { status: principal.status }, fields: ['id'] },
@@ -1435,7 +1482,7 @@ describe('Repository API routes', () => {
       await contribution.createRouter({ container }),
     );
     const request = (actor?: string): Promise<Response> =>
-      principalRouter.request('/api/principal-orders:findMany', {
+      principalRouter.request('/api/principalOrders/findMany', {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
@@ -1458,7 +1505,7 @@ describe('Repository API routes', () => {
     const anonymous = await request();
     expect(anonymous.status).toBe(403);
     expect(await anonymous.json()).toMatchObject({
-      code: 'PRINCIPAL_REQUIRED',
+      error: { reason: 'PRINCIPAL_REQUIRED' },
     });
   });
 
@@ -1467,7 +1514,7 @@ describe('Repository API routes', () => {
       principal: () => 'actor',
       repositories: [
         {
-          name: 'referencing-orders',
+          name: 'referencingOrders',
           collection: 'orders',
           policy: () => ({
             read: {
@@ -1492,7 +1539,7 @@ describe('Repository API routes', () => {
     // on a relation the Policy appears to grant.
     expect(
       (
-        await referencingRouter.request('/api/referencing-orders:findMany', {
+        await referencingRouter.request('/api/referencingOrders/findMany', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: '{}',
@@ -1506,7 +1553,7 @@ describe('Repository API routes', () => {
       principal: () => 'actor',
       repositories: [
         {
-          name: 'broken-principal-orders',
+          name: 'brokenPrincipalOrders',
           collection: 'orders',
           // `scope` is missing, which only shows once the function runs.
           policy: () => ({ read: { fields: ['id'] } }) as never,
@@ -1517,7 +1564,7 @@ describe('Repository API routes', () => {
     const brokenRouter = new Hono();
     brokenRouter.route('/api', await contribution.createRouter({ container }));
     const response = await brokenRouter.request(
-      '/api/broken-principal-orders:count',
+      '/api/brokenPrincipalOrders/count',
       {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -1530,14 +1577,16 @@ describe('Repository API routes', () => {
 
   it('does not expose undeclared collections or actions and preserves other routes', async () => {
     for (const path of [
-      '/api/orders:findMany',
-      '/api/catalog:createOne',
-      '/api/sales%2Forders:deleteMany',
-      '/api/users:findMany',
+      '/api/orders/findMany',
+      '/api/catalog/createOne',
+      '/api/salesOrders/deleteMany',
+      '/api/users/findMany',
+      // The colon separator is gone; only the slash form is routed.
+      '/api/salesOrders:findMany',
     ]) {
       expect((await router.request(path, { method: 'POST' })).status).toBe(404);
     }
-    expect((await router.request('/api/sales%2Forders:findMany')).status).toBe(
+    expect((await router.request('/api/salesOrders/findMany')).status).toBe(
       404,
     );
     expect(await (await router.request('/api/unrelated')).json()).toEqual({
@@ -1567,14 +1616,17 @@ describe('Repository API routes', () => {
     const response = await request(action as string, input);
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({
-      code: expect.any(String),
-      message: expect.any(String),
+      error: {
+        status: 'INVALID_ARGUMENT',
+        reason: expect.any(String),
+        message: expect.any(String),
+      },
     });
     expect(await database.repository('orders').count()).toBe(0);
   });
 
   it('rejects malformed JSON, non-JSON requests and oversized bodies', async () => {
-    const path = '/api/sales%2Forders:findMany';
+    const path = '/api/salesOrders/findMany';
     expect(
       (
         await router.request(path, {
@@ -1598,11 +1650,8 @@ describe('Repository API routes', () => {
   });
 
   it('keeps unexpected failures as server errors rather than invalid input', async () => {
-    router.onError((_error, context) =>
-      context.json(
-        { code: 'INTERNAL_ERROR', message: 'Internal server error' },
-        500,
-      ),
+    router.onError((error, context) =>
+      apiErrorHandler(toApiError(error), context),
     );
     vi.spyOn(stubScopedRepository(database), 'count').mockRejectedValue(
       new Error('Database unavailable'),
@@ -1615,8 +1664,8 @@ describe('Repository API routes', () => {
       client().repository('broken').count(),
     ).rejects.toMatchObject<ApiClientError>({
       status: 500,
-      code: 'INTERNAL_ERROR',
-      message: 'Internal server error',
+      reason: 'INTERNAL_ERROR',
+      message: 'Internal server error.',
     });
   });
 
@@ -1647,17 +1696,61 @@ describe('Repository API routes', () => {
     const routes = await contribution.createRouter({ container });
     expect(resolve).toHaveBeenCalledWith('orders', 'secondary');
     expect(
-      (await routes.request('/external:deleteOne', { method: 'POST' })).status,
+      (await routes.request('/external/deleteOne', { method: 'POST' })).status,
     ).toBe(404);
     expect(
       await (
-        await routes.request('/external:count', {
+        await routes.request('/external/count', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: '{}',
         })
       ).json(),
     ).toEqual({ data: 0 });
+  });
+
+  it.each([
+    'sales/orders',
+    'sales%2Forders',
+    'sales:orders',
+    'sales-orders',
+    'sales_orders',
+    'SalesOrders',
+    '1orders',
+    'sales orders',
+  ])(
+    'rejects the exposure name %j, which is not a camelCase segment',
+    (name) => {
+      expect(() =>
+        defineRepositoryApiRoutes({
+          repositories: [{ name, policy: open, actions: { count: {} } }],
+        }),
+      ).toThrow(
+        `Repository API exposure name ${JSON.stringify(name)} is invalid. Exposure names are camelCase path segments matching /^[a-z][a-zA-Z0-9]*$/, such as "salesOrders".`,
+      );
+    },
+  );
+
+  it.each(['auth', 'healthz', 'swagger'])(
+    'rejects the exposure name %j, which the application already answers under /api',
+    (name) => {
+      expect(() =>
+        defineRepositoryApiRoutes({
+          repositories: [{ name, policy: open, actions: { count: {} } }],
+        }),
+      ).toThrow(`Repository API exposure name "${name}" is reserved`);
+    },
+  );
+
+  it('accepts camelCase exposure names with digits', () => {
+    expect(() =>
+      defineRepositoryApiRoutes({
+        repositories: [
+          { name: 'orders2026', policy: open, actions: { count: {} } },
+          { name: 'salesOrderItems', policy: open, actions: { count: {} } },
+        ],
+      }),
+    ).not.toThrow();
   });
 
   it('rejects ambiguous declarations and permits an empty exposure list without database services', async () => {
@@ -1668,6 +1761,16 @@ describe('Repository API routes', () => {
         }),
       ).toThrow();
     }
+    expect(() =>
+      defineRepositoryApiRoutes({
+        repositories: [
+          { name: 'orders', policy: open, actions: {} },
+          { name: 'orders', policy: open, actions: {} },
+        ],
+      }),
+    ).toThrow(
+      'Repository API exposure name "orders" is declared more than once',
+    );
     expect(() =>
       defineRepositoryApiRoutes({
         repositories: [
@@ -1687,14 +1790,6 @@ describe('Repository API routes', () => {
             policy: open,
             actions: { findMany: { maxLimit: 0 } },
           },
-        ],
-      }),
-    ).toThrow();
-    expect(() =>
-      defineRepositoryApiRoutes({
-        repositories: [
-          { name: 'orders', policy: open, actions: {} },
-          { name: 'orders', policy: open, actions: {} },
         ],
       }),
     ).toThrow();

@@ -9,20 +9,25 @@ import { databasePlugin } from '../../server/database/plugin.js';
 import { defineDatabasePermission } from '../../server/database/builders.js';
 import { DatabasePermissionSetStore } from '../../server/stores/permission-sets.js';
 import { createAppAuthorization } from '../../server/authorization.js';
+import type { DatabaseManager } from '@nocobase/db';
 import {
-  createSqliteDatabase,
-  migrationContext,
-} from '../helpers/database-fixture.js';
+  createTestDatabase,
+  type TestDatabase,
+} from '@nocobase/app-testing/server';
+import { migrationContext } from '../helpers/database-fixture.js';
 
 describe('authorization plugin database stores', () => {
-  const database = createSqliteDatabase();
+  let testDatabase: TestDatabase;
+  let database: DatabaseManager;
 
   beforeAll(async () => {
+    testDatabase = await createTestDatabase();
+    database = testDatabase.database;
     await permissionSetMigration.up(migrationContext(database.connection()));
   });
 
   afterAll(async () => {
-    await database.destroy();
+    await testDatabase.destroy();
   });
 
   it.each(['revoke', 'replace', 'mixed'] as const)(
@@ -46,7 +51,7 @@ describe('authorization plugin database stores', () => {
         });
       }
       const notifications: string[] = [];
-      authorization.onGrantsChanged(async (subject) => {
+      const off = authorization.onGrantsChanged(async (subject) => {
         // An independent connection read can complete only after the writer
         // commits and releases SQLite's single pooled connection.
         expect(
@@ -77,6 +82,9 @@ describe('authorization plugin database stores', () => {
         await authorization.permissionSets.listAssignments(key),
       ).toHaveLength(1);
       expect(notifications).toHaveLength(1);
+      // The bound API notifies after its commit too, and the listener's
+      // assertion is about the operations above, not about the cleanup.
+      off();
       await database.connection().transaction(async (connection) => {
         await authorization.permissionSets
           .withTransaction(connection)

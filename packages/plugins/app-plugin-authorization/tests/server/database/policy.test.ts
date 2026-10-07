@@ -8,6 +8,7 @@ import {
   type DatabaseConnection,
   type DatabaseManager,
 } from '@nocobase/db';
+import { type TestDatabase } from '@nocobase/app-testing/server';
 import { defineRepositoryApiRoutes } from '@nocobase/app-server/router';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
@@ -30,13 +31,15 @@ import {
   orderFields,
 } from '../../helpers/orders-database.js';
 
+let testDatabase: TestDatabase;
 let database: DatabaseManager;
 let connection: DatabaseConnection;
 let signedInAs = 'alice';
 
 /** `orders` for the policy folds, `authzOrders` and `authzCustomers` for relations. */
 beforeEach(async () => {
-  database = await createOrdersDatabase();
+  testDatabase = await createOrdersDatabase();
+  database = testDatabase.database;
   connection = database.connection();
   await permissionSetMigration.up(migrationContext(connection));
   await connection.builder.createCollections([
@@ -75,7 +78,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await database.destroy();
+  await testDatabase.destroy();
 });
 
 const resource = { type: 'database.collection', id: 'orders' } as const;
@@ -210,6 +213,58 @@ describe('policyFor', () => {
       update: true,
       delete: true,
     });
+  });
+});
+
+describe('an all-fields write grant', () => {
+  it('allows only the fields db accepts, so a write through the Policy succeeds', async () => {
+    const write = (action: string) => ({
+      action,
+      policy: { type: 'database', fields: '*', recordAccess: ['allRecords'] },
+    });
+    const store = new MockPermissionSetStore({
+      permissionSets: [
+        {
+          key: 'order-writer',
+          grants: [
+            {
+              resource,
+              actions: ['read', 'create', 'update'].map(write),
+            },
+          ],
+        },
+      ],
+      assignments: [
+        {
+          id: 'writer-assignment',
+          subject: { type: 'user', id: 'alice' },
+          permissionSet: 'order-writer',
+        },
+      ],
+    });
+    const authorization = createAuthorization({
+      connection,
+      plugins: [permissionSetsPlugin({ store }), databasePlugin()],
+    });
+    const policy = await authorization.database.policyFor(
+      'orders',
+      authorization.for({ principal: { type: 'user', id: 'alice' } }),
+    );
+    // `id` is an `increments` column: db assigns it, so neither write may name it.
+    const writable = orderFields.filter((field) => field !== 'id');
+    expect(policy.create).toMatchObject({ fields: writable });
+    expect(policy.update).toMatchObject({ fields: writable });
+
+    const orders = database.repository('orders').withPolicy(policy);
+    const created = await orders.createOne({
+      values: { ownerId: 'alice', amount: 10 },
+    });
+    await expect(
+      orders.updateOne({
+        filter: { id: created.record.id },
+        values: { amount: 20 },
+      }),
+    ).resolves.toMatchObject({ record: { amount: 20 } });
   });
 });
 
@@ -702,7 +757,7 @@ describe('business operation Repository middleware', () => {
   it('does not accept collection grants in place of the bound business action', async () => {
     await grantOrders({ recordAccess: ['allRecords'] });
     expect(
-      (await post(await compositeRoutes(), '/salesOrders:findMany')).status,
+      (await post(await compositeRoutes(), '/salesOrders/findMany')).status,
     ).toBe(403);
   });
 
@@ -710,13 +765,13 @@ describe('business operation Repository middleware', () => {
     await grantBusinessOrders();
     await grantOrders({ recordAccess: ['allRecords'] });
     const router = await compositeRoutes();
-    const rows = await post(router, '/salesOrders:findMany');
+    const rows = await post(router, '/salesOrders/findMany');
     expect(rows.status).toBe(200);
     expect((await rows.json()).data).toHaveLength(2);
-    expect((await post(router, '/salesOrders:count')).status).toBe(200);
+    expect((await post(router, '/salesOrders/count')).status).toBe(200);
     expect(
       (
-        await post(router, '/salesOrders:updateOne', {
+        await post(router, '/salesOrders/updateOne', {
           filter: { id: 'order-1' },
           values: { amount: 15 },
         })
@@ -724,7 +779,7 @@ describe('business operation Repository middleware', () => {
     ).toBe(200);
     expect(
       (
-        await post(router, '/salesOrders:updateOne', {
+        await post(router, '/salesOrders/updateOne', {
           filter: { id: 'order-2' },
           values: { amount: 15 },
         })
@@ -732,21 +787,21 @@ describe('business operation Repository middleware', () => {
     ).toBe(404);
     expect(
       (
-        await post(router, '/salesOrders:updateOne', {
+        await post(router, '/salesOrders/updateOne', {
           filter: { id: 'order-1' },
           values: { ownerId: 'bob' },
         })
       ).status,
     ).toBe(403);
     signedInAs = 'bob';
-    expect((await post(router, '/salesOrders:findMany')).status).toBe(403);
+    expect((await post(router, '/salesOrders/findMany')).status).toBe(403);
   });
 
   it('denies unmapped methods and mismatched target collections', async () => {
     await grantBusinessOrders();
     expect(
       (
-        await post(await compositeRoutes(), '/salesOrders:deleteOne', {
+        await post(await compositeRoutes(), '/salesOrders/deleteOne', {
           filter: { id: 'order-1' },
         })
       ).status,
@@ -755,7 +810,7 @@ describe('business operation Repository middleware', () => {
       (
         await post(
           await compositeRoutes({ collection: 'authzCustomers' }),
-          '/salesOrders:findMany',
+          '/salesOrders/findMany',
         )
       ).status,
     ).toBe(403);

@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-notification-in-app",
   "displayName": "In-app Notification App Plugin",
   "description": "Provides an authenticated in-app inbox, notification Channel, and development-only Client inbox page.",
-  "version": "0.2.0-beta.19",
+  "version": "1.0.0-beta.21",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -88,12 +88,12 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@nocobase/session": "workspace:^",
     "better-auth": "catalog:",
-    "hono": "catalog:"
+    "hono": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
-    "@nocobase/db-sqlite": "workspace:*",
+    "@nocobase/app-testing": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@testing-library/jest-dom": "catalog:",
     "@testing-library/react": "catalog:",
