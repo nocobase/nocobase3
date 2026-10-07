@@ -217,9 +217,12 @@ describe('ChatPanel', () => {
     expect(within(files).getByText('deploy.log')).toBeVisible();
     fireEvent.click(screen.getByTestId('chat-send'));
     const log = screen.getByRole('log', { name: 'Messages' });
-    expect(
-      await within(log).findByRole('link', { name: 'deploy.log' }),
-    ).toBeVisible();
+    // The sent message may render again as the reply arrives, so wait on the link as it is, not one found earlier.
+    await waitFor(() =>
+      expect(
+        within(log).getByRole('link', { name: 'deploy.log' }),
+      ).toBeVisible(),
+    );
   });
 
   it('opens the history, filters archived conversations, and opens one', async () => {
