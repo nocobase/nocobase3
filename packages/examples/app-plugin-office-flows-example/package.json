@@ -51,7 +51,6 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@nocobase/lifecycle": "workspace:^",
     "hono": "catalog:",
     "zod": "catalog:"
   },
@@ -63,6 +62,7 @@
     "@nocobase/db": "workspace:^",
     "@nocobase/i18n": "workspace:^",
     "@nocobase/jobs": "workspace:^",
+    "@nocobase/lifecycle": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",

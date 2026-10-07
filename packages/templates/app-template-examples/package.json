@@ -203,6 +203,7 @@
     "@nocobase/authorization": "workspace:^",
     "@nocobase/queue": "workspace:^",
     "@nocobase/jobs": "workspace:^",
+    "@nocobase/lifecycle": "workspace:^",
     "@nocobase/i18n": "workspace:^",
     "@nocobase/caching": "workspace:^",
     "@nocobase/ai-employee": "workspace:^",

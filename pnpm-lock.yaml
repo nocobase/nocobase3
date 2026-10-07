@@ -5115,6 +5115,9 @@ importers:
       '@nocobase/jobs':
         specifier: workspace:^
         version: link:../../libs/jobs
+      '@nocobase/lifecycle':
+        specifier: workspace:^
+        version: link:../../libs/lifecycle
       '@nocobase/queue':
         specifier: workspace:^
         version: link:../../libs/queue
