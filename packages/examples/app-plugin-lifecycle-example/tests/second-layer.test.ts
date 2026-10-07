@@ -8,12 +8,12 @@ import {
   REPLANS,
   ReplanAgent,
   replanLifecycle,
-} from '../server/second-layer/agent.js';
+} from './fixtures/second-layer/agent.js';
 import {
   VISAS,
   VisaMaterials,
   visaLifecycle,
-} from '../server/second-layer/materials.js';
+} from './fixtures/second-layer/materials.js';
 import { createHarness, refusal, type Harness } from './support/harness.js';
 
 function setup() {

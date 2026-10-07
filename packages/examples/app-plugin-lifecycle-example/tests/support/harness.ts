@@ -14,7 +14,7 @@ import {
 } from '@nocobase/lifecycle';
 import { expect } from 'vitest';
 
-import type { SecondLayerServices } from '../../server/second-layer/rows.js';
+import type { SecondLayerServices } from '../fixtures/second-layer/rows.js';
 
 export interface SentMessage {
   readonly to: string;

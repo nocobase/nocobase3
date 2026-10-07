@@ -1,3 +1,8 @@
+// A test fixture: it runs only on the memory store, through the `MemoryRows`
+// handle a memory transaction hands out, and is not part of the published
+// plugin. A real plugin keeps a second layer's rows in tables of its own,
+// created by a migration and written through the transaction's Repository.
+
 import {
   defineLifecycle,
   SYSTEM_ACTOR,

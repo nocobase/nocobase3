@@ -11,7 +11,7 @@ Two lifecycles run under **Lifecycle Example** in the application menu, each beh
 
 Each page has a **Signed in as** switch over the example's people — agents and customers, or employees, managers, an executive and the finance director — so one person can play every role; a real application takes the actor from the signed-in user and authorizes the action. The waits are minutes rather than days so you can watch a trigger fire, and a demo option on each new record makes its first email deliveries or payment attempts fail on purpose, to show retries. Under each record, **Under the hood** shows its states, parameters, transition log and effect runs.
 
-`server/second-layer/` shows what goes on while a record waits in one state, written by hand without a page of its own: a visa waits in `supplementing` while the applicant and the officer exchange material in rounds, and an order waits in `replanning` while an assistant asks the planner to choose. Each keeps its rounds in rows of its own, set up and ended by the state's `onEnterState` and `onLeaveState` hooks, and moves the record only when it concludes, by firing a `manual: false` transition in `runtime.transaction()` — so the record's version and clock stay where they were until then. Approvals are this pattern made reusable, in `@nocobase/app-plugin-approval`.
+`tests/fixtures/second-layer/` shows what goes on while a record waits in one state, written by hand as test fixtures without a page of its own: a visa waits in `supplementing` while the applicant and the officer exchange material in rounds, and an order waits in `replanning` while an assistant asks the planner to choose. Each keeps its rounds in rows of its own, set up and ended by the state's `onEnterState` and `onLeaveState` hooks, and moves the record only when it concludes, by firing a `manual: false` transition in `runtime.transaction()` — so the record's version and clock stay where they were until then. They run only on the memory store and are not part of the published plugin; a real plugin keeps such rows in tables of its own, created by a migration and written through the transaction's Repository. A reusable second layer, such as an approval layer, could provide the whole state in the same way.
 
 ## Try it
 
@@ -52,7 +52,7 @@ Run the examples application with `pnpm --filter @nocobase/app-template-examples
 
 `tests/lifecycles.test.ts` tests both lifecycles with `@nocobase/lifecycle/testing`: a memory store, a fake clock and in-process effects, so waiting, escalating and retrying are plain function calls. `tests/provider.test.ts` runs the real Provider on the test database (SQLite by default) with the memory jobs service, `tests/routes.test.ts` covers the HTTP boundary, and `tests/error-message.test.ts` covers how a page words a refusal.
 
-`tests/second-layer.test.ts` runs the two hand-written second layers on memory storage and a fake clock: rounds that leave the record alone, the conclusion that moves it, and a late answer for a stay that has already ended being refused.
+`tests/second-layer.test.ts` runs the two hand-written second layers in `tests/fixtures/second-layer/` on memory storage and a fake clock: rounds that leave the record alone, the conclusion that moves it, and a late answer for a stay that has already ended being refused.
 
 ```bash
 pnpm --filter @nocobase/app-plugin-lifecycle-example lint

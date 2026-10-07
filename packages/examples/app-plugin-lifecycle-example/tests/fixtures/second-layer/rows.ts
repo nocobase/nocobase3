@@ -7,13 +7,16 @@ import type {
   RecordId,
 } from '@nocobase/lifecycle';
 
+// A test fixture: it runs only on the memory store, through the `MemoryRows`
+// handle a memory transaction hands out, and is not part of the published
+// plugin. A real plugin keeps a second layer's rows in tables of its own,
+// created by a migration and written through the transaction's Repository.
+//
 // What the hand-written second layers share: their rows, read and written
 // through the transaction a transition or `runtime.transaction()` hands
-// them, their refusals, and the services they are registered with. They run
-// on the memory store in the tests; on `@nocobase/db` the same four
-// operations are `createOne`, `findOne`, `findMany` and a filtered
-// `updateMany` on the transaction's connection, as `@nocobase/app-plugin-approval`
-// does for its own rows.
+// them, their refusals, and the services they are registered with. On
+// `@nocobase/db` the same four operations would be `createOne`, `findOne`,
+// `findMany` and a filtered `updateMany` on the transaction's connection.
 
 /** A row of a second layer: an exchange, an agent run. */
 export type Row = LifecycleRecord;
