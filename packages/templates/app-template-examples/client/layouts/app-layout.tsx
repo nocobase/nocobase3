@@ -49,8 +49,7 @@ export function AppLayout({
   return (
     // The shell owns the business route tree used by its pages and navigation.
     <RouteTreeProvider routes={routes}>
-      {/* Examples mounts the global AI employee entry around its signed-in pages only; Settings and Dev keep their
-      own layouts without it. */}
+      {/* Examples owns the AI employee demonstration; its global entry wraps only the signed-in shell. */}
       <AIEmployeeEntry>
         <AppSidebarProvider>
           <AppSidebar label={navigationLabel} footer={<AppSidebarFooter />}>
@@ -83,7 +82,7 @@ export function AppLayout({
             </LayoutHeader>
             <main className='relative min-w-0 flex-1 overflow-hidden'>
               {/* main only positions; the page scrolls in here, so a child page layer laid over main is neither
-            moved by the page's scrolling nor stretched by its height. */}
+              moved by the page's scrolling nor stretched by its height. */}
               <div className='h-full overflow-y-auto'>
                 <Outlet />
               </div>
