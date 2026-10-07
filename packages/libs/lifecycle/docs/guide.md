@@ -400,7 +400,7 @@ A state definition may carry the same hooks itself — `{ name: 'approving', onE
 
 ### Move several records in one transaction
 
-`runtime.transaction(async (tx) => { … })` gives one transaction across every registered lifecycle: `tx.read()`, `tx.fire()` and `tx.create()` check exactly what `fire()` and `create()` check, `tx.handle` writes rows of your own, and `tx.afterCommit()` schedules a best-effort callback. Events, effects and callbacks follow the commit, and none of it happens on a rollback. Each `tx.fire()` and `tx.create()` runs in a savepoint; a refusal or hook failure undoes that call, and the caller may catch it and continue. An uncaught failure rolls the outer transaction back. Hooks and `onTransition` receive the same `tx`. Calling `runtime.fire()` instead from inside the work opens a second transaction, which on the memory store and on SQLite waits forever.
+`runtime.transaction(async (tx) => { … })` gives one transaction across every registered lifecycle: `tx.read()` reads through the transaction store, while `tx.fire()` and `tx.create()` check exactly what `fire()` and `create()` check, `tx.handle` writes rows of your own, and `tx.afterCommit()` schedules a best-effort callback. Events, effects and callbacks follow the commit, and none of it happens on a rollback. Each `tx.fire()` and `tx.create()` runs in a savepoint; a refusal or hook failure undoes that call, and the caller may catch it and continue. An uncaught failure rolls the outer transaction back. Hooks and `onTransition` receive the same `tx`. Calling `runtime.fire()` instead from inside the work opens a second transaction, which on the memory store and on SQLite waits forever.
 
 ### A transition only the server fires
 
