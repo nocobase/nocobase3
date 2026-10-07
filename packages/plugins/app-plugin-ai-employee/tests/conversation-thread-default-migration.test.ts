@@ -21,7 +21,7 @@ async function defaultThread(connection: DatabaseConnection): Promise<number> {
   return Number(row?.thread);
 }
 
-describeMigration('202610070001_default_ai_conversation_thread_to_one', {
+describeMigration('202610070002_default_ai_conversation_thread_to_one', {
   sources: aiEmployeeMigrations,
   up: async ({ connection }) => {
     await expect(defaultThread(connection)).resolves.toBe(1);

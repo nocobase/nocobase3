@@ -8,7 +8,7 @@ import {
 // cleanup moves a conversation whose checkpoints it released. A row inserted
 // without a thread therefore starts on 1 too, rather than looking released.
 const migration: MigrationDefinition = defineMigration({
-  name: '202610070001_default_ai_conversation_thread_to_one',
+  name: '202610070002_default_ai_conversation_thread_to_one',
   async up({ builder }: MigrationContext): Promise<void> {
     await builder.alterField('aiConversations', 'thread', {
       type: 'integer',
