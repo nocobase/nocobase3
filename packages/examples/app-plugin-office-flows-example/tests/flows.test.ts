@@ -18,7 +18,7 @@ import {
 } from '@nocobase/lifecycle';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   emptyDataRequest,
@@ -55,6 +55,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await testDatabase.destroy();
 });
 
@@ -228,6 +229,73 @@ describe('data usage request', () => {
       firstUseDate: today(1),
       consumers: ['内部合规风险审计', '内部管理及分析'],
     });
+  });
+
+  it('keeps both fields of two partial edits that interleave', async () => {
+    const created = await service.createDataRequest(
+      requestForm({}),
+      'zhangwei',
+    );
+    const id = String(created.id);
+    // Another request on its own store, so the spy below does not see it.
+    const other = new OfficeFlowsService(
+      database,
+      runtime,
+      new OfficeStore(database),
+    );
+    const find = store.find.bind(store);
+    let interleaved = false;
+    vi.spyOn(store, 'find').mockImplementation(async (collection, recordId) => {
+      const record = await find(collection, recordId);
+      if (!interleaved && collection === COLLECTIONS.dataRequests) {
+        interleaved = true;
+        // The other edit reads and writes after this one read, before it writes.
+        await other.updateDataRequest(id, { reason: '年度审计' }, 'zhangwei');
+      }
+      return record;
+    });
+    await service.updateDataRequest(
+      id,
+      { subject: '客户分群数据' },
+      'zhangwei',
+    );
+    expect(interleaved).toBe(true);
+    vi.restoreAllMocks();
+    const form = (await service.dataRequestDetail(id, 'zhangwei'))
+      .form as DataRequestForm;
+    expect(form).toMatchObject({
+      subject: '客户分群数据',
+      reason: '年度审计',
+      volume: '50≤x<2万',
+    });
+  });
+
+  it('refuses a transition decided on the record before an edit', async () => {
+    const created = await service.createDataRequest(
+      requestForm({}),
+      'zhangwei',
+    );
+    const id = String(created.id);
+    // A page shows the form as it is, ready to submit.
+    const seen = await runtime.view('dataRequests', id, { id: 'zhangwei' });
+    expect(seen.available.find((item) => item.name === 'submit')).toMatchObject(
+      { allowed: true },
+    );
+    // Meanwhile another edit changes the form: the version moves on, so a
+    // submit decided on what that page showed no longer commits.
+    await service.updateDataRequest(
+      id,
+      { subject: '客户分群数据' },
+      'zhangwei',
+    );
+    await expect(
+      runtime.fire('dataRequests', id, 'submit', {
+        actor: { id: 'zhangwei' },
+        expect: { version: seen.version },
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    const detail = await service.dataRequestDetail(id, 'zhangwei');
+    expect((detail.record as Plain).status).toBe('draft');
   });
 
   it('creates the due tasks of a periodic request once, however often it sweeps', async () => {
@@ -834,6 +902,106 @@ describe('routes on the real service', () => {
       send('incoming/999/managementRows?actAs=zhoujie', { groupId: '1' }),
     );
     expect(missing.status).toBe(404);
+  });
+
+  it('answers an edit that keeps losing to concurrent changes with 409 ABORTED', async () => {
+    const routes = await router();
+    const created = await service.createDataRequest(
+      requestForm({}),
+      'zhangwei',
+    );
+    const id = String(created.id);
+    const find = store.find.bind(store);
+    let reads = 0;
+    // Every read is overtaken by another change before the edit writes.
+    vi.spyOn(store, 'find').mockImplementation(async (collection, recordId) => {
+      const record = await find(collection, recordId);
+      if (collection === COLLECTIONS.dataRequests) {
+        reads += 1;
+        await database.repository(COLLECTIONS.dataRequests).updateMany({
+          filter: { id: Number(id) },
+          values: { lifecycleVersion: { increment: 1 } },
+        });
+      }
+      return record;
+    });
+    const patched = await routes.request(
+      send(
+        `dataRequests/${id}?actAs=zhangwei`,
+        { form: { subject: '客户分群数据' } },
+        'PATCH',
+      ),
+    );
+    expect(patched.status).toBe(409);
+    await expect(patched.json()).resolves.toMatchObject({
+      error: { status: 'ABORTED', reason: 'RECORD_CHANGED' },
+    });
+    // Read again on each attempt, and nothing written.
+    expect(reads).toBe(3);
+    vi.restoreAllMocks();
+    const form = (await service.dataRequestDetail(id, 'zhangwei'))
+      .form as DataRequestForm;
+    expect(form.subject).toBe('客户画像数据');
+  });
+
+  it('refuses a second countersign to that clerk alone, as forbidden', async () => {
+    const routes = await router();
+    const created = await service.createIncoming(
+      {
+        title: '关于加强数据安全管理的通知',
+        code: 'SW-2026-0101',
+        sender: '监管机构',
+        senderRef: '监管〔2026〕12号',
+        summary: '要求各部门开展数据安全自查。',
+        officeOpinion: '财务部统筹。',
+        distributionType: 'review',
+      },
+      'zhoujie',
+    );
+    const id = String(created.id);
+    await service.fireIncoming(id, 'submit', {}, 'zhoujie');
+    await service.fireIncoming(id, 'approve', {}, 'wuhua');
+    await service.fireIncoming(id, 'approve', {}, 'zhengkai');
+    await service.addRow(
+      'incoming',
+      id,
+      {
+        departmentName: '财务部',
+        includeClerks: true,
+        includeHeads: false,
+        includeLeaders: false,
+      },
+      'zhoujie',
+    );
+    await service.fireIncoming(id, 'dispatchClerks', {}, 'zhoujie');
+    const [clerk] = (await service.myTasks('gaoyan')).records;
+    const sign = async (person: string): Promise<Response> =>
+      routes.request(
+        send(`tasks/clerk/${String(clerk!.id)}/fire?actAs=${person}`, {
+          transition: 'sign',
+          input: { decision: 'C' },
+        }),
+      );
+    expect((await sign('gaoyan')).status).toBe(204);
+    // Having signed refuses gaoyan only; it is not a state nobody can pass.
+    const again = await sign('gaoyan');
+    expect(again.status).toBe(403);
+    await expect(again.json()).resolves.toMatchObject({
+      error: {
+        status: 'PERMISSION_DENIED',
+        reason: 'GUARD_REJECTED',
+        metadata: {
+          blockers: [{ code: 'alreadySigned', kind: 'permission' }],
+        },
+      },
+    });
+    expect((await sign('linfeng')).status).toBe(204);
+    expect(
+      (
+        (await service.taskDetail('clerk', String(clerk!.id), 'gaoyan'))
+          .record as Plain
+      ).status,
+    ).toBe('reviewing');
   });
 
   it('names both fields of a manual extraction task left empty', async () => {

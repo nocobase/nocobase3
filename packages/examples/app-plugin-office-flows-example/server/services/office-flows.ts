@@ -150,6 +150,12 @@ const DATA_REQUEST_FIELDS: readonly (keyof DataRequestForm)[] = [
   'securityFiles',
 ];
 
+/**
+ * How often an edit reads the record again after a concurrent change wrote
+ * first, before it answers `RECORD_CHANGED`.
+ */
+const EDIT_ATTEMPTS = 3;
+
 /** Which state a record may be edited in, per kind. */
 const EDITABLE_STATES: Readonly<Record<string, readonly string[]>> = {
   dataRequests: ['draft'],
@@ -253,6 +259,17 @@ export class OfficeFlowsService {
     return record;
   }
 
+  /**
+   * Writes an edit against the record as read: the state check, the
+   * permission check and `change` all see that version, and the write
+   * applies only while the record is still at it. Every edit moves
+   * `lifecycleVersion` on, so of two edits read at the same version only one
+   * applies; the other reads again and is applied anew to what the first
+   * left, so neither overwrites the other with what it read before. A
+   * transition that read the record before an edit wrote is refused with
+   * `CONFLICT` when it commits, since it writes on the version it read. After
+   * `EDIT_ATTEMPTS` lost races the edit gives up with `RECORD_CHANGED`.
+   */
   private async edit(
     name: LifecycleName,
     collection: string,
@@ -261,40 +278,48 @@ export class OfficeFlowsService {
     change: Plain | ((record: Plain) => Plain),
     allowed: (record: Plain) => boolean,
   ): Promise<void> {
-    const record = await this.require(collection, id);
-    if (!EDITABLE_STATES[name].includes(text(record.status)))
-      throw new OfficeFlowsError(
-        'LOCKED',
-        'RECORD_LOCKED',
-        'The record cannot be edited at this step.',
-      );
-    if (!allowed(record))
-      throw new OfficeFlowsError(
-        'FORBIDDEN',
-        'EDIT_NOT_ALLOWED',
-        'The current role cannot edit this record.',
-      );
-    const values = typeof change === 'function' ? change(record) : change;
-    if (!Object.keys(values).length) return;
-    // The status and its timestamp are never in `values`: only fire() writes
-    // them. The edit was authorized for the record as read, so it applies
-    // only while the record is still that version.
-    const { updatedCount } = await this.database
-      .repository(collection)
-      .updateMany({
-        filter: {
-          id: idOf(id),
-          status: text(record.status),
-          lifecycleVersion: Number(record.lifecycleVersion ?? 0),
-        },
-        values: values as RepositoryRecord,
-      });
-    if (!updatedCount)
-      throw new OfficeFlowsError(
-        'CONFLICT',
-        'RECORD_CHANGED',
-        'Someone else changed the record; reload and try again.',
-      );
+    for (let attempt = 1; attempt <= EDIT_ATTEMPTS; attempt += 1) {
+      const record = await this.require(collection, id);
+      if (!EDITABLE_STATES[name].includes(text(record.status)))
+        throw new OfficeFlowsError(
+          'LOCKED',
+          'RECORD_LOCKED',
+          'The record cannot be edited at this step.',
+        );
+      if (!allowed(record))
+        throw new OfficeFlowsError(
+          'FORBIDDEN',
+          'EDIT_NOT_ALLOWED',
+          'The current role cannot edit this record.',
+        );
+      const values = typeof change === 'function' ? change(record) : change;
+      if (!Object.keys(values).length) return;
+      // The status and its timestamp are never in `values`: only fire()
+      // writes them. The version is the lifecycle's, and is moved from here
+      // for the reason `OfficeStore.createExtraction` moves it: a transition
+      // conditions its write on the version it decided on, so one that
+      // checked these fields — `submit` validates the form, `submitFeedback`
+      // the feedback — must not commit over values it did not see.
+      const { updatedCount } = await this.database
+        .repository(collection)
+        .updateMany({
+          filter: {
+            id: idOf(id),
+            status: text(record.status),
+            lifecycleVersion: Number(record.lifecycleVersion ?? 0),
+          },
+          values: {
+            ...values,
+            lifecycleVersion: { increment: 1 },
+          } as RepositoryRecord,
+        });
+      if (updatedCount) return;
+    }
+    throw new OfficeFlowsError(
+      'CONFLICT',
+      'RECORD_CHANGED',
+      'Someone else kept changing the record; reload and try again.',
+    );
   }
 
   // ── Data usage requests ────────────────────────────────────────────────
@@ -343,8 +368,9 @@ export class OfficeFlowsService {
       'dataRequests',
       COLLECTIONS.dataRequests,
       id,
-      // Merged into the version `edit` writes against, so a concurrent
-      // change is refused rather than overwritten with what was read before.
+      // Merged into the record as `edit` read it, and merged again if a
+      // concurrent edit wrote first: a field this patch does not name keeps
+      // the other edit's value instead of the one read before it.
       (record) =>
         pick(
           { ...normalizeDataRequest({ ...formOf(record), ...changes }) },

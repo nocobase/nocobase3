@@ -232,15 +232,16 @@ export const clerkTaskLifecycle: Lifecycle<ClerkTypes> =
         title: '会签',
         from: 'signing',
         to: ['signing', 'reviewing', 'accepted', 'objected'],
-        // An assignee may countersign, once: having signed already is the
-        // task's state rather than a missing permission.
+        // An assignee may countersign, once. Having signed already refuses
+        // this person only — the other clerks can still sign — so it is a
+        // permission (403), not a precondition nobody could get past.
         guard: (context) =>
           !isAssignee(context)
             ? false
             : !people(context.record.signedBy).includes(context.actor.id) || {
                 code: 'alreadySigned',
                 message: 'You have already countersigned this task.',
-                kind: 'precondition',
+                kind: 'permission',
               },
         validate: (input) =>
           typeof input.decision === 'string' && input.decision in SIGN_DECISIONS

@@ -149,7 +149,10 @@ const fireRefusals = {
     400,
     'The state does not allow it, or the record is not complete enough (`INVALID_STATE`); every guard that refused waits for the record to change (`GUARD_REJECTED`, status `FAILED_PRECONDITION`), such as an open extraction task; its input is invalid (`INVALID_INPUT`) or the transition is unknown (`UNKNOWN_TRANSITION`).',
   ),
-  403: apiErrorResponse(403, 'A guard refused the persona (`GUARD_REJECTED`).'),
+  403: apiErrorResponse(
+    403,
+    'A guard refused the persona while others may still act (`GUARD_REJECTED`), such as a clerk who has already countersigned.',
+  ),
   409: apiErrorResponse(409, 'A concurrent change won (`CONFLICT`).'),
 };
 const editRefusals = {
@@ -161,7 +164,10 @@ const editRefusals = {
     403,
     'The persona cannot edit it (`EDIT_NOT_ALLOWED`).',
   ),
-  409: apiErrorResponse(409, 'Someone else changed it (`RECORD_CHANGED`).'),
+  409: apiErrorResponse(
+    409,
+    'Concurrent changes kept winning; the edit was reapplied and gave up (`RECORD_CHANGED`).',
+  ),
 };
 
 export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
