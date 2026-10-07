@@ -6,7 +6,7 @@ keywords: 'NocoBase,workflow,Agent'
 
 # Development process
 
-This page is for developers implementing their own business workflows. It follows one development task and explains what to provide, how to ask the agent, and what to check. Complete [Overview and preparation](./index.md) first. Replace the `<...>` placeholders below; the main example is inventory replenishment.
+This page is for developers implementing their own business workflows. It follows one development task and explains what to provide, how to ask the agent, and what to check. Complete [Preparation](./index.md) first. Replace the `<...>` placeholders below; the main example is inventory replenishment.
 
 ## 1. Describe the requirements
 

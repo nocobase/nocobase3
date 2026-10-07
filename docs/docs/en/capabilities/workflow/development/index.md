@@ -1,10 +1,10 @@
 ---
-title: 'Overview and preparation'
+title: 'Preparation'
 description: 'Prepare your application, agent, Workflow Skill, and development environment.'
 keywords: 'NocoBase,workflow,Agent'
 ---
 
-# Overview and preparation
+# Preparation
 
 Use an application agent to write workflows: you describe the business goal, review the plan and risks, and accept the execution evidence; the agent inspects the application, implements workflows and business code, and runs validation. The management UI enables workflows, configures parameters, and displays runs; it does not edit workflow structure.
 
