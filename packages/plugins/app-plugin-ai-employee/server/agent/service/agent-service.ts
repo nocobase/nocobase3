@@ -313,23 +313,16 @@ export class AgentService {
    * decision continues a paused run, which only its checkpoint can do, so
    * neither ever starts over from the messages.
    */
-  private async isReleasedThread(
+  private isReleasedThread(
     operation: AgentOperation,
     request: AgentRequest,
     thread: AgentThread | undefined,
-  ): Promise<boolean> {
-    const { checkpointer, restoresReleasedThreads } = this.providers;
-    if (!restoresReleasedThreads || typeof checkpointer !== 'object')
+  ): boolean {
+    if (!this.providers.restoresReleasedThreads || !this.useCheckpointer())
       return false;
     if (operation === 'resume' || request.userDecisions?.decisions?.length)
       return false;
-    if (!thread || thread.thread !== RELEASED_THREAD) return false;
-    // A conversation its caller created on thread 0 is checkpointed there
-    // until it first forks, and goes on from that checkpoint.
-    const checkpoint = await checkpointer.getTuple({
-      configurable: { thread_id: thread.threadId },
-    });
-    return !checkpoint;
+    return thread?.thread === RELEASED_THREAD;
   }
   private async prepare(
     operation: AgentOperation,
@@ -342,7 +335,7 @@ export class AgentService {
     let thread = await conversation.messages.currentThread();
     const history = request.messageId
       ? await conversation.messages.loadMessages(request.messageId)
-      : (await this.isReleasedThread(operation, request, thread))
+      : this.isReleasedThread(operation, request, thread)
         ? await conversation.messages.loadMessages()
         : [];
     // A released conversation continues from its stored messages on a fresh

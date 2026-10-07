@@ -50,7 +50,7 @@ const ask = (content: string) => ({
   userMessages: [{ role: 'user' as const, content: { type: 'text', content } }],
 });
 
-async function fixedAgents(thread: number) {
+async function fixedAgents(thread?: number) {
   const fixture = await createTestAIEmployeeFixture();
   const database = fixture.deps.database;
   await database.connect();
@@ -59,7 +59,12 @@ async function fixedAgents(thread: number) {
   // `sessionId` is a uuid column; a fixed value keeps the test deterministic.
   const sessionId = '7a2e4c1d-5b3f-4e6a-9c8d-0f1e2d3c4b5a';
   await repositories.aiConversations.create({
-    values: { sessionId, category: 'chat', thread, read: true },
+    values: {
+      sessionId,
+      category: 'chat',
+      read: true,
+      ...(thread === undefined ? {} : { thread }),
+    },
   });
   const model = new RecordingChatModel({});
   const provider = {
@@ -153,26 +158,27 @@ describe('a released conversation', () => {
   });
 });
 
-describe('a conversation on thread 0 that was never released', () => {
-  it('runs on thread 0 and goes on from its checkpoint there', async () => {
+describe('a conversation created without a thread', () => {
+  it('starts on thread 1 and goes on from its checkpoints there', async () => {
     const { sessionId, model, create, threadOf, checkpoints } =
-      await fixedAgents(0);
+      await fixedAgents();
+    expect(await threadOf()).toBe(1);
 
     await (await create()).invoke(ask('first question'));
-    expect(model.calls[0]).toEqual(['human: first question']);
-    expect(await threadOf()).toBe(0);
-    expect(await checkpoints(`${sessionId}:0`)).toBeGreaterThan(0);
-
     await (await create()).invoke(ask('second question'));
+
     expect(model.calls[1]).toEqual([
       'human: first question',
       'ai: answer 1',
       'human: second question',
     ]);
-    expect(await threadOf()).toBe(0);
-    expect(await checkpoints(`${sessionId}:1`)).toBe(0);
+    expect(await threadOf()).toBe(1);
+    expect(await checkpoints(`${sessionId}:0`)).toBe(0);
+    expect(await checkpoints(`${sessionId}:1`)).toBeGreaterThan(0);
   });
+});
 
+describe('a conversation on thread 0', () => {
   it('beside a caller persistence, still sends only the request', async () => {
     const { model, create } = await fixedAgents(0);
     const persistence = new MemoryConversationPersistence(

@@ -11,9 +11,9 @@ import type {
 
 /**
  * The thread of a conversation whose checkpoints were released. A conversation
- * starts at thread 1, so nothing is checkpointed under thread 0 in the normal
- * course; the next run of a released conversation replays its history from the
- * database onto a fresh thread instead.
+ * starts at thread 1, which is also the column's default, so a conversation on
+ * thread 0 is a released one: its next run replays its history from the
+ * database onto a fresh thread.
  */
 export const RELEASED_THREAD = 0;
 
@@ -170,9 +170,8 @@ export class CheckpointCleaner {
         );
         if (!updated) continue;
         released += 1;
-        // Thread 0 included: a conversation its caller created on thread 0 has
-        // checkpoints there from before its first fork, and a released
-        // conversation must hold none.
+        // Thread 0 included: a conversation created on it before thread 1
+        // became the default kept checkpoints there until its first fork.
         for (let thread = RELEASED_THREAD; thread <= target.thread; thread++)
           threadIds.push(`${target.sessionId}:${thread}`);
       }

@@ -193,7 +193,7 @@ describe('CheckpointCleaner', () => {
     });
     // Nothing to replay it from.
     await conversation(session(4), { thread: 1, messageAt: null });
-    // Released already, or created on thread 0 and checkpointed there.
+    // Released already.
     await conversation(session(5), { thread: 0 });
 
     await expect(cleaner.cleanOutdated(expiredAt)).resolves.toBe(0);
