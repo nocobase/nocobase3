@@ -26,6 +26,7 @@ export {
   EffectFailure,
   LifecycleError,
   type Blocker,
+  type BlockerKind,
   type EffectFailureOptions,
   type InputProblem,
   type LifecycleErrorCode,

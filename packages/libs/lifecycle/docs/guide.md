@@ -158,9 +158,10 @@ await builder.createCollection('leaves', (table) => {
   table.integer('lifecycleVersion').notNull().defaultTo(0); // concurrency
   table.index(['status', 'statusChangedAt']);
 });
-// Then lifecycleTransitions and lifecycleEffectRuns, with a unique index on
-// (lifecycle, recordId, version) and one on (lifecycle, recordId, requestId)
-// under a `requestId IS NOT NULL` predicate where the dialect supports it.
+// Then lifecycleTransitions and lifecycleEffectRuns. The log keeps a nullable
+// requestId and a not-null requestKey (the requestId, or `$v:<version>`),
+// with unique indexes on (lifecycle, recordId, version) and on
+// (lifecycle, recordId, requestKey): plain indexes, the same on every dialect.
 ```
 
 ### 4. Assemble the runtime in a provider
@@ -331,6 +332,8 @@ it('expires a request nobody handles', async () => {
 });
 ```
 
+`kit.start()` creates a record through `runtime.create()`, with the definition's `create` checks, the `$create` entry and the initial state's `onEnter` effects. `kit.create()` inserts the record directly, as a seed would: it bypasses `create.validate` and `create.guard` and writes no history, which suits a test about later transitions. Test who may create what with `kit.start()` or `runtime.create()`.
+
 ## By scenario
 
 Each recipe below is a paragraph; [examples.md](examples.md) has the code for most of them.
@@ -339,7 +342,9 @@ Each recipe below is a paragraph; [examples.md](examples.md) has the code for mo
 
 ### Tell the person why a button is greyed out
 
-A guard returns `true` to allow, or `false`, a message, or `{ code, message }` to refuse. `view().available[i].blockers` and the `blockers` on the `LifecycleError` that `fire()` throws are the same list. A stable `code` lets the page translate the reason; the example plugin's client does this through its locale files. When the state is wrong, `can()` answers with a blocker whose `source` is `state`. `fire()` runs `validate` before the guards, so a missing field is an `INVALID_INPUT` problem rather than a guard's refusal. `available()` and `can()` without input ask the guards with `{}`, so a guard that reads the input must still answer for `{}`; when the answer depends on the input — approve this line, not that one — ask `can(name, id, transition, actor, { input })`, which validates the input first and answers `{ allowed, blockers, problems }` without throwing. Either is a preview: `fire()` decides again inside its transaction.
+A guard returns `true` to allow, or `false`, a message, or `{ code, message, kind? }` to refuse. `view().available[i].blockers` and the `blockers` on the `LifecycleError` that `fire()` throws are the same list. A stable `code` lets the page translate the reason; the example plugin's client does this through its locale files. Each blocker has a `kind`: `permission` when this actor may not act, which is what a refusal is unless the guard says otherwise, and `precondition` when nobody may until the record changes — `{ code: 'openTasks', message: 'Finish the outstanding tasks first.', kind: 'precondition' }`. A route answers a refusal whose blockers are all preconditions with `400 FAILED_PRECONDITION` and any other with `403 PERMISSION_DENIED`, so the person who may act is not told they lack permission. When the state is wrong, `can()` answers with a blocker whose `source` is `state` and whose `kind` is `precondition`.
+
+Only `fire()` and `can()` given input guarantee a guard reads input `validate` accepted: they run `validate` before the guards, so a missing field is an `INVALID_INPUT` problem rather than a guard's refusal. `available()`, `view()` and `can()` without input ask the guards with `{}`, so a guard that reads the input must still answer for `{}`; when the answer depends on the input — approve this line, not that one — ask `can(name, id, transition, actor, { input })`, which validates the input first and answers `{ allowed, blockers, problems }` without throwing. Either is a preview: `fire()` decides again inside its transaction.
 
 ### Validate input and write fields onto the record
 
@@ -363,11 +368,11 @@ Declare a trigger: `when` is the state, `after(parameters)` returns milliseconds
 
 ### Call an external system, retry, then move on
 
-Write an effect. `retry`, `timeoutMs` and `shouldRetry` control the retries; pass `idempotencyKey` to the external system; `onSuccess: 'paid'` fires the next transition as the system with the run's result as input, and `accept: ['paymentRef']` on that transition writes the result onto the record. `onFailure` receives `{ error }`; throw an `EffectFailure(code, message, { details })` when the effect knows why it failed, and it receives `errorCode` and `details` as well, without the attempt being retried. `idempotencyKey` covers the attempts of one run only: a record entering the state again owes a new run with a new key, so a call that must happen once per business fact is keyed by that fact.
+Write an effect. `retry`, `timeoutMs` and `shouldRetry` control the retries; pass `idempotencyKey` to the external system; `onSuccess: 'paid'` fires the next transition as the system with the run's result as input, and `accept: ['paymentRef']` on that transition writes the result onto the record. `onFailure` receives `{ error }`; throw an `EffectFailure(code, message, { details })` when the effect knows why it failed, and it receives `errorCode` and `details` as well, without the attempt being retried; `details` that are not JSON, such as a BigInt, are dropped and the failure is recorded as any other. A continuation the record refuses — it has moved on, or the result fails the transition's `validate` — is logged and rolled back, the outcome stays recorded, and the effect does not run again; only a `CONFLICT` or a failure that is not a lifecycle refusal puts the attempt back in the queue. `idempotencyKey` covers the attempts of one run only: a record entering the state again owes a new run with a new key, so a call that must happen once per business fact is keyed by that fact.
 
 ### Refuse duplicate submissions and stale pages
 
-Calling the runtime directly, pass `requestId` and `expect: { version }`; the React hook sends both on its own. A webhook uses the sender's delivery id as its `requestId`.
+Calling the runtime directly, pass `requestId` and `expect: { version }`; the React hook sends both on its own. A webhook uses the sender's delivery id as its `requestId`. A `requestId` may not start with `$`, which the library keeps for its own entries, such as an effect's continuation; `fire()` refuses one with `INVALID_REQUEST_ID`.
 
 ### Create a record
 
@@ -377,13 +382,15 @@ Use `runtime.create(name, values, { actor, state? })` rather than an insert. It 
 
 `fire()` and `create()` take `transaction`: the `transactionHandle` an `onTransition` or a services factory receives, or the `@nocobase/db` connection of the caller's own `database.transaction()`, on the connection the store writes to. The call is nested in it as a savepoint, so a parent can create its children in its own transition, a child's last transition can move its parent on in the same commit, and an application can group several calls with its own writes. A refusal undoes only the nested call's writes and is thrown to the caller, which decides whether the whole transaction fails. Effects and listeners wait for the outermost commit and are dropped on rollback, so the effect runs a joined call returns are still queued. On SQLite, read inside the transaction through the same connection; `view()`, `available()` and `can()` do not take one and would wait for it.
 
+Inside an `onTransition`, always pass its `transactionHandle`. A `fire()` or `create()` there without `transaction` opens a transaction of its own and waits for the one it is called from, which waits for it: forever on SQLite, on the memory store and in the test kit, and on a server database whenever the two touch the same rows. Without a dispatcher, effects run inline in the commit callbacks of the outermost transaction, so a caller's own `database.transaction()` that joined lifecycle calls resolves only once those effects, and the continuations they fire, have finished; give the runtime a dispatcher such as `createLifecycleJobs()` where that wait matters.
+
 ### Let another plugin veto an action
 
-`runtime.addGuard('expenses', ['approve'] | '*', guard)` adds a guard without touching the definition; its refusals join the other blockers, and the returned function removes it.
+`runtime.addGuard('expenses', ['approve'] | '*', guard)` adds a guard without touching the definition; its refusals join the other blockers, with the same `kind`, and the returned function removes it. It applies to transitions only: creation is checked by the definition's `create.guard` alone, which no other code can veto.
 
 ### Write other tables with the state
 
-Put `onTransition(context)` on the transition. It runs in the same transaction after the record and the log entry are written; `context.transactionHandle` is the transaction, and throwing rolls everything back. Nothing that reaches outside the database belongs here — that is an effect.
+Put `onTransition(context)` on the transition. It runs in the same transaction after the record and the log entry are written; `context.transactionHandle` is the transaction, and throwing rolls everything back — in an effect's continuation too, where the effect's outcome stays recorded. Nothing that reaches outside the database belongs here — that is an effect.
 
 ### Read other tables from a guard
 
@@ -395,7 +402,7 @@ Register the services as a factory, `(handle) => services`, so the services a gu
 
 ### Operate: list, retry, cancel, prune
 
-`listEffectRuns({ status: 'failed' })` finds the failed runs; `retryRun(id)` runs a `failed`, `dead` or `cancelled` run again with a fresh budget of attempts, and refuses with `RUN_SETTLED` a run whose `onFailure` already moved the record on unless given `{ force: true, reason }`; `cancelRun(id)` gives up on a `queued` or `running` one; `prune({ olderThan })` deletes old `succeeded` and `cancelled` runs. The retry and cancel routes are `operate` actions, refused unless `authorize` allows them.
+`listEffectRuns({ status: 'failed' })` finds the failed runs; `retryRun(id)` runs a `failed`, `dead` or `cancelled` run again with a fresh budget of attempts, and refuses with `RUN_SETTLED` a run whose `onFailure` already moved the record on unless given `{ force: true, reason }`. That is the only case it refuses: a `dead` or `cancelled` run, a run whose effect has no `onFailure`, or one whose continuation was refused is retried without `force` even when the record has since left the state the effect served or entered it again, so check the record before retrying one, or a payment can be made twice; `cancelRun(id)` gives up on a `queued` or `running` one; `prune({ olderThan })` deletes old `succeeded` and `cancelled` runs. The retry and cancel routes are `operate` actions, refused unless `authorize` allows them.
 
 ### Draw the state diagram
 
@@ -422,6 +429,8 @@ Register the services as a factory, `(handle) => services`, so the services a gu
 | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Frequent `CONFLICT`                       | The record changed while the page was open (`expect.version` no longer matches), or two requests really arrived together                                                                                                            | Expected. Tell the person the record changed, reload, and let them decide again; do not retry automatically. If the conflicts come from a trigger or a continuation, check whether they compete with people for the same state |
 | A request hangs on SQLite                 | A guard, `route`, `set` or `onTransition` reads or writes through the database manager and waits for the connection the transaction holds                                                                                           | Switch to a services factory and read through the `transactionHandle`                                                                                                                                                          |
+| A transition never returns                | An `onTransition` calls `fire()` or `create()` without `transaction`, which waits for the transaction it is called from: forever on SQLite, on the memory store and in the test kit                                                 | Pass `transaction: context.transactionHandle`                                                                                                                                                                                  |
+| A caller's transaction is slow to resolve | No dispatcher: the effects of the lifecycle calls it joined run inline once it commits, and it resolves after them                                                                                                                  | Expected while developing; give the runtime `createLifecycleJobs()` as its dispatcher                                                                                                                                          |
 | An effect run stays `queued`              | (1) this process has not registered the effect: `registered: false` in `listEffectRuns()` and "is not registered; it stays queued" in the log, usually after a rename; (2) the dispatch was lost; (3) `runAfter` has not come       | (1) register the old name again, or cancel the runs; (2) `reclaim()` on the sweep hands it over once it has been due for a lease, and `recover()` at the next start; (3) wait                                                  |
 | An effect run becomes `dead`              | Every attempt ended without recording an outcome: the process crashed or was killed mid-attempt, or the outcome write failed each time                                                                                              | Find out why the process stops on this effect — memory, a timeout — then `retryRun()`                                                                                                                                          |
 | A run is `failed` and the record is stuck | The attempts ran out, or `shouldRetry` said no, and the effect has no `onFailure`                                                                                                                                                   | Fix the cause and `retryRun()`; success fires `onSuccess` as usual. For an automatic fallback, add `onFailure` to a state a person handles                                                                                     |
@@ -431,6 +440,7 @@ Register the services as a factory, `(handle) => services`, so the services a gu
 | `INVALID_DEFINITION` on load              | An unreachable state, a final state with a way out, a non-final state without one, or `accept` naming a field the lifecycle manages                                                                                                 | Fix the definition; a state that genuinely has no way out is `final: true`                                                                                                                                                     |
 | A duplicate submission got through        | The caller generates a new `requestId` each time, for example `client.fire()` inside a retry loop                                                                                                                                   | Reuse one `requestId` for the retries of one user action; webhooks use the sender's delivery id                                                                                                                                |
 | `REQUEST_REUSED`                          | One `requestId` was sent for two different transitions on a record, such as a key kept across two decisions                                                                                                                         | Take a new `requestId` for each decision a person makes; reuse it only for retries of that one decision                                                                                                                        |
+| `INVALID_REQUEST_ID`                      | The `requestId` starts with `$`, which the library keeps for its own log entries                                                                                                                                                    | Generate keys without a leading `$`, for example by prefixing a namespace such as `payments:`                                                                                                                                  |
 
 Changing a definition that is already in production is covered in [design.md](design.md#changing-a-definition).
 
@@ -441,12 +451,14 @@ Changing a definition that is already in production is covered in [design.md](de
 | Code                                                   | Status                      | When                                                                                             |
 | ------------------------------------------------------ | --------------------------- | ------------------------------------------------------------------------------------------------ |
 | `GUARD_REJECTED`                                       | `PERMISSION_DENIED` (403)   | A guard refused; `blockers` says why                                                             |
+| `GUARD_REJECTED`, every blocker a `precondition`       | `FAILED_PRECONDITION` (400) | Nobody may until the record changes, such as while a subtask is open; `blockers` says what       |
 | `INVALID_STATE`                                        | `FAILED_PRECONDITION` (400) | The current state does not allow the transition, or a run is not in a state the operation allows |
 | `RUN_SETTLED`                                          | `FAILED_PRECONDITION` (400) | `retryRun()` on a run whose `onFailure` already moved the record on, without `force`             |
 | `UNKNOWN_EFFECT`                                       | `FAILED_PRECONDITION` (400) | A retry of a run whose effect this process does not know                                         |
 | `CONFLICT`                                             | `ABORTED` (409)             | A concurrent change, or `expect` not met (a stale page)                                          |
 | `INVALID_INPUT`                                        | `INVALID_ARGUMENT` (400)    | `validate` refused; `problems` lists the fields                                                  |
 | `REQUEST_REUSED`                                       | `INVALID_ARGUMENT` (400)    | The `requestId` already fired another transition on this record; nothing was changed             |
+| `INVALID_REQUEST_ID`                                   | `INVALID_ARGUMENT` (400)    | The `requestId` starts with `$`, which is reserved for the library's own entries                 |
 | `UNKNOWN_TRANSITION`                                   | `INVALID_ARGUMENT` (400)    | The body names a transition the lifecycle does not have                                          |
 | `UNKNOWN_LIFECYCLE` / `RECORD_NOT_FOUND`               | `NOT_FOUND` (404)           | Nothing by that name here                                                                        |
 | `INVALID_ROUTE` / `INVALID_SET` / `INVALID_DEFINITION` | — (500)                     | A `route` or `set` that wrote what it may not, or a broken definition: the server's fault        |

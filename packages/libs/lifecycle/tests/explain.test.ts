@@ -91,6 +91,7 @@ describe('explaining refusals', () => {
         blockers: [
           {
             source: 'guard',
+            kind: 'permission',
             code: 'NOT_OWNER',
             message: 'Only the owner can submit it.',
           },
@@ -118,6 +119,7 @@ describe('explaining refusals', () => {
       blockers: [
         {
           source: 'state',
+          kind: 'precondition',
           code: 'INVALID_STATE',
           message: '"approve" cannot start from "draft".',
         },

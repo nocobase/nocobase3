@@ -13,15 +13,25 @@ export type LifecycleErrorCode =
   | 'UNKNOWN_EFFECT'
   | 'CONFLICT'
   | 'REQUEST_REUSED'
+  | 'INVALID_REQUEST_ID'
   | 'RUN_SETTLED';
+
+/**
+ * What kind of refusal a blocker is: `permission` when this actor may not do
+ * it, `precondition` when nobody may until the record or its surroundings
+ * change, such as a task that cannot finish while a subtask is open.
+ */
+export type BlockerKind = 'permission' | 'precondition';
 
 /**
  * Why a transition may not run for this actor now: the state it is in, or a
  * guard that said no. `code` is stable for a client to branch on; `message`
- * is what to show the person.
+ * is what to show the person. A guard's blocker is a `permission` refusal
+ * unless the guard said otherwise; a `state` blocker is a `precondition`.
  */
 export interface Blocker {
   readonly source: 'state' | 'guard';
+  readonly kind: BlockerKind;
   readonly code: string;
   readonly message: string;
 }

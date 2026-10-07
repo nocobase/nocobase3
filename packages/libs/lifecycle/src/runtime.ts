@@ -111,7 +111,9 @@ export interface FireOptions {
    * delivery. Sent again for the same record and transition, it finds the
    * first request's log entry and changes nothing; sent for another
    * transition, it is refused with `REQUEST_REUSED`. Reuse it for the
-   * retries of one action, and take a new one for each new decision.
+   * retries of one action, and take a new one for each new decision. A key
+   * starting with `$` is the library's own, such as the one an effect's
+   * continuation is logged under, and is refused with `INVALID_REQUEST_ID`.
    */
   readonly requestId?: string;
   /**
@@ -291,6 +293,21 @@ function storable(value: unknown): JsonValue {
   return JSON.parse(text) as JsonValue;
 }
 
+/**
+ * The prefix of the request ids the library logs under itself. A caller's
+ * request id may not start with it, so no caller can spend the key a
+ * continuation will need, or pass for one.
+ */
+const RESERVED_REQUEST_PREFIX = '$';
+
+function checkRequestId(requestId: string | undefined): void {
+  if (requestId?.startsWith(RESERVED_REQUEST_PREFIX))
+    throw new LifecycleError(
+      'INVALID_REQUEST_ID',
+      `Request id "${requestId}" starts with "${RESERVED_REQUEST_PREFIX}", which is reserved for the lifecycle's own entries; send another one.`,
+    );
+}
+
 /** Refusals that mean the record is no longer where the caller found it. */
 const MOVED_ON: ReadonlySet<LifecycleErrorCode> = new Set<LifecycleErrorCode>([
   'RECORD_NOT_FOUND',
@@ -455,6 +472,7 @@ export class LifecycleRuntime {
     options: FireOptions,
   ): Promise<FireResult> {
     const registered = this.get(name);
+    checkRequestId(options.requestId);
     const now = this.clock();
     return this.store.transaction(async (store) => {
       const outcome: { decided?: FireResult } = {};
@@ -580,6 +598,7 @@ export class LifecycleRuntime {
         blockers: [
           {
             source: 'state',
+            kind: 'precondition',
             code: 'INVALID_STATE',
             message: `"${transition}" cannot start from "${state}".`,
           },
@@ -879,7 +898,7 @@ export class LifecycleRuntime {
         ? {
             error: outcome.error,
             errorCode: failure.code,
-            details: storable(failure.details),
+            details: this.failureDetails(effect.name, runId, failure),
           }
         : { error: outcome.error };
     // Recording the outcome and firing what follows it commit together: a
@@ -895,33 +914,52 @@ export class LifecycleRuntime {
         );
         if (!recorded) return undefined;
         if (next === undefined) return null;
+        const continued: { decided?: FireResult } = {};
+        // Registered before deciding, as fire() does, so after the commit
+        // the continuation is told about before anything its onTransition
+        // started.
+        store.afterCommit(() => {
+          const { decided } = continued;
+          return decided && !decided.replayed
+            ? this.settle(registered, decided, SYSTEM_ACTOR)
+            : undefined;
+        });
         try {
-          return await this.decide(
-            store,
-            registered,
-            run.recordId,
-            next,
-            {
-              actor: SYSTEM_ACTOR,
-              input,
-              requestId: continuationKey(
-                runId,
-                outcome.ok ? 'succeeded' : 'failed',
+          // Nested, so a refusal — the continuation's own, or one raised by
+          // a lifecycle call its onTransition made — undoes everything the
+          // continuation wrote and nothing of the outcome.
+          continued.decided = await store.transaction(
+            (nested) =>
+              this.decide(
+                nested,
+                registered,
+                run.recordId,
+                next,
+                {
+                  actor: SYSTEM_ACTOR,
+                  input,
+                  requestId: continuationKey(
+                    runId,
+                    outcome.ok ? 'succeeded' : 'failed',
+                  ),
+                },
+                this.clock(),
               ),
-            },
-            this.clock(),
+            { within: store.transactionHandle },
           );
+          return continued.decided;
         } catch (error) {
-          // The record has moved on, or the guard refuses: the outcome is
-          // still recorded, and nothing follows from it. decide() writes
-          // nothing before it refuses, so the transaction stays whole.
-          // Anything else, a conflict included, rolls the attempt back so
-          // it runs again rather than losing what should follow.
-          if (!isRefusal(error, MOVED_ON)) throw error;
-          this.logger.warn(
-            `Effect "${run.effect}" could not continue with "${next}": ${error.message}`,
-            { runId },
-          );
+          // A conflict, or anything that is not a refusal, may go away: roll
+          // the outcome back too, so the attempt runs again rather than
+          // losing what should follow. Any other refusal would be the same
+          // next time — running the effect again would only repeat it — so
+          // the outcome is recorded and nothing follows from it.
+          if (!(error instanceof LifecycleError) || error.code === 'CONFLICT')
+            throw error;
+          const message = `Effect "${run.effect}" could not continue with "${next}": ${error.message}`;
+          if (MOVED_ON.has(error.code))
+            this.logger.warn(message, { runId, code: error.code });
+          else this.logger.error(message, { runId, code: error.code, error });
           return null;
         }
       });
@@ -952,10 +990,10 @@ export class LifecycleRuntime {
       await this.handOver(runId, runAfter);
       return this.store.findEffectRun(runId);
     }
+    // The continuation, if any, was settled when the transaction committed.
     if (finished === undefined) this.discarded(effect.name, runId, attempt);
     // A forced retry that failed again: its continuation already ran.
     else if (finished?.replayed) return this.store.findEffectRun(runId);
-    else if (finished) await this.settle(registered, finished, SYSTEM_ACTOR);
     if (!outcome.ok)
       this.logger.warn(
         `Effect "${effect.name}" failed after ${attempt} attempt(s)`,
@@ -985,6 +1023,12 @@ export class LifecycleRuntime {
    * or pass `force` when the failed attempts are known to have had no
    * effect. The attempt count goes on from where it was: an earlier attempt
    * still finishing somewhere cannot pass for a new one.
+   *
+   * `RUN_SETTLED` covers only that case. A dead or cancelled run, a run
+   * whose effect has no `onFailure`, or one whose continuation was refused
+   * is retried without `force` even when the record has since left the
+   * state the effect served or entered it again; check the record before
+   * retrying such a run, or its success may do the work twice.
    */
   public async retryRun(
     runId: string,
@@ -1125,8 +1169,21 @@ export class LifecycleRuntime {
               firedHere += 1;
             } catch (error) {
               // Another sweep or a person got there first, or the guard said
-              // no: the record is no longer this trigger's business.
-              if (isRefusal(error, RACED)) continue;
+              // no: the record is no longer this trigger's business. Said
+              // aloud, so a trigger refused on every sweep — a nested call
+              // its onTransition makes, say — does not fail unseen.
+              if (isRefusal(error, RACED)) {
+                this.logger.warn(
+                  `Trigger "${trigger.name}" skipped "${trigger.transition}" on ${lifecycle.name} record "${String(record.id)}": ${error.message}`,
+                  {
+                    lifecycle: lifecycle.name,
+                    recordId: String(record.id),
+                    transition: trigger.transition,
+                    code: error.code,
+                  },
+                );
+                continue;
+              }
               // A broken definition or a failing store: keep sweeping the
               // other records, then report it rather than look idle forever.
               this.logger.error(
@@ -1298,6 +1355,13 @@ export class LifecycleRuntime {
         throw new LifecycleError(
           'REQUEST_REUSED',
           `Request "${options.requestId}" was already used for "${earlier.transition}" on this ${lifecycle.collection} record; send "${transition}" under a new request id.`,
+        );
+      // Nor is the same key sent by someone else: replaying would hand them
+      // another actor's success and log entry without asking their guards.
+      if (earlier && earlier.actorId !== options.actor.id)
+        throw new LifecycleError(
+          'REQUEST_REUSED',
+          `Request "${options.requestId}" was already used by another actor on this ${lifecycle.collection} record; send "${transition}" under a new request id.`,
         );
       if (earlier)
         return {
@@ -1519,6 +1583,28 @@ export class LifecycleRuntime {
       services: registered.services(undefined) as ServicesOf<LifecycleTypes>,
       now: this.clock(),
     });
+  }
+
+  /**
+   * An `EffectFailure`'s details as `onFailure` receives them. Details that
+   * are not JSON — a BigInt, a cycle — would otherwise stop the outcome from
+   * being recorded at all and leave the run claimed; they are dropped
+   * instead, and the failure is recorded as any other.
+   */
+  private failureDetails(
+    effect: string,
+    runId: string,
+    failure: EffectFailure,
+  ): JsonValue {
+    try {
+      return storable(failure.details);
+    } catch (error) {
+      this.logger.error(
+        `Effect "${effect}" failed with details that are not JSON; "${failure.code}" is recorded without them.`,
+        { runId, error },
+      );
+      return {};
+    }
   }
 
   private discarded(effect: string, runId: string, attempt: number): void {

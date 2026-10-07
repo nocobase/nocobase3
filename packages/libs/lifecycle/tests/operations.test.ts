@@ -156,6 +156,32 @@ describe('repeated requests', () => {
     });
     expect(record().status).toBe('failed');
   });
+
+  it('refuses a request id another actor already spent, instead of handing them its success', async () => {
+    const { runtime, id, record } = setup({ held: true });
+    const first = await runtime.fire('invoices', id, 'send', {
+      actor: { id: 'clerk' },
+      requestId: 'form-1',
+    });
+    await expect(
+      runtime.fire('invoices', id, 'send', {
+        actor: { id: 'stranger' },
+        requestId: 'form-1',
+      }),
+    ).rejects.toMatchObject({
+      code: 'REQUEST_REUSED',
+      message: expect.stringContaining('another actor'),
+    });
+    expect(record()).toMatchObject({ status: 'sent', lifecycleVersion: 1 });
+    // The actor who sent it still gets the replay, ahead of any version check.
+    await expect(
+      runtime.fire('invoices', id, 'send', {
+        actor: { id: 'clerk' },
+        requestId: 'form-1',
+        expect: { version: 0 },
+      }),
+    ).resolves.toMatchObject({ replayed: true, entry: first.entry });
+  });
 });
 
 describe('retry policy', () => {

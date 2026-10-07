@@ -5,7 +5,7 @@ import type { RecordView } from './runtime.js';
 import type { JsonObject } from './types.js';
 import type { FireView, LifecycleDescriptionView } from './views.js';
 
-export type { Blocker, InputProblem } from './errors.js';
+export type { Blocker, BlockerKind, InputProblem } from './errors.js';
 export type {
   AvailableTransition,
   RecordHistory,
@@ -107,6 +107,13 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/** A blocker as a route sent it; one without a `kind` is a `permission` refusal, as an unmarked guard's is. */
+function withKind(blocker: unknown): Blocker {
+  if (!isObject(blocker) || blocker.kind !== undefined)
+    return blocker as Blocker;
+  return { ...(blocker as Omit<Blocker, 'kind'>), kind: 'permission' };
+}
+
 /** `{ error: { reason, message, metadata: { blockers, problems } } }`, from the transport's error `payload`. */
 function refusalOf(cause: unknown): unknown {
   if (!isObject(cause) || !isObject(cause.payload)) return cause;
@@ -116,7 +123,7 @@ function refusalOf(cause: unknown): unknown {
   return new LifecycleRequestError(
     body.message,
     typeof body.reason === 'string' ? body.reason : 'ERROR',
-    Array.isArray(metadata.blockers) ? (metadata.blockers as Blocker[]) : [],
+    Array.isArray(metadata.blockers) ? metadata.blockers.map(withKind) : [],
     Array.isArray(metadata.problems)
       ? (metadata.problems as InputProblem[])
       : [],

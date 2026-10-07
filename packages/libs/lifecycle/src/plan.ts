@@ -37,11 +37,25 @@ export interface PlanContext<T extends LifecycleTypes> {
 function blockerOf(verdict: GuardVerdict, fallback: string): Blocker | null {
   if (verdict === true) return null;
   if (verdict === false)
-    return { source: 'guard', code: 'GUARD_REJECTED', message: fallback };
+    return {
+      source: 'guard',
+      kind: 'permission',
+      code: 'GUARD_REJECTED',
+      message: fallback,
+    };
   if (typeof verdict === 'string')
-    return { source: 'guard', code: 'GUARD_REJECTED', message: verdict };
+    return {
+      source: 'guard',
+      kind: 'permission',
+      code: 'GUARD_REJECTED',
+      message: verdict,
+    };
   return {
     source: 'guard',
+    // Unmarked, a refusal is about who asks: reporting a missing permission
+    // as a precondition would tell the person to wait for something that
+    // never comes.
+    kind: verdict.kind === 'precondition' ? 'precondition' : 'permission',
     code: verdict.code ?? 'GUARD_REJECTED',
     message: verdict.message,
   };
@@ -189,8 +203,10 @@ export async function planTransition<T extends LifecycleTypes>(
     now: context.now,
   });
   const definition = transition.definition;
-  // The input first, so a guard reads only input that passed: a guard
-  // judging "may this actor approve line 3" need not defend against no line.
+  // The input first, so a guard asked by fire() reads only input that
+  // passed: judging "may this actor approve line 3" need not defend against
+  // a malformed line. available(), view() and can() without input still ask
+  // it with {}, which it has to answer as well.
   const problems = inputProblems(transition, input);
   if (problems.length)
     throw new LifecycleError(

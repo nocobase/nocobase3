@@ -1,4 +1,8 @@
-import { LifecycleError, type InputProblem } from './errors.js';
+import {
+  LifecycleError,
+  type BlockerKind,
+  type InputProblem,
+} from './errors.js';
 import type { TransitionEntry } from './store.js';
 import type {
   JsonObject,
@@ -131,9 +135,22 @@ export interface StateDefinition<S extends string> {
 export type FromStates<S extends string> =
   OneOrMany<S> | '*' | { readonly except: readonly S[] };
 
-/** What a guard answers: `true` to allow, anything else to refuse and say why. */
+/**
+ * What a guard answers: `true` to allow, anything else to refuse and say why.
+ * A refusal is a `permission` refusal — this actor may not — unless the
+ * object form says `kind: 'precondition'`: nobody may until something
+ * changes, such as an open subtask, which a route answers as a failed
+ * precondition rather than as a denied permission.
+ */
 export type GuardVerdict =
-  boolean | string | { readonly code?: string; readonly message: string };
+  | boolean
+  | string
+  | {
+      readonly code?: string;
+      readonly message: string;
+      /** Defaults to `permission`. */
+      readonly kind?: BlockerKind;
+    };
 
 export interface TransitionDefinition<T extends LifecycleTypes> {
   readonly title?: string;
@@ -144,8 +161,11 @@ export interface TransitionDefinition<T extends LifecycleTypes> {
   route?(context: TransitionContext<T>): T['state'];
   /**
    * Whether this actor may fire it now. `true` allows it; `false`, a
-   * message, or `{ code, message }` refuses it, and the message is what
-   * `available()` and the refusal tell the person.
+   * message, or `{ code, message, kind }` refuses it, and the message is what
+   * `available()` and the refusal tell the person. In `fire()` and in a
+   * `can()` given input, the guard sees input `validate` accepted; in
+   * `available()`, `view()` and a `can()` without input it sees `{}`, and
+   * must answer for that too.
    */
   guard?(context: TransitionContext<T>): GuardVerdict | Promise<GuardVerdict>;
   /** Returns what is wrong with the input: a message, a list of problems, or nothing. */

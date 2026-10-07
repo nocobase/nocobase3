@@ -13,6 +13,7 @@ describe('lifecycleErrorFields', () => {
           'UNKNOWN_TRANSITION',
           'INVALID_INPUT',
           'REQUEST_REUSED',
+          'INVALID_REQUEST_ID',
           'GUARD_REJECTED',
           'INVALID_STATE',
           'UNKNOWN_EFFECT',
@@ -30,6 +31,7 @@ describe('lifecycleErrorFields', () => {
       UNKNOWN_TRANSITION: 'INVALID_ARGUMENT',
       INVALID_INPUT: 'INVALID_ARGUMENT',
       REQUEST_REUSED: 'INVALID_ARGUMENT',
+      INVALID_REQUEST_ID: 'INVALID_ARGUMENT',
       GUARD_REJECTED: 'PERMISSION_DENIED',
       INVALID_STATE: 'FAILED_PRECONDITION',
       UNKNOWN_EFFECT: 'FAILED_PRECONDITION',
@@ -52,7 +54,12 @@ describe('lifecycleErrorFields', () => {
   it('carries the blockers, and names each input problem where it sits in the body', () => {
     const refused = new LifecycleError('GUARD_REJECTED', 'Not yours.', {
       blockers: [
-        { source: 'guard', code: 'notYourLine', message: 'Not yours.' },
+        {
+          source: 'guard',
+          kind: 'permission',
+          code: 'notYourLine',
+          message: 'Not yours.',
+        },
       ],
     });
     expect(lifecycleErrorFields(refused)).toEqual({
@@ -93,8 +100,32 @@ describe('lifecycleErrorFields', () => {
         ?.fieldViolations,
     ).toEqual([{ field: 'requestId', description: 'Spent.' }]);
     expect(
+      lifecycleErrorFields(new LifecycleError('INVALID_REQUEST_ID', 'Ours.'))
+        ?.fieldViolations,
+    ).toEqual([{ field: 'requestId', description: 'Ours.' }]);
+    expect(
       lifecycleErrorFields(new LifecycleError('UNKNOWN_TRANSITION', 'None.'))
         ?.fieldViolations,
     ).toEqual([{ field: 'transition', description: 'None.' }]);
+  });
+
+  it('answers a guard refusal whose every blocker is a precondition as a failed precondition', () => {
+    const refusal = (...kinds: ('permission' | 'precondition')[]) =>
+      lifecycleErrorFields(
+        new LifecycleError('GUARD_REJECTED', 'No.', {
+          blockers: kinds.map((kind, index) => ({
+            source: 'guard',
+            kind,
+            code: `blocker${index}`,
+            message: 'No.',
+          })),
+        }),
+      )?.status;
+    expect(refusal('precondition')).toBe('FAILED_PRECONDITION');
+    expect(refusal('precondition', 'precondition')).toBe('FAILED_PRECONDITION');
+    expect(refusal('precondition', 'permission')).toBe('PERMISSION_DENIED');
+    expect(refusal('permission')).toBe('PERMISSION_DENIED');
+    // Without a blocker to say otherwise, a guard refusal is about permission.
+    expect(refusal()).toBe('PERMISSION_DENIED');
   });
 });

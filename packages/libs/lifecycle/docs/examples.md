@@ -457,7 +457,7 @@ router.post('/payments/callback', async (c) => {
 });
 ```
 
-A replay returns the first log entry with `replayed: true` and the record as it is now. The same `requestId` sent for another transition is not a replay but `REQUEST_REUSED`, and changes nothing. Acknowledge only what can never succeed; a `CONFLICT` may succeed on the provider's next delivery, and a store failure certainly should be retried.
+A replay returns the first log entry with `replayed: true` and the record as it is now. The same `requestId` sent for another transition, or by another actor, is not a replay but `REQUEST_REUSED`, and changes nothing. Acknowledge only what can never succeed; a `CONFLICT` may succeed on the provider's next delivery, and a store failure certainly should be retried.
 
 ### 12. Refuse while an effect is in flight
 
@@ -465,10 +465,12 @@ A report whose payment is queued or running cannot be withdrawn: withdrawing wou
 
 ```ts
 // The plugin's service, bound to the transaction like any other a guard reads.
+// available(), view() and can() ask the guard outside any transaction and
+// hand the factory no handle: read through the database manager then.
 const effectRuns = {
   bound: (handle) => ({
     inFlight: (lifecycle, recordId, effect) =>
-      handle
+      (handle ?? database)
         .repository('lifecycleEffectRuns') // the store's effectRuns collection
         .count({
           filter: (f) =>
@@ -580,12 +582,13 @@ complete: {
     return (await services.tasks.countOpen(record.id)) === 0 || {
       code: 'openTasks',
       message: 'Finish the outstanding tasks first.',
+      kind: 'precondition', // the owner may act once they are done: 400, not 403
     };
   },
 },
 ```
 
-The guard admits the system as well as the owner, so the last task can finish the document. Give the task's finishing transition an effect that does so:
+The guard admits the system as well as the owner, so the last task can finish the document. The open tasks are a `precondition` rather than a missing permission, so the owner's route answers `400 FAILED_PRECONDITION` and the page says what is outstanding, while a stranger still gets `403`. Give the task's finishing transition an effect that does so:
 
 ```ts
 const nudgeParent = defineEffect({
@@ -1142,7 +1145,7 @@ it('refuses an approval from anyone but the approver, and says why', async () =>
 });
 ```
 
-The kit covers definitions; the Repository store, migrations, routes and sweeps need a database. A provider test against SQLite with the plugin's migration applied covers that wiring once, as `tests/provider.test.ts` does in the lifecycle example.
+The kit covers definitions; the Repository store, migrations, routes and sweeps need a database. A provider test on the test database (SQLite by default) with the plugin's migration applied covers that wiring once, as `tests/provider.test.ts` does in the lifecycle example.
 
 ## From a recipe to a working plugin
 
