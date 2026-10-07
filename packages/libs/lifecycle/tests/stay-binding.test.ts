@@ -1,8 +1,7 @@
 // Which outcomes a record's later transitions take away. An effect a state's
 // `onEnter` queued serves that stay: once the record has left the state —
-// even to enter it again — its outcome no longer moves the record. A
-// self-transition does not leave the state, so it ends nothing, and neither
-// does a sibling effect's continuation that keeps the record where it is. An
+// even to enter it again, as a self-transition does — its outcome no longer
+// moves the record; the runs the new stay queued carry it on. An
 // effect the transition itself declares serves the transition, not the stay:
 // its continuation is checked only against the state the record is in then.
 import { describe, expect, it, vi } from 'vitest';
@@ -41,7 +40,7 @@ const crunch = defineEffect<JobTypes>({
   run: () => ({ crunched: true }),
 });
 
-/** A sibling of `crunch` whose outcome keeps the job where it is. */
+/** A sibling of `crunch` whose outcome is a self-transition. */
 const heartbeat = defineEffect<JobTypes>({
   name: 'jobs.heartbeat',
   onSuccess: 'touch',
@@ -75,7 +74,7 @@ const jobs: Lifecycle<JobTypes> = defineLifecycle<JobTypes>({
   transitions: {
     begin: { from: 'idle', to: 'busy' },
     handOff: { from: 'idle', to: 'busy', effects: [deliver] },
-    // Stays in `busy`: the same stay goes on.
+    // Leaves `busy` and enters it again: a new stay, with new runs.
     touch: { from: 'busy', to: 'busy' },
     pause: { from: 'busy', to: 'idle' },
     toReview: { from: 'busy', to: 'review' },
@@ -141,17 +140,21 @@ function setup() {
 }
 
 describe('an onEnter effect’s continuation', () => {
-  it('goes on after a self-transition while the effect ran', async () => {
+  it('is dropped after a self-transition while the effect ran, and the new stay carries on', async () => {
     const context = setup();
     const begun = await context.fire('begin');
-    await context.fire('touch');
+    const touched = await context.fire('touch');
     await context.runtime.runEffect(
       context.runOf(begun.effectRuns, 'jobs.crunch'),
+    );
+    expect(context.status()).toBe('busy');
+    await context.runtime.runEffect(
+      context.runOf(touched.effectRuns, 'jobs.crunch'),
     );
     expect(context.status()).toBe('done');
   });
 
-  it('goes on after a sibling effect’s continuation kept the record in its state', async () => {
+  it('is dropped once a sibling effect’s self-transition began a new stay', async () => {
     const context = setup();
     const begun = await context.fire('begin');
     await context.runtime.runEffect(
@@ -161,10 +164,17 @@ describe('an onEnter effect’s continuation', () => {
     await context.runtime.runEffect(
       context.runOf(begun.effectRuns, 'jobs.crunch'),
     );
+    expect(context.status()).toBe('busy');
+    // The self-transition queued its own runs of busy's effects, which do
+    // continue: the job completes once the new stay's crunch runs.
+    const queued = await context.store.listEffectRuns({ status: 'queued' });
+    const next = queued.find((run) => run.effect === 'jobs.crunch');
+    expect(next).toBeDefined();
+    await context.runtime.runEffect(next!.id);
     expect(context.status()).toBe('done');
   });
 
-  it('is continued by the sweep after a self-transition while it waited', async () => {
+  it('is dropped by the sweep after a self-transition while it waited', async () => {
     const context = setup();
     context.flags.broken = true;
     const begun = await context.fire('begin');
@@ -177,8 +187,11 @@ describe('an onEnter effect’s continuation', () => {
     await context.fire('touch');
     context.flags.broken = false;
     context.advance(60_000);
-    await expect(context.runtime.reclaim()).resolves.toBe(1);
-    expect(context.status()).toBe('done');
+    await expect(context.runtime.reclaim()).resolves.toBe(0);
+    expect(context.status()).toBe('busy');
+    expect(await context.store.findEffectRun(runId)).toMatchObject({
+      continuation: null,
+    });
   });
 
   it('is dropped once the record left the state and came back while the effect ran', async () => {
@@ -254,5 +267,34 @@ describe('a transition’s own effect’s continuation', () => {
       expect.stringContaining('could not continue with "approve"'),
       expect.objectContaining({ code: 'INVALID_STATE' }),
     );
+  });
+
+  it('goes on with a store that ignores `after` and returns the whole log', async () => {
+    class WholeLogStore extends MemoryLifecycleStore {
+      public override listTransitions(
+        lifecycle: string,
+        recordId: string,
+      ): ReturnType<MemoryLifecycleStore['listTransitions']> {
+        return super.listTransitions(lifecycle, recordId);
+      }
+    }
+    const store = new WholeLogStore();
+    const runtime = new LifecycleRuntime({
+      store,
+      dispatcher: new HeldDispatcher(),
+    });
+    runtime.register(jobs, { services: { flags: { broken: false } } });
+    const job = store.insertRecord('jobs', {
+      status: 'idle',
+      lifecycleVersion: 0,
+    });
+    const begun = await runtime.fire('jobs', job.id, 'begin', {
+      actor: SYSTEM_ACTOR,
+    });
+    const crunchRun = begun.effectRuns.find(
+      (run) => run.effect === 'jobs.crunch',
+    );
+    await runtime.runEffect(crunchRun!.id);
+    expect(store.record('jobs', job.id)?.status).toBe('done');
   });
 });

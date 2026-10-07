@@ -2077,11 +2077,10 @@ export class LifecycleRuntime {
    * effect the transition itself declares does not, and its continuation is
    * checked only against the state the record is in, as any transition is.
    * The stay ends with the first transition of its lifecycle logged after
-   * the run's own that leaves the state — `from` other than `to` — other
-   * than one the run's outcome fired. A self-transition, a sibling effect's
-   * continuation that keeps the record where it is, or an edit that
-   * advances the version outside the lifecycle and logs nothing, does not
-   * end it. The answer is the refusal a continuation gets for it. Only the
+   * the run's own, other than one the run's outcome fired. A self-transition
+   * ends it too: it leaves the state and enters it again, queuing the
+   * state's onEnter effects anew. An edit that advances the version outside
+   * the lifecycle logs nothing and does not end it. The answer is the refusal a continuation gets for it. Only the
    * entries after the run's own are read.
    */
   private async stayEnded(
@@ -2093,13 +2092,18 @@ export class LifecycleRuntime {
     const entry = await store.findTransition(run.transitionId);
     if (entry && !servesStay(lifecycle, entry, run.effect)) return undefined;
     const own = `$run:${run.id}:`;
+    // Any later transition ends the stay, a self-transition included: it
+    // leaves and enters the state again and queues its onEnter effects anew.
+    // Only this run's own continuation does not. The version check keeps a
+    // store that ignores `after` from counting the entry that queued the run.
     const left = (
       await store.listTransitions(run.lifecycle, run.recordId, {
         after: run.transitionId,
       })
     ).find(
       (later) =>
-        later.from !== later.to && later.requestId?.startsWith(own) !== true,
+        (entry === undefined || later.version > entry.version) &&
+        later.requestId?.startsWith(own) !== true,
     );
     if (!left) return undefined;
     return new LifecycleError(

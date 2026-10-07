@@ -875,18 +875,22 @@ describe('a continuation bound to its stay, on the database', () => {
       })
     )?.status;
 
-  it('goes on after a self-transition, reading only the entries after its own', async () => {
+  it('is dropped after a self-transition, reading only the entries after its own, while the new stay goes on', async () => {
     const id = await createTicket();
     const runtime = stayRuntime();
     const waited = await runtime.fire('stays', id, 'wait', {
       actor: SYSTEM_ACTOR,
     });
-    await runtime.fire('stays', id, 'nudge', { actor: SYSTEM_ACTOR });
+    const nudged = await runtime.fire('stays', id, 'nudge', {
+      actor: SYSTEM_ACTOR,
+    });
     await expect(
       store.listTransitions('stays', id, { after: waited.entry.id }),
     ).resolves.toMatchObject([{ transition: 'nudge' }]);
 
     await runtime.runEffect(waited.effectRuns[0].id);
+    await expect(status(id)).resolves.toBe('awaitingCustomer');
+    await runtime.runEffect(nudged.effectRuns[0].id);
     await expect(status(id)).resolves.toBe('closed');
   });
 
