@@ -232,10 +232,13 @@ export function lifecycleRoutes(
         200: dataResponse(RecordViewSchema, 'The record afterwards.'),
         400: apiErrorResponse(
           400,
-          'Nothing waits (`NO_CONTINUATION`), or the continuation was refused again, with its code as the reason, such as `GUARD_REJECTED`, `INVALID_STATE`, `UNKNOWN_TRANSITION` or `INVALID_SET`, and its blockers and problems in `metadata`.',
+          'Nothing waits (`NO_CONTINUATION`), or the continuation was refused again, with its code as the reason, such as `GUARD_REJECTED`, `INVALID_STATE`, `UNKNOWN_TRANSITION` or `INVALID_SET`, and its blockers and problems in `metadata`; a `RECORD_NOT_FOUND` or `UNKNOWN_LIFECYCLE` here names a record or a lifecycle the continuation reached for, such as a parent deleted since.',
         ),
         401: apiErrorResponse(401),
-        404: apiErrorResponse(404, 'No such record, or no such run on it.'),
+        404: apiErrorResponse(
+          404,
+          'No such record, or no such run on it, checked before the continuation is tried.',
+        ),
         409: apiErrorResponse(
           409,
           'The record changed meanwhile (`CONFLICT`).',

@@ -92,6 +92,16 @@ describeMigration('202610010001_lifecycle_example_create_collections', {
     await expectCollection('lifecycleExampleEffectRuns').toHaveIndex([
       'continuationDueAt',
     ]);
+    // When the sweep gave up on it: null unless it did.
+    await expectCollection('lifecycleExampleEffectRuns').toHaveField(
+      'continuationAbandonedAt',
+      {
+        nullable: true,
+      },
+    );
+    await expectCollection('lifecycleExampleEffectRuns').toHaveIndex([
+      'continuationAbandonedAt',
+    ]);
   },
   down: async ({ expectCollection }) => {
     for (const name of COLLECTIONS) await expectCollection(name).not.toExist();

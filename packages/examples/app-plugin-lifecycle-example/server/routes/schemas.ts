@@ -314,7 +314,14 @@ const Run: z.ZodType<EffectRun> = z
         input: jsonObject,
         error: z.string(),
         code: z.string(),
-        attempts: z.number(),
+        attempts: z.number().meta({
+          description:
+            'How many times it was refused: what counts toward the sweep giving up on it.',
+        }),
+        errorTries: z.number().meta({
+          description:
+            'How many tries ended in an error that was not a refusal, such as a database failure; they back off but never lead to giving up.',
+        }),
         failedAt: z.iso.datetime(),
         dueAt: z.iso.datetime(),
         abandonedAt: z.iso.datetime().nullable().meta({

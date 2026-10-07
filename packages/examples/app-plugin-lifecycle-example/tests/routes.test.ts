@@ -388,6 +388,7 @@ describe('lifecycle example routes', () => {
         error: 'Not deployed yet.',
         code: 'UNKNOWN_TRANSITION',
         attempts: 1,
+        errorTries: 0,
         failedAt: '2026-10-01T09:00:00.000Z',
         dueAt: '2026-10-01T09:01:00.000Z',
         abandonedAt: null,
@@ -458,6 +459,7 @@ describe('lifecycle example routes', () => {
           error: 'Refused.',
           code: 'GUARD_REJECTED',
           attempts: 1,
+          errorTries: 0,
           failedAt: '2026-10-01T09:00:00.000Z',
           dueAt: '2026-10-01T09:01:00.000Z',
           abandonedAt: null,
@@ -511,6 +513,34 @@ describe('lifecycle example routes', () => {
     expect(invalid.body.error).toMatchObject({
       status: 'FAILED_PRECONDITION',
       reason: 'INVALID_SET',
+    });
+
+    // A record the continuation's onTransition fires that no longer exists,
+    // or a lifecycle it names that this release dropped: the report and the
+    // run this URL names were found, so neither is a 404.
+    for (const reason of ['RECORD_NOT_FOUND', 'UNKNOWN_LIFECYCLE'] as const) {
+      const run = await waiting('paid');
+      vi.spyOn(service.runtime, 'continueRun').mockRejectedValueOnce(
+        new LifecycleError(reason, 'No such parent.'),
+      );
+      const nested = await answer(run.id);
+      expect(nested.status).toBe(400);
+      expect(nested.body.error).toMatchObject({
+        status: 'FAILED_PRECONDITION',
+        reason,
+      });
+    }
+
+    // What the URL names is still answered 404 before the continuation is tried.
+    const missing = await router.request(
+      post(
+        `/lifecycleExample/expenses/999/effectRuns/${buggy.id}/continue?actAs=lin`,
+        {},
+      ),
+    );
+    expect(missing.status).toBe(404);
+    await expect(missing.json()).resolves.toMatchObject({
+      error: { status: 'NOT_FOUND', reason: 'RECORD_NOT_FOUND' },
     });
   });
 

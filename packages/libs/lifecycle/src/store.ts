@@ -89,8 +89,18 @@ export interface PendingContinuation {
    * that was not one.
    */
   readonly code: string;
-  /** How many times it has been tried; a `CONFLICT` does not count. */
+  /**
+   * How many times it has been refused, the first refusal included: what
+   * the sweep counts toward giving up. A `CONFLICT` does not count, nor does
+   * an error that is not a refusal, which `errorTries` counts instead.
+   */
   readonly attempts: number;
+  /**
+   * How many tries ended in an error that is not a refusal, such as a
+   * database failing mid-try. They back off as refusals do, but never lead
+   * to giving up: a failing database says nothing about the continuation.
+   */
+  readonly errorTries: number;
   /** When the last try was refused. */
   readonly failedAt: string;
   /**
@@ -101,8 +111,9 @@ export interface PendingContinuation {
   /**
    * When the sweep gave up on it, after `continuations.maxAttempts` tries,
    * or null while it waits. A continuation given up on is never tried by
-   * the sweep again and no longer keeps `prune()` from deleting its run;
-   * `continueRun()` still tries it, and clears it once it fires.
+   * the sweep again, but still keeps `prune()` from deleting its run, the
+   * record of an outcome its record never followed; `continueRun()` still
+   * tries it, and clears it once it fires.
    */
   readonly abandonedAt: string | null;
 }
@@ -117,6 +128,17 @@ export function waitingDueAt(
   continuation: PendingContinuation | null,
 ): string | null {
   return continuation && !continuation.abandonedAt ? continuation.dueAt : null;
+}
+
+/**
+ * When the sweep gave up on a run's continuation, and null when the run has
+ * none or it still waits. A store keeps it where a query can find it, such
+ * as the Repository store's `continuationAbandonedAt` column.
+ */
+export function abandonedAt(
+  continuation: PendingContinuation | null,
+): string | null {
+  return continuation?.abandonedAt ?? null;
 }
 
 export type NewTransitionEntry = Omit<TransitionEntry, 'id'>;
@@ -189,6 +211,13 @@ export interface EffectRunQuery {
    */
   readonly continuationPending?: boolean;
   /**
+   * True for the runs whose continuation the sweep gave up on, false for
+   * the others: those with none, and those whose continuation waits. With
+   * `continuationPending: false`, false lists the runs with no continuation
+   * at all.
+   */
+  readonly continuationAbandoned?: boolean;
+  /**
    * Only runs whose pending continuation is due at or before this instant,
    * the earliest due first rather than by id, so `limit` takes the ones that
    * have waited longest.
@@ -198,9 +227,9 @@ export interface EffectRunQuery {
 }
 
 /**
- * Which finished runs `deleteEffectRuns` removes. A run whose continuation
- * waits is never removed: its outcome has yet to move the record. One whose
- * continuation was given up on is removed as any other.
+ * Which finished runs `deleteEffectRuns` removes. A run that holds a
+ * continuation is never removed, whether it waits or was given up on: its
+ * outcome has yet to move the record, and the run is the only record of it.
  */
 export interface EffectRunPruneQuery {
   readonly statuses: readonly EffectRunStatus[];
@@ -227,6 +256,11 @@ export interface IdleRecordQuery {
 export interface IdleRecordCursor {
   readonly changedAt: string;
   readonly id: RecordId;
+}
+
+export interface TransitionListOptions {
+  /** The id of an entry of the same record: only those logged after it. */
+  readonly after?: string;
 }
 
 export interface TransactionOptions {
@@ -306,10 +340,15 @@ export interface LifecycleStore {
     recordId: string,
     requestId: string,
   ): Promise<TransitionEntry | undefined>;
-  /** Oldest first. */
+  /**
+   * Oldest first: in the order they were logged, which is the order of
+   * their ids. With `after`, only the entries logged after the entry with
+   * that id.
+   */
   listTransitions(
     lifecycle: string,
     recordId: string,
+    options?: TransitionListOptions,
   ): Promise<TransitionEntry[]>;
 
   createEffectRun(run: NewEffectRun): Promise<EffectRun>;
@@ -322,6 +361,6 @@ export interface LifecycleStore {
   ): Promise<boolean>;
   /** Oldest first. */
   listEffectRuns(query: EffectRunQuery): Promise<EffectRun[]>;
-  /** Removes finished runs without a waiting continuation; returns how many. */
+  /** Removes finished runs that hold no continuation; returns how many. */
   deleteEffectRuns(query: EffectRunPruneQuery): Promise<number>;
 }

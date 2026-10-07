@@ -84,6 +84,16 @@ describeMigration('202610010001_office_flows_example_create_collections', {
     await expectCollection(COLLECTIONS.effectRuns).toHaveIndex([
       'continuationDueAt',
     ]);
+    // When the sweep gave up on it: null unless it did.
+    await expectCollection(COLLECTIONS.effectRuns).toHaveField(
+      'continuationAbandonedAt',
+      {
+        nullable: true,
+      },
+    );
+    await expectCollection(COLLECTIONS.effectRuns).toHaveIndex([
+      'continuationAbandonedAt',
+    ]);
   },
   down: async ({ expectCollection }) => {
     for (const name of names) await expectCollection(name).not.toExist();

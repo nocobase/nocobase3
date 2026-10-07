@@ -88,6 +88,7 @@ export type {
   RecordCondition,
   TransactionOptions,
   TransitionEntry,
+  TransitionListOptions,
 } from './store.js';
 export { toMermaid, type MermaidOptions } from './mermaid.js';
 export {

@@ -154,6 +154,11 @@ describe('lifecycleErrorFields', () => {
         problems: [{ field: 'reference', message: 'Required.' }],
       }),
       new LifecycleError('INVALID_STATE', 'Moved on.'),
+      // Raised inside the continuation, such as by a parent its
+      // onTransition fires: the route has already found the record and the
+      // run the URL names, so these are not a missing resource.
+      new LifecycleError('RECORD_NOT_FOUND', 'No orders record "9".'),
+      new LifecycleError('UNKNOWN_LIFECYCLE', 'No lifecycle "orders".'),
     ])
       expect(lifecycleErrorFields(error, { continuation: true })).toEqual({
         status: 'FAILED_PRECONDITION',
@@ -163,8 +168,6 @@ describe('lifecycleErrorFields', () => {
       });
     for (const [code, status] of [
       ['NO_CONTINUATION', 'FAILED_PRECONDITION'],
-      ['UNKNOWN_LIFECYCLE', 'NOT_FOUND'],
-      ['RECORD_NOT_FOUND', 'NOT_FOUND'],
       ['CONFLICT', 'ABORTED'],
     ] as const)
       expect(

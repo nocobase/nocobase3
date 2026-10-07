@@ -253,9 +253,14 @@ const migration: MigrationDefinition = defineMigration({
       // nothing is pending, so the sweep finds the due runs without a JSON
       // filter, those due longest first.
       table.datetimeTz('continuationDueAt');
+      // When the sweep gave up on that continuation: null unless it did, so
+      // an operations page finds those runs, and prune() keeps them, without
+      // a JSON filter.
+      table.datetimeTz('continuationAbandonedAt');
       table.index(['status', 'id']);
       table.index(['lifecycle', 'recordId', 'id']);
       table.index(['continuationDueAt']);
+      table.index(['continuationAbandonedAt']);
     });
   },
 

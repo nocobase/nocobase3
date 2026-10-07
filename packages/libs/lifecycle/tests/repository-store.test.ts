@@ -73,6 +73,8 @@ async function createTables(): Promise<void> {
     // exactly when nothing is pending, so the sweep finds the due ones.
     table.json('continuation');
     table.datetimeTz('continuationDueAt');
+    // When the sweep gave up on it: null unless it did.
+    table.datetimeTz('continuationAbandonedAt');
   });
 }
 
@@ -765,6 +767,144 @@ describe('a continuation waiting on the database', () => {
     await expect(
       runtime.prune({ olderThan: new Date(now.getTime() + 60_000) }),
     ).resolves.toBe(1);
+  });
+
+  it('lists a continuation given up on by itself, and keeps its run from prune()', async () => {
+    const id = await createTicket();
+    const flags: Flags = { broken: true };
+    const runtime = new LifecycleRuntime({
+      store,
+      clock: () => now,
+      // Given up on at the first refusal.
+      continuations: { maxAttempts: 1 },
+    });
+    runtime.register(deliveries, { services: { flags, calls: [] } });
+    runtime.register(ticketLifecycle, {
+      services: { mail: { send: (to) => void sent.push(to) } },
+    });
+    const shipped = await runtime.fire('deliveries', id, 'ship', {
+      actor: SYSTEM_ACTOR,
+    });
+    const runId = shipped.effectRuns[0].id;
+    await expect(store.findEffectRun(runId)).resolves.toMatchObject({
+      continuation: { attempts: 1, abandonedAt: now.toISOString() },
+    });
+    // A run with no continuation at all.
+    await runtime.fire('tickets', await createTicket(), 'replyToCustomer', {
+      actor: { id: 'agent' },
+      input: { message: 'Hi' },
+    });
+
+    const ids = async (
+      query: Parameters<LifecycleRuntime['listEffectRuns']>[0],
+    ): Promise<string[]> =>
+      (await runtime.listEffectRuns(query)).map((run) => run.id);
+    await expect(ids({ continuationAbandoned: true })).resolves.toEqual([
+      runId,
+    ]);
+    await expect(ids({ continuationPending: true })).resolves.toEqual([]);
+    const none = await ids({
+      continuationAbandoned: false,
+      continuationPending: false,
+    });
+    expect(none).toHaveLength(1);
+    expect(none).not.toContain(runId);
+
+    await expect(
+      runtime.prune({
+        olderThan: new Date(now.getTime() + 3_600_000),
+        statuses: ['succeeded', 'failed', 'dead', 'cancelled'],
+      }),
+    ).resolves.toBe(1);
+    await expect(store.findEffectRun(runId)).resolves.toMatchObject({
+      continuation: { abandonedAt: now.toISOString() },
+    });
+
+    // Continued by hand once fixed, it is cleared and pruned as any other.
+    flags.broken = false;
+    await runtime.continueRun(runId);
+    await expect(ids({ continuationAbandoned: true })).resolves.toEqual([]);
+    await expect(
+      runtime.prune({ olderThan: new Date(now.getTime() + 3_600_000) }),
+    ).resolves.toBe(1);
+  });
+});
+
+describe('a continuation bound to its stay, on the database', () => {
+  interface StayTypes {
+    record: TicketTypes['record'];
+    state: TicketTypes['state'];
+  }
+
+  const chase = defineEffect<StayTypes>({
+    name: 'stays.chase',
+    onSuccess: 'close',
+    run: () => ({}),
+  });
+
+  const stays = defineLifecycle<StayTypes>({
+    name: 'stays',
+    collection: 'tickets',
+    initial: 'open',
+    states: ['open', 'awaitingCustomer', { name: 'closed', final: true }],
+    transitions: {
+      wait: { from: 'open', to: 'awaitingCustomer' },
+      // A reminder: the same stay goes on.
+      nudge: { from: 'awaitingCustomer', to: 'awaitingCustomer' },
+      reopen: { from: 'awaitingCustomer', to: 'open' },
+      close: { from: 'awaitingCustomer', to: 'closed' },
+    },
+    onEnter: { awaitingCustomer: [chase] },
+  });
+
+  /** A runtime whose runs wait until the test runs them. */
+  function stayRuntime(): LifecycleRuntime {
+    const created = new LifecycleRuntime({
+      store,
+      clock: () => now,
+      dispatcher: { dispatch: () => Promise.resolve() },
+    });
+    created.register(stays);
+    return created;
+  }
+
+  const status = async (id: string): Promise<unknown> =>
+    (
+      await database.repository('tickets').findOne({
+        filter: { id: Number(id) },
+      })
+    )?.status;
+
+  it('goes on after a self-transition, reading only the entries after its own', async () => {
+    const id = await createTicket();
+    const runtime = stayRuntime();
+    const waited = await runtime.fire('stays', id, 'wait', {
+      actor: SYSTEM_ACTOR,
+    });
+    await runtime.fire('stays', id, 'nudge', { actor: SYSTEM_ACTOR });
+    await expect(
+      store.listTransitions('stays', id, { after: waited.entry.id }),
+    ).resolves.toMatchObject([{ transition: 'nudge' }]);
+
+    await runtime.runEffect(waited.effectRuns[0].id);
+    await expect(status(id)).resolves.toBe('closed');
+  });
+
+  it('is dropped once the record left the state and came back', async () => {
+    const id = await createTicket();
+    const runtime = stayRuntime();
+    const first = await runtime.fire('stays', id, 'wait', {
+      actor: SYSTEM_ACTOR,
+    });
+    await runtime.fire('stays', id, 'reopen', { actor: SYSTEM_ACTOR });
+    const second = await runtime.fire('stays', id, 'wait', {
+      actor: SYSTEM_ACTOR,
+    });
+
+    await runtime.runEffect(first.effectRuns[0].id);
+    await expect(status(id)).resolves.toBe('awaitingCustomer');
+    await runtime.runEffect(second.effectRuns[0].id);
+    await expect(status(id)).resolves.toBe('closed');
   });
 });
 

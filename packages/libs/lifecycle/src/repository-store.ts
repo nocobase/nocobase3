@@ -22,8 +22,9 @@ import type {
   RecordCondition,
   TransactionOptions,
   TransitionEntry,
+  TransitionListOptions,
 } from './store.js';
-import { transitionRequestKey, waitingDueAt } from './store.js';
+import { abandonedAt, transitionRequestKey, waitingDueAt } from './store.js';
 import type {
   JsonObject,
   JsonValue,
@@ -180,9 +181,10 @@ function toContinuation(value: unknown): PendingContinuation | null {
     error,
     code,
     attempts,
+    errorTries,
     failedAt,
     dueAt,
-    abandonedAt,
+    abandonedAt: abandoned,
   } = stored;
   if (
     typeof transition !== 'string' ||
@@ -199,6 +201,7 @@ function toContinuation(value: unknown): PendingContinuation | null {
     error: typeof error === 'string' ? error : '',
     code: typeof code === 'string' ? code : '',
     attempts: typeof attempts === 'number' ? attempts : 0,
+    errorTries: typeof errorTries === 'number' ? errorTries : 0,
     failedAt: typeof failedAt === 'string' ? failedAt : '',
     dueAt:
       typeof dueAt === 'string'
@@ -206,16 +209,19 @@ function toContinuation(value: unknown): PendingContinuation | null {
         : typeof failedAt === 'string'
           ? failedAt
           : '',
-    abandonedAt: typeof abandonedAt === 'string' ? abandonedAt : null,
+    abandonedAt: typeof abandoned === 'string' ? abandoned : null,
   };
 }
 
 /**
- * The columns a run's continuation is written to: the continuation itself,
- * and `continuationDueAt`, its `dueAt` as a plain timestamp that is null
+ * The columns a run's continuation is written to: the continuation itself;
+ * `continuationDueAt`, its `dueAt` as a plain timestamp that is null
  * exactly when nothing waits — no continuation, or one the sweep gave up on
  * — so a query finds the waiting runs, and the due ones in the order they
- * fell due, on every dialect without filtering on JSON.
+ * fell due; and `continuationAbandonedAt`, its `abandonedAt`, null unless
+ * the sweep gave up on it, so a query finds those too. Both work on every
+ * dialect without filtering on JSON, which no portable filter can test for
+ * being set.
  */
 function continuationColumns(
   continuation: PendingContinuation | null,
@@ -223,6 +229,7 @@ function continuationColumns(
   return {
     continuation,
     continuationDueAt: waitingDueAt(continuation),
+    continuationAbandonedAt: abandonedAt(continuation),
   };
 }
 
@@ -380,9 +387,16 @@ class RepositoryLifecycleStore implements LifecycleStore {
   public async listTransitions(
     lifecycle: string,
     recordId: string,
+    options: TransitionListOptions = {},
   ): Promise<TransitionEntry[]> {
+    const { after } = options;
     const rows = await this.repository(this.names.transitions).findMany({
-      filter: { lifecycle, recordId },
+      filter: (filter) =>
+        filter.and([
+          filter.string('lifecycle').eq(lifecycle),
+          filter.string('recordId').eq(recordId),
+          ...(after === undefined ? [] : [filter.number('id').gt(key(after))]),
+        ]),
       sort: (sort) => sort.field('id').asc(),
     });
     return rows.map(toTransition);
@@ -470,6 +484,13 @@ class RepositoryLifecycleStore implements LifecycleStore {
                   ? filter.date('continuationDueAt').notEmpty()
                   : filter.date('continuationDueAt').empty(),
               ]),
+          ...(query.continuationAbandoned === undefined
+            ? []
+            : [
+                query.continuationAbandoned
+                  ? filter.date('continuationAbandonedAt').notEmpty()
+                  : filter.date('continuationAbandonedAt').empty(),
+              ]),
           ...(query.continuationDueBy === undefined
             ? []
             : [
@@ -499,8 +520,10 @@ class RepositoryLifecycleStore implements LifecycleStore {
             query.statuses.map((status) => filter.string('status').eq(status)),
           ),
           filter.date('updatedAt').before(query.updatedBefore),
-          // Its outcome has yet to move the record, unless it was given up on.
+          // Its outcome has yet to move the record, whether its
+          // continuation waits or was given up on: keep it.
           filter.date('continuationDueAt').empty(),
+          filter.date('continuationAbandonedAt').empty(),
         ]),
     });
     return deletedCount;
@@ -529,7 +552,10 @@ class RepositoryLifecycleStore implements LifecycleStore {
  * column alongside the nullable `continuation` (json): the `dueAt` of a
  * waiting continuation, and null when none waits, which is how the sweep
  * finds the waiting runs that are due without filtering on JSON, and what a
- * write that clears or rewrites a continuation is conditioned on.
+ * write that clears or rewrites a continuation is conditioned on. A second
+ * nullable `datetimeTz` column, `continuationAbandonedAt`, holds the
+ * `abandonedAt` of a continuation the sweep gave up on, so those runs can
+ * be listed, and kept from `prune()`, the same way.
  */
 export function createRepositoryLifecycleStore(
   database: DatabaseManager,

@@ -50,10 +50,15 @@ export interface LifecycleApiErrorOptions {
    * and nobody's permission is in question. Every refusal is then a
    * `FAILED_PRECONDITION` — the continuation cannot fire yet — with its code
    * as `reason`, its blockers and problems in `metadata` and no field
-   * violations, except `NO_CONTINUATION`, `UNKNOWN_LIFECYCLE`,
-   * `RECORD_NOT_FOUND` and `CONFLICT`, which keep their usual status. Even a
-   * refusal that is the server's own fault, such as `INVALID_SET`, is
-   * answered this way, since the run waits for it to be fixed.
+   * violations, except `NO_CONTINUATION` and `CONFLICT`, which keep their
+   * usual status. Even a refusal that is the server's own fault, such as
+   * `INVALID_SET`, is answered this way, since the run waits for it to be
+   * fixed. `RECORD_NOT_FOUND` and `UNKNOWN_LIFECYCLE` are answered this way
+   * too: thrown from inside the continuation, they name a record or a
+   * lifecycle its `onTransition` or a hook reached for — a parent deleted
+   * since — not what the URL names. A route answers a record or a run the
+   * URL names that does not exist with `404` itself, before it calls
+   * `continueRun()`.
    */
   readonly continuation?: boolean;
 }
@@ -95,12 +100,7 @@ function statusOf(error: LifecycleError): LifecycleApiStatus | undefined {
 
 /** The refusals of `continueRun()` that keep their usual status. */
 const CONTINUATION_OWN: ReadonlySet<LifecycleErrorCode> =
-  new Set<LifecycleErrorCode>([
-    'NO_CONTINUATION',
-    'UNKNOWN_LIFECYCLE',
-    'RECORD_NOT_FOUND',
-    'CONFLICT',
-  ]);
+  new Set<LifecycleErrorCode>(['NO_CONTINUATION', 'CONFLICT']);
 
 /** The body field a refusal is about, when it is one field of the request. */
 const FIELDS: Readonly<Partial<Record<LifecycleErrorCode, string>>> =

@@ -114,6 +114,7 @@ describe('continueRun', () => {
         error: 'Not yet.',
         code: 'INVALID_SET',
         attempts: 1,
+        errorTries: 0,
         failedAt: '2026-10-01T09:00:00.000Z',
         dueAt: '2026-10-01T09:01:00.000Z',
         abandonedAt: null,

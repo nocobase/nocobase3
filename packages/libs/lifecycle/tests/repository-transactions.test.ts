@@ -84,6 +84,8 @@ async function createTables(): Promise<void> {
     // exactly when nothing is pending, so the sweep finds the due ones.
     table.json('continuation');
     table.datetimeTz('continuationDueAt');
+    // When the sweep gave up on it: null unless it did.
+    table.datetimeTz('continuationAbandonedAt');
   });
 }
 

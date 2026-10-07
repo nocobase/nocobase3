@@ -88,8 +88,14 @@ export interface LifecycleRuntimeOptions {
  * continuation waits `backoffMs × factor^(n-1)`, capped at `maxMs`, before
  * the sweep tries it again, and each sweep tries at most `batchSize` of the
  * due ones, those due longest first. A `CONFLICT` is not counted and is
- * tried again after `backoffMs`. After `maxAttempts` counted tries the sweep
- * gives up on it: see {@link PendingContinuation.abandonedAt}.
+ * tried again after `backoffMs`. An error that is not a refusal, such as a
+ * database failing mid-try, is not counted either, but backs off as a
+ * refusal does, each such try taking the delay one step further (see
+ * {@link PendingContinuation.errorTries}). After `maxAttempts` counted tries
+ * the sweep gives up on it: see {@link PendingContinuation.abandonedAt}. So
+ * only refusals lead to giving up: an outage never does, and neither does a
+ * bug that throws an ordinary error, which is tried at most hourly and
+ * logged on its 1st, 2nd, 4th… try until it is fixed.
  */
 export interface ContinuationSweepOptions {
   /** Defaults to 100. */
@@ -456,6 +462,24 @@ const raisedInStep = new WeakSet<LifecycleError>();
  */
 function recordMovedOn(error: LifecycleError): boolean {
   return MOVED_ON.has(error.code) && !raisedInStep.has(error);
+}
+
+/**
+ * Whether a run of `effect`, queued by `entry`, serves the stay `entry`
+ * began rather than the transition itself: an effect of the entered
+ * state's `onEnter` does, and so does one the definition no longer names
+ * in either place, to be safe; an effect only the transition declares
+ * does not. One named in both is taken as `onEnter`'s.
+ */
+function servesStay(
+  lifecycle: Lifecycle<LifecycleTypes>,
+  entry: TransitionEntry,
+  effect: string,
+): boolean {
+  const named = (effects: readonly EffectDefinition<LifecycleTypes>[]) =>
+    effects.some((each) => each.name === effect);
+  if (named(lifecycle.onEnter.get(entry.to) ?? [])) return true;
+  return !named(lifecycle.transitions.get(entry.transition)?.effects ?? []);
 }
 
 /** Whether a run of failed tries has reached a count worth a log line: 1, 2, 4, 8… */
@@ -1283,9 +1307,9 @@ export class LifecycleRuntime {
         );
         if (!recorded) return undefined;
         if (next === undefined) return null;
-        // The outcome belongs to the stay the run was queued for. A record
-        // that has left it since — even to return to the same state — is in
-        // a stay this outcome knows nothing about.
+        // An onEnter effect's outcome belongs to the stay the run was queued
+        // for. A record that has left it since — even to return to the same
+        // state — is in a stay this outcome knows nothing about.
         const ended = await this.stayEnded(store, registered, run);
         if (ended) {
           this.logger.warn(
@@ -1356,13 +1380,14 @@ export class LifecycleRuntime {
               error: '',
               code: '',
               attempts: 0,
+              errorTries: 0,
               failedAt: finishedAt,
               dueAt: finishedAt,
               abandonedAt: null,
             },
             error,
             finishedAt,
-            true,
+            'refusal',
           );
           await store.updateEffectRun(
             runId,
@@ -1414,8 +1439,10 @@ export class LifecycleRuntime {
 
   /**
    * Effect runs for an operations page: the stuck, the failed, the dead,
-   * and those whose continuation is pending (`continuationPending: true`).
-   * Each says whether this process knows its effect.
+   * those whose continuation is pending (`continuationPending: true`) and
+   * those whose continuation the sweep gave up on
+   * (`continuationAbandoned: true`). Each says whether this process knows
+   * its effect.
    */
   public async listEffectRuns(
     query: EffectRunQuery = {},
@@ -1529,11 +1556,11 @@ export class LifecycleRuntime {
    * known here, only its lifecycle. A refusal is thrown as the error it is:
    * one saying the record moved on (`RECORD_NOT_FOUND`, `INVALID_STATE`,
    * `GUARD_REJECTED`) also drops the continuation, and so does
-   * `INVALID_STATE` when the record has left the stay the run was queued
-   * for, even to enter the same state again; any other refusal, or an error
-   * that is not one, leaves it pending with the new error and counts the
-   * try, a `CONFLICT` without counting it, and a continuation the sweep gave
-   * up on stays given up on. A run with nothing pending is refused with
+   * `INVALID_STATE` when the record has left the stay an `onEnter` effect's
+   * run was queued for, even to enter the same state again; any other
+   * refusal leaves it pending with the new error and counts the try, a
+   * `CONFLICT` or an error that is not a refusal without counting it, and a
+   * continuation the sweep gave up on stays given up on. A run with nothing pending is refused with
    * `NO_CONTINUATION`, and one whose lifecycle this process does not know
    * with `UNKNOWN_LIFECYCLE`.
    */
@@ -1601,8 +1628,11 @@ export class LifecycleRuntime {
 
   /**
    * Deletes finished runs last changed before `olderThan`; returns how many.
-   * A run whose continuation waits is kept; one whose continuation the
-   * sweep gave up on is deleted as any other run of its status.
+   * A run that holds a continuation is kept, whether it waits or the sweep
+   * gave up on it: its outcome never moved the record, and the run is the
+   * only record of it — a payment made for a report that never became paid.
+   * Once `continueRun()` fires it, or a forced retry drops it, the run is
+   * pruned as any other.
    */
   public prune(options: PruneOptions): Promise<number> {
     const olderThan =
@@ -1748,9 +1778,10 @@ export class LifecycleRuntime {
    * Tries once each pending continuation that is due, at most `batchSize`
    * of them and those due longest first, and returns how many fired. A
    * continuation refused again with the error it was refused with before is
-   * logged as a warning on its 2nd, 4th, 8th… try; a different refusal is
-   * logged as an error, since something has changed, and so is giving up on
-   * it. A run whose lifecycle this process does not know — a rolling
+   * logged as a warning on its 2nd, 4th, 8th… try, and one failing again
+   * with the same error that is not a refusal on its 2nd, 4th, 8th such try;
+   * a different refusal or error is logged as an error, since something has
+   * changed, and so is giving up on it. A run whose lifecycle this process does not know — a rolling
    * deploy — is put off by its current backoff without counting a try, so
    * it leaves the batch to the runs behind it.
    */
@@ -1805,18 +1836,23 @@ export class LifecycleRuntime {
       runId,
       code: continuation.code,
       attempts: continuation.attempts,
+      errorTries: continuation.errorTries,
     };
     const message = `Effect run "${runId}" could not continue with "${continuation.transition}": ${continuation.error}`;
     const counted = continuation.attempts !== previous.attempts;
+    const errored = continuation.errorTries !== previous.errorTries;
     if (
       continuation.code !== previous.code ||
       continuation.error !== previous.error
     ) {
       // A conflict is a race, not a fault.
-      if (counted)
+      if (counted || errored)
         this.logger.error(message, { ...details, error: tried.error });
       else this.logger.warn(message, details);
     } else if (counted && isLogworthy(continuation.attempts))
+      this.logger.warn(message, details);
+    // An outage that goes on is said again less and less often.
+    else if (errored && isLogworthy(continuation.errorTries))
       this.logger.warn(message, details);
   }
 
@@ -1870,9 +1906,10 @@ export class LifecycleRuntime {
    * `onTransition` wrote. It is logged under the request id the run's
    * outcome would have used, so a continuation that already fired replays
    * rather than firing twice, and it is dropped once the record has left
-   * the stay the run was queued for. A conflict, or anything that is not a
-   * refusal, rolls the whole try back, and is then recorded on the
-   * continuation in a write of its own, pushing its due time back.
+   * the stay an `onEnter` effect's run was queued for. A conflict, or
+   * anything that is not a refusal, rolls the whole try back, and is then
+   * recorded on the continuation in a write of its own, pushing its due time
+   * back without counting toward giving up.
    */
   private async tryContinuation(
     run: EffectRun,
@@ -1935,7 +1972,7 @@ export class LifecycleRuntime {
               pending,
               error,
               at,
-              true,
+              'refusal',
             );
             // Cleared above, in this transaction: nothing waits now.
             await store.updateEffectRun(
@@ -1956,12 +1993,19 @@ export class LifecycleRuntime {
     } catch (error) {
       // Undone as a whole, the clearing included. Record the try on the
       // continuation as it was read, so the sweep backs off rather than
-      // trying it again at once; a conflict is a race and is not counted.
+      // trying it again at once. A conflict is a race, tried again soon; an
+      // error that is not a refusal — a deadlock, a lost connection — backs
+      // off as a refusal does. Neither counts toward giving up: neither says
+      // anything about the continuation itself.
       const continuation = this.refusedContinuation(
         pending,
         error,
         at,
-        !isRefusal(error, CONFLICTS),
+        isRefusal(error, CONFLICTS)
+          ? 'conflict'
+          : error instanceof LifecycleError
+            ? 'refusal'
+            : 'error',
       );
       let recorded: boolean;
       try {
@@ -1984,57 +2028,83 @@ export class LifecycleRuntime {
   }
 
   /**
-   * A continuation after one more refused try at `at`: the refusal it
-   * records, the try counted unless `counted` is false, its next due time,
-   * and the instant the sweep gives up on it once it has been tried
-   * `maxAttempts` times. One already given up on stays given up on.
+   * A continuation after one more failed try at `at`: what failed it, its
+   * next due time and, once it has been refused `maxAttempts` times, the
+   * instant the sweep gives up on it. A `refusal` counts toward giving up
+   * and backs off by the refusals so far; a `conflict` counts nothing and
+   * is due again after `backoffMs`; an `error` that is not a refusal counts
+   * in `errorTries` only and backs off by every counted try so far, so an
+   * outage is tried less and less often, up to `maxMs`, and never given up
+   * on. One already given up on stays given up on.
    */
   private refusedContinuation(
     pending: PendingContinuation,
     error: unknown,
     at: string,
-    counted: boolean,
+    kind: 'refusal' | 'conflict' | 'error',
   ): PendingContinuation {
-    const attempts = counted ? pending.attempts + 1 : pending.attempts;
+    const attempts =
+      kind === 'refusal' ? pending.attempts + 1 : pending.attempts;
+    const errorTries =
+      kind === 'error' ? pending.errorTries + 1 : pending.errorTries;
     return {
       ...pending,
       error: errorText(error),
       code: error instanceof LifecycleError ? error.code : CONTINUATION_ERROR,
       attempts,
+      errorTries,
       failedAt: at,
-      dueAt: counted
-        ? this.continuationDue(at, attempts)
-        : new Date(Date.parse(at) + this.continuations.backoffMs).toISOString(),
+      dueAt:
+        kind === 'conflict'
+          ? new Date(
+              Date.parse(at) + this.continuations.backoffMs,
+            ).toISOString()
+          : this.continuationDue(
+              at,
+              kind === 'refusal' ? attempts : attempts + errorTries,
+            ),
       abandonedAt:
         pending.abandonedAt ??
-        (counted && attempts >= this.continuations.maxAttempts ? at : null),
+        (kind === 'refusal' && attempts >= this.continuations.maxAttempts
+          ? at
+          : null),
     };
   }
 
   /**
-   * Whether the record has left the stay `run` was queued for: a transition
-   * of its lifecycle logged after the run's own, other than one the run's
-   * outcome fired. The answer is the refusal a continuation gets for it. An
-   * edit that advances the version outside the lifecycle logs nothing and
-   * does not end the stay.
+   * Whether the record has left the stay `run` was queued for, when the run
+   * serves one: an effect of the entered state's `onEnter` does, while an
+   * effect the transition itself declares does not, and its continuation is
+   * checked only against the state the record is in, as any transition is.
+   * The stay ends with the first transition of its lifecycle logged after
+   * the run's own that leaves the state — `from` other than `to` — other
+   * than one the run's outcome fired. A self-transition, a sibling effect's
+   * continuation that keeps the record where it is, or an edit that
+   * advances the version outside the lifecycle and logs nothing, does not
+   * end it. The answer is the refusal a continuation gets for it. Only the
+   * entries after the run's own are read.
    */
   private async stayEnded(
     store: LifecycleStore,
     registered: Registered,
     run: EffectRun,
   ): Promise<LifecycleError | undefined> {
-    const last = (await store.listTransitions(run.lifecycle, run.recordId)).at(
-      -1,
+    const { lifecycle } = registered;
+    const entry = await store.findTransition(run.transitionId);
+    if (entry && !servesStay(lifecycle, entry, run.effect)) return undefined;
+    const own = `$run:${run.id}:`;
+    const left = (
+      await store.listTransitions(run.lifecycle, run.recordId, {
+        after: run.transitionId,
+      })
+    ).find(
+      (later) =>
+        later.from !== later.to && later.requestId?.startsWith(own) !== true,
     );
-    if (
-      !last ||
-      last.id === run.transitionId ||
-      last.requestId?.startsWith(`$run:${run.id}:`) === true
-    )
-      return undefined;
+    if (!left) return undefined;
     return new LifecycleError(
       'INVALID_STATE',
-      `The ${registered.lifecycle.collection} record "${run.recordId}" has moved on with "${last.transition}" since the transition effect run "${run.id}" was queued for, so what follows from that run no longer applies to it.`,
+      `The ${lifecycle.collection} record "${run.recordId}" has moved on with "${left.transition}" since the transition effect run "${run.id}" was queued for, so what follows from that run no longer applies to it.`,
     );
   }
 

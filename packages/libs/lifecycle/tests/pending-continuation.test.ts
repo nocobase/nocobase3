@@ -693,7 +693,7 @@ describe('two sweeps reading the same waiting continuation', () => {
 });
 
 describe('a continuation that fails with something other than a refusal', () => {
-  it('backs off, counting the try, rather than being tried on every sweep', async () => {
+  it('backs off without counting the try, rather than being tried on every sweep', async () => {
     const context = setup();
     const runId = await workOnce(context);
     context.services.flags.broken = false;
@@ -702,7 +702,10 @@ describe('a continuation that fails with something other than a refusal', () => 
     await expect(context.runtime.reclaim()).resolves.toBe(0);
     expect(await context.store.findEffectRun(runId)).toMatchObject({
       continuation: {
-        attempts: 2,
+        // A failing database says nothing about the continuation: the try
+        // counts as an error, not toward giving up.
+        attempts: 1,
+        errorTries: 1,
         code: 'ERROR',
         error: 'The ledger is down.',
         failedAt: '2026-10-01T09:01:00.000Z',
@@ -721,7 +724,7 @@ describe('a continuation that fails with something other than a refusal', () => 
     expect(context.logger.error).toHaveBeenCalledTimes(2);
     expect(context.logger.error).toHaveBeenLastCalledWith(
       expect.stringContaining('The ledger is down.'),
-      expect.objectContaining({ runId, code: 'ERROR', attempts: 2 }),
+      expect.objectContaining({ runId, code: 'ERROR', errorTries: 1 }),
     );
 
     context.services.flags.throws = undefined;
@@ -763,8 +766,46 @@ describe('a continuation that fails with something other than a refusal', () => 
       'The ledger is down.',
     );
     expect(await context.store.findEffectRun(runId)).toMatchObject({
-      continuation: { attempts: 2, code: 'ERROR' },
+      continuation: { attempts: 1, errorTries: 1, code: 'ERROR' },
     });
+  });
+
+  it('is never given up on for such errors, backing off up to an hour and saying so less often', async () => {
+    const context = setup({ maxAttempts: 3 });
+    const runId = await workOnce(context);
+    context.services.flags.broken = false;
+    context.services.flags.throws = new Error('The database went away.');
+    for (let sweep = 0; sweep < 12; sweep += 1) {
+      context.advance(60 * MINUTE);
+      await context.runtime.reclaim();
+    }
+    const run = await context.store.findEffectRun(runId);
+    expect(run?.continuation).toMatchObject({
+      attempts: 1,
+      errorTries: 12,
+      code: 'ERROR',
+      abandonedAt: null,
+    });
+    expect(
+      Date.parse(run?.continuation?.dueAt ?? '') -
+        Date.parse(run?.continuation?.failedAt ?? ''),
+    ).toBe(60 * MINUTE);
+    // An error when it first appears, then a warning on the 2nd, 4th and 8th.
+    const said = (calls: readonly unknown[][]): number =>
+      calls.filter((call) =>
+        String(call[0]).includes('The database went away.'),
+      ).length;
+    expect(said(context.logger.error.mock.calls)).toBe(1);
+    expect(said(context.logger.warn.mock.calls)).toBe(3);
+    await expect(
+      context.runtime.listEffectRuns({ continuationPending: true }),
+    ).resolves.toMatchObject([{ id: runId }]);
+
+    // Once the database is back, the sweep fires it.
+    context.services.flags.throws = undefined;
+    context.advance(60 * MINUTE);
+    await expect(context.runtime.reclaim()).resolves.toBe(1);
+    expect(context.store.record('tasks', context.task.id)?.status).toBe('done');
   });
 });
 
@@ -833,13 +874,48 @@ describe('a continuation the sweep gives up on', () => {
     expect(context.store.record('tasks', context.task.id)?.status).toBe('done');
   });
 
-  it('no longer keeps prune() from deleting its run', async () => {
+  it('keeps its run from prune(), as the record of an outcome its record never followed', async () => {
     const context = setup({ maxAttempts: 3 });
     const runId = await giveUp(context);
     await expect(
-      context.runtime.prune({ olderThan: '2026-12-01T00:00:00.000Z' }),
-    ).resolves.toBe(1);
-    expect(await context.store.findEffectRun(runId)).toBeUndefined();
+      context.runtime.prune({
+        olderThan: '2026-12-01T00:00:00.000Z',
+        statuses: ['succeeded', 'failed', 'dead', 'cancelled'],
+      }),
+    ).resolves.toBe(0);
+    expect(await context.store.findEffectRun(runId)).toMatchObject({
+      continuation: { abandonedAt: '2026-10-01T09:03:00.000Z' },
+    });
+  });
+
+  it('is listed on its own for an operations page', async () => {
+    const context = setup({ maxAttempts: 3 });
+    const runId = await giveUp(context);
+    // Another run whose continuation still waits, and one with none.
+    const other = context.store.insertRecord('tasks', {
+      status: 'todo',
+      lifecycleVersion: 0,
+    });
+    await context.runtime.fire('tasks', other.id, 'start', {
+      actor: SYSTEM_ACTOR,
+    });
+    const waiting = (
+      await context.runtime.listEffectRuns({ recordId: String(other.id) })
+    )[0].id;
+    await context.runtime.runEffect(waiting);
+
+    const ids = async (query: EffectRunQuery): Promise<string[]> =>
+      (await context.runtime.listEffectRuns(query)).map((run) => run.id);
+    await expect(ids({ continuationAbandoned: true })).resolves.toEqual([
+      runId,
+    ]);
+    await expect(ids({ continuationPending: true })).resolves.toEqual([
+      waiting,
+    ]);
+    expect(await ids({ continuationAbandoned: false })).not.toContain(runId);
+    await expect(
+      ids({ continuationAbandoned: true, continuationPending: true }),
+    ).resolves.toEqual([]);
   });
 
   it('is given up on after ten tries by default', async () => {

@@ -11,8 +11,9 @@ import type {
   NewTransitionEntry,
   TransactionOptions,
   TransitionEntry,
+  TransitionListOptions,
 } from './store.js';
-import { transitionRequestKey, waitingDueAt } from './store.js';
+import { abandonedAt, transitionRequestKey, waitingDueAt } from './store.js';
 import type { LifecycleRecord, RecordId } from './types.js';
 
 /** The sweep order: oldest change first, then by id, as a database index would. */
@@ -420,11 +421,17 @@ export class MemoryLifecycleStore implements LifecycleStore, MemoryRows {
   public listTransitions(
     lifecycle: string,
     recordId: string,
+    options: TransitionListOptions = {},
   ): Promise<TransitionEntry[]> {
     if (this.scope?.finished) return Promise.reject(new Error(FINISHED));
+    const { after } = options;
     return Promise.resolve(
       this.state.transitions.filter(
-        (entry) => entry.lifecycle === lifecycle && entry.recordId === recordId,
+        (entry) =>
+          entry.lifecycle === lifecycle &&
+          entry.recordId === recordId &&
+          // Ids come from one sequence, so their order is the log's.
+          (after === undefined || Number(entry.id) > Number(after)),
       ),
     );
   }
@@ -486,6 +493,9 @@ export class MemoryLifecycleStore implements LifecycleStore, MemoryRows {
         (query.continuationPending === undefined ||
           (waitingDueAt(run.continuation) !== null) ===
             query.continuationPending) &&
+        (query.continuationAbandoned === undefined ||
+          (abandonedAt(run.continuation) !== null) ===
+            query.continuationAbandoned) &&
         (query.continuationDueBy === undefined ||
           isDueBy(waitingDueAt(run.continuation), query.continuationDueBy)),
     );
@@ -511,7 +521,7 @@ export class MemoryLifecycleStore implements LifecycleStore, MemoryRows {
       if (
         query.statuses.includes(run.status) &&
         run.updatedAt < query.updatedBefore &&
-        waitingDueAt(run.continuation) === null
+        run.continuation === null
       ) {
         this.log(write(this.state.effectRuns, id, undefined));
         deleted += 1;

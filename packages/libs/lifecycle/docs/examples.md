@@ -878,7 +878,7 @@ Before deploying, check that every value already in `status` is a state of the d
 
 ### 23. An operations page
 
-An operator sees the failed and dead runs across all records, and the runs whose continuation waits, retries, continues or cancels them, and old finished runs are pruned.
+An operator sees the failed and dead runs across all records, the runs whose continuation waits and those whose continuation the sweep gave up on, retries, continues or cancels them, and old finished runs are pruned.
 
 ```ts
 // The plugin's own route: the record routes only operate the runs of one record.
@@ -886,13 +886,15 @@ router.get(
   '/expenses/effectRuns',
   requireOperator, // the permission first, then the declaration and the validators
   describeRoute({ tags, summary: 'List effect runs', operationId: 'expensesListEffectRuns', responses }),
-  apiValidator('query', ListRunsQuery), // { status?: 'failed' | 'dead' | 'queued', waiting?: boolean, pageSize }
+  apiValidator('query', ListRunsQuery), // { status?: 'failed' | 'dead' | 'queued', waiting?: boolean, abandoned?: boolean, pageSize }
   async (c) => {
-    const { status, waiting, pageSize } = c.req.valid('query');
+    const { status, waiting, abandoned, pageSize } = c.req.valid('query');
     const runs = await runtime.listEffectRuns({
       lifecycle: 'expenses',
       ...(status ? { status } : {}),
       ...(waiting ? { continuationPending: true } : {}),
+      // Given up on by the sweep: Continue by hand once the cause is fixed.
+      ...(abandoned ? { continuationAbandoned: true } : {}),
       limit: pageSize,
     });
     return c.json({ data: runs, meta: { total: runs.length } });
@@ -939,7 +941,7 @@ function FailedRuns() {
 }
 ```
 
-Retry, continue and cancel go through the record routes, behind the plugin's operator permission ([section 26](#26-permissions-on-the-record-routes)). A run marked `registered: false` names an effect this process does not know — usually a renamed effect: while it is queued, `retryRun()` refuses it with `INVALID_STATE`, as every queued run, and once it has failed, with `UNKNOWN_EFFECT`; register the old name again or cancel it. A `dead` run ended without recording an outcome on every attempt, typically because the process crashed in it: find out why before retrying. A retry grants a fresh budget of attempts and counts on from the ones before. A run whose `onFailure` already moved the record on is refused with `RUN_SETTLED`; recover through the record's transitions, or pass `{ force: true, reason }` to `client.retryRun()` when the failed attempts are known to have done nothing. A run whose `continuation` is set recorded its outcome but could not fire its `onSuccess` or `onFailure` yet, so the record has not moved. Most often a lifecycle call its `onTransition` or a hook made was refused — a parent not ready to move — and otherwise the running definition cannot fire it — a rolling deploy, or a bug in `set`. Such a run may be `succeeded`, so a page that lists only failed runs never shows it: list `continuationPending: true` as well, and offer Continue rather than Retry, which refuses a failed one with `RUN_SETTLED`. The sweep tries it again until it fires or the record moves on, and gives up after ten tries, marking it `abandonedAt`, which `continuationPending: true` no longer lists; `runtime.continueRun(id)` tries one at once, given up on or not, once the cause is fixed. It never runs the effect again.
+Retry, continue and cancel go through the record routes, behind the plugin's operator permission ([section 26](#26-permissions-on-the-record-routes)). A run marked `registered: false` names an effect this process does not know — usually a renamed effect: while it is queued, `retryRun()` refuses it with `INVALID_STATE`, as every queued run, and once it has failed, with `UNKNOWN_EFFECT`; register the old name again or cancel it. A `dead` run ended without recording an outcome on every attempt, typically because the process crashed in it: find out why before retrying. A retry grants a fresh budget of attempts and counts on from the ones before. A run whose `onFailure` already moved the record on is refused with `RUN_SETTLED`; recover through the record's transitions, or pass `{ force: true, reason }` to `client.retryRun()` when the failed attempts are known to have done nothing. A run whose `continuation` is set recorded its outcome but could not fire its `onSuccess` or `onFailure` yet, so the record has not moved. Most often a lifecycle call its `onTransition` or a hook made was refused — a parent not ready to move — and otherwise the running definition cannot fire it — a rolling deploy, or a bug in `set`. Such a run may be `succeeded`, so a page that lists only failed runs never shows it: list `continuationPending: true` and `continuationAbandoned: true` as well, and offer Continue rather than Retry, which refuses a failed one with `RUN_SETTLED`. The sweep tries it again until it fires or the record moves on, and gives up after ten refused tries — about four hours with the default backoff — marking it `abandonedAt`; `continuationAbandoned: true` lists those, and `prune()` never deletes them, since such a run may be the only record of a payment its report never followed. A parent not ready to move is seldom ready within those hours, so a continuation given up on usually needs a person: `runtime.continueRun(id)` tries one at once, given up on or not, once the cause is fixed. It never runs the effect again.
 
 ### 24. Duplicate requests and stale pages
 

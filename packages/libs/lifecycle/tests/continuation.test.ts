@@ -95,7 +95,7 @@ const tasks: Lifecycle<TaskTypes> = defineLifecycle<TaskTypes>({
   initial: 'todo',
   states: ['todo', 'working', { name: 'done', final: true }],
   transitions: {
-    start: { from: 'todo', to: 'working', effects: [work] },
+    start: { from: 'todo', to: 'working' },
     // Sent back to be started over: a new stay in `working` later.
     reset: { from: 'working', to: 'todo' },
     // The last task moves its order on, in the same commit.
@@ -110,7 +110,8 @@ const tasks: Lifecycle<TaskTypes> = defineLifecycle<TaskTypes>({
       },
     },
   },
-  onEnter: { done: [archive] },
+  // The work of each stay in `working`, whichever transition began it.
+  onEnter: { working: [work], done: [archive] },
 });
 
 /** Keeps every run it is handed, so a test runs each one when it chooses. */
@@ -267,6 +268,36 @@ describe('an effect’s continuation', () => {
       'completed orders.complete',
       'dispatch orders.notify',
     ]);
+  });
+
+  it('answers a parent that no longer exists, at continueRun(), as a failed precondition and not as a missing resource', async () => {
+    const context = setup();
+    context.store.patchRecord('tasks', context.task.id, { orderId: '999' });
+    const runId = await startWork(context);
+    await context.runtime.runEffect(runId);
+    expect(await context.store.findEffectRun(runId)).toMatchObject({
+      continuation: { transition: 'finish', code: 'RECORD_NOT_FOUND' },
+    });
+
+    const refused = await context.runtime.continueRun(runId).then(
+      () => undefined,
+      (error: unknown) => error as LifecycleError,
+    );
+    expect(refused).toMatchObject({ code: 'RECORD_NOT_FOUND' });
+    // The run and its record are there: what is missing is the parent the
+    // continuation's onTransition fires, which the operator cannot fix by
+    // asking again.
+    expect(
+      refused && lifecycleErrorFields(refused, { continuation: true }),
+    ).toEqual({
+      status: 'FAILED_PRECONDITION',
+      reason: 'RECORD_NOT_FOUND',
+      message: refused?.message,
+      metadata: { blockers: [], problems: [] },
+    });
+    expect(await context.store.findEffectRun(runId)).toMatchObject({
+      continuation: { code: 'RECORD_NOT_FOUND', attempts: 2 },
+    });
   });
 
   it('records the outcome without running the effect again when the continuation refuses its input', async () => {
@@ -641,7 +672,8 @@ describe('a continuation bound to the stay its run was queued for', () => {
       (error: unknown) => error as LifecycleError,
     );
     expect(refused).toMatchObject({ code: 'INVALID_STATE' });
-    expect(refused?.message).toContain('has moved on with "start"');
+    // Named by the transition that left the stay, not the latest one.
+    expect(refused?.message).toContain('has moved on with "reset"');
     expect(context.store.record('tasks', context.task.id)?.status).toBe(
       'working',
     );
