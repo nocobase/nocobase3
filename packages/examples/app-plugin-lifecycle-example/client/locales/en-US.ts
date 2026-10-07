@@ -238,6 +238,8 @@ const enUS = {
     cancel: 'Cancel',
     continue: 'Continue',
     continuationWaits: '{{transition}} waits: {{error}}',
+    continuationAbandoned:
+      '{{transition}} given up after {{attempts}} tries, until continued by hand: {{error}}',
     states: 'States',
     parameters: 'Parameters',
     transitions: 'Transition log',

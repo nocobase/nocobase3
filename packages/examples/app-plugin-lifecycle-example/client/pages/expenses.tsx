@@ -351,8 +351,14 @@ function ExpenseEditor({
       if (!submit) setNote(t('expenses.editor.saved'));
       await onSaved(id, '');
     } catch (cause) {
-      if (id && !record) await onSaved(id, errorMessage(cause, translate));
-      else setError(errorMessage(cause, translate));
+      const message = errorMessage(cause, translate);
+      if (id && !record) await onSaved(id, message);
+      else {
+        setError(message);
+        // Saved but not submitted: the edit advanced the report's version,
+        // so the page reads it again rather than keep the version it had.
+        if (id) await onSaved(id, message);
+      }
     } finally {
       setBusy(false);
     }

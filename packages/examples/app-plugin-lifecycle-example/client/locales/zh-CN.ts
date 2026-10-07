@@ -231,6 +231,8 @@ const zhCN: LifecycleExampleResource = {
     cancel: '取消',
     continue: '继续',
     continuationWaits: '{{transition}} 尚未执行：{{error}}',
+    continuationAbandoned:
+      '{{transition}} 已尝试 {{attempts}} 次，不再自动重试，可手动继续：{{error}}',
     states: '状态',
     parameters: '参数',
     transitions: '转换记录',

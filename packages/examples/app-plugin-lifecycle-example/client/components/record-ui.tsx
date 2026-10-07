@@ -331,7 +331,9 @@ export function LifecyclePanel({
                         </td>
                         <td className='py-1.5 pr-3 whitespace-nowrap'>
                           <div>{t(`runs.${run.status}`)}</div>
-                          {RETRYABLE.has(run.status) ? (
+                          {/* A failed run whose onFailure still waits is
+                              continued, not retried: a retry is refused. */}
+                          {RETRYABLE.has(run.status) && !run.continuation ? (
                             <Button
                               size='sm'
                               variant='outline'
@@ -353,7 +355,7 @@ export function LifecyclePanel({
                           {run.continuation ? (
                             // The outcome is recorded but what follows it
                             // could not fire yet; the sweep tries it again,
-                            // and this tries it now.
+                            // unless it gave up, and this tries it now.
                             <Button
                               size='sm'
                               variant='outline'
@@ -373,13 +375,21 @@ export function LifecyclePanel({
                           })}
                         </td>
                         <td className='min-w-40 py-1.5 break-words text-destructive'>
-                          {run.error ??
-                            (run.continuation
-                              ? t('lifecycle.continuationWaits', {
+                          {run.error ? <div>{run.error}</div> : null}
+                          {run.continuation ? (
+                            <div>
+                              {t(
+                                run.continuation.abandonedAt
+                                  ? 'lifecycle.continuationAbandoned'
+                                  : 'lifecycle.continuationWaits',
+                                {
                                   transition: run.continuation.transition,
                                   error: run.continuation.error,
-                                })
-                              : '')}
+                                  attempts: run.continuation.attempts,
+                                },
+                              )}
+                            </div>
+                          ) : null}
                         </td>
                       </tr>
                     ))}
