@@ -177,6 +177,11 @@ const writeDistWorkspace = () => {
       '  oracledb: true',
       '  esbuild: true',
       '  tesseract.js: false',
+      '  # dockerode (the release management Docker driver): ssh2 falls back to JavaScript without its optional native',
+      "  # binding, cpu-features is that binding's helper, and protobufjs's script only prints a notice.",
+      '  cpu-features: false',
+      '  protobufjs: false',
+      '  ssh2: false',
       '',
       '# Use msgpackr without its optional native accelerator or platform binary packages.',
       'ignoredOptionalDependencies:',
@@ -328,6 +333,8 @@ const dependencies = Object.fromEntries([
 
 const distPackage = {
   name: rootPackage.name,
+  // The server publishes both to the client, which shows them as the application's name and version.
+  ...(rootPackage.displayName ? { displayName: rootPackage.displayName } : {}),
   version: rootPackage.version ?? '0.0.0',
   private: true,
   type: 'module',

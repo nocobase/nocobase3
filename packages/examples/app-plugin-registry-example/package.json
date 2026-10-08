@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-registry-example",
   "displayName": "UI Registry Example App Plugin",
   "description": "Example plugin demonstrating runtime UI and application-owned Registry UI.",
-  "version": "0.0.2-beta.5",
+  "version": "0.0.2-beta.6",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -84,8 +84,7 @@
     "@base-ui/react": "catalog:",
     "@nocobase/app-client": "workspace:^",
     "class-variance-authority": "catalog:",
-    "clsx": "catalog:",
-    "react": "^19.0.0",
-    "tailwind-merge": "catalog:"
+    "cn": "catalog:",
+    "react": "^19.0.0"
   }
 }

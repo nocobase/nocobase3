@@ -6,7 +6,7 @@ You own everything in this directory. Add pages, API routes, database tables, an
 
 This is the examples template, based on `@nocobase/app-template-default`. It is a standalone application with its own database and configuration. Default provides a clean starting template with product capabilities and no example plugins.
 
-The homepage links to article management, repository queries, CRM, orders, file management, and routes. Additional registered plugins demonstrate services, queues, scheduled jobs, record lifecycles and the office processes built on them, realtime, CLI commands, and Skills. Plugin demonstrations remain in their own packages under `packages/examples/`; the article page demonstrates application-owned development.
+The homepage links to article management, repository queries, CRM, orders, file management, routes, and AI employee tasks. Additional registered plugins demonstrate services, queues, scheduled jobs, record lifecycles and the office processes built on them, realtime, CLI commands, and Skills. Plugin demonstrations remain in their own packages under `packages/examples/`; the article page demonstrates application-owned development.
 
 Examples retains Default’s Users and API Keys integration alongside its demonstrations. Users lists direct Authorization Permission Sets as application roles; authenticated default access remains separate. API Keys is configured in both authentication factories and mounted under Settings. Keep these product integrations aligned with Default.
 
@@ -41,6 +41,14 @@ The fallback table runs deliberately incomplete resources in a page-local `I18nR
 
 The regional comparison formats the same number, USD amount and fixed UTC timestamp for `zh-CN`, `en-US` and `de-DE` using `Intl`. It performs no currency conversion and does not add German to the application's language list. This example covers regional formatting; it does not demonstrate RTL layout.
 
+## AI employee example
+
+Every signed-in page carries the global AI employee entry: a trigger at the lower right opens the shared AI conversation as a side panel that pushes the page narrower on a wide screen and expands into a dialog. `client/components/ai-employee-entry.tsx` composes it around `AppLayout` from the application-owned `nocobase-ai` Registry item in `client/extensions/nocobase-ai`, and shows the trigger only once the current user has an AI employee. Settings and Dev keep their own layouts without it. Configure an LLM service under `ai.llmServices` in `config.yml` first, as the AI Employee plugin's README describes; without one the employees load but cannot answer.
+
+Open **AI employee tasks** from the homepage or sidebar (`/ai-employee-example`). `@nocobase/app-plugin-ai-employee-example` registers the AI employee Iris and the read-only tool `example-ticket-history` on the server, and declares the route; the page itself is the plugin's `tasks-page` Registry item in `client/extensions/nocobase-ai-employee-example-tasks-page`, which replaces the plugin's fallback through `extension.ts`. Select a ticket and hover **Ask Iris** to run **Analyze this ticket**, which is sent at once, or **Draft a reply**, which only fills the composer; **Triage the queue** starts a task from an ordinary button through `useGlobalAIChatController().triggerTask()` with every ticket as work context. Each task carries its user message, instructions for that run and the tools it may call, and Iris reads each ticket's internal history through the tool.
+
+Both directories under `client/extensions/` belong to the application. `pnpm registry materialize` in the source repository installs them, and upgrades are reviewed with a three-way merge rather than copied over. `tests/components/ai-employee-entry.test.tsx` and `tests/components/ai-employee-tasks-page.test.tsx` cover the entry, the tasks and the requests they send, and `tests/logic/ai-employee-example.test.ts` starts the application and reads the registered employee and tool back.
+
 ## Maintain this template
 
 Keep framework files aligned with Default and Hub: the `package.json` scripts that call `nocobase`, runtime composition mechanisms, the `cli/plugins.ts` composition root, shell, theme and development guidance. Keep the examples homepage, article module, example plugin choices and sample data here. Existing Default installations retain their historical data; follow the [upgrade migration rules](.agents/skills/nocobase-app-upgrade/references/edge-cases.md#migrations) when removing example registrations.
@@ -55,7 +63,7 @@ pnpm nocobase config check
 pnpm dev
 ```
 
-`pnpm nocobase config init` writes `config.yml` from `config.example.yml`, keeping its comments and filling in `auth.secret` and `session.secret`. It is only needed once; `pnpm dev` and `pnpm start` refuse to run until it has been. `pnpm nocobase config check` loads the configuration the way a start would, connects to any database other than SQLite, and reports what would stop the application from starting or quietly misbehave.
+`pnpm nocobase config init` writes `config.yml` from `config.example.yml`, keeping its comments and generating the first key of `secrets.keys`, which encrypts what the application stores as a secret and from which the sign-in and session keys are derived. It is only needed once; `pnpm dev` and `pnpm start` refuse to run until it has been. `pnpm nocobase config check` loads the configuration the way a start would, connects to any database other than SQLite, and reports what would stop the application from starting or quietly misbehave.
 
 `pnpm dev` starts the API server and the Vite client together, picks free ports if the defaults are taken, and prints the URL to open. Use the printed URL rather than assuming a port.
 
@@ -96,14 +104,16 @@ APP_SERVER_PORT=13399 PROXY_TARGET_URL=http://127.0.0.1:13000/main pnpm dev
 
 ### Review your configuration
 
-`pnpm nocobase config init` wrote `config.yml` from `config.example.yml`, with `auth.secret` and `session.secret` filled in. It gets you running on SQLite; adjust it for your situation:
+`pnpm nocobase config init` wrote `config.yml` from `config.example.yml`, with a generated `secrets.keys` key filled in. It gets you running on SQLite; adjust it for your situation:
 
 - **Database.** SQLite needs no server and works as it is. Another one means installing its driver first — `pnpm add @nocobase/db-postgres`, and `pnpm remove @nocobase/db-sqlite` if nothing else uses SQLite — then `pnpm nocobase config init --dialect postgres --force` to rewrite the connection, and `pnpm nocobase config set` for its settings, with `--from-env` for the password so it stays out of the shell history. Which dialects the application can run on is decided by what it depends on, not by this file: a driver it does not have cannot be introduced from here.
 - **Change a value** with `pnpm nocobase config set key=value`, which keeps the comments and refuses a section the application does not know. Values that differ per machine — `APP_SERVER_PORT`, `APP_SERVER_HOST`, `APP_PUBLIC_ORIGIN` — are better set in the environment, which is applied over this file; `config set` says when an environment variable overrides what it wrote.
 - **Where the application is served.** `APP_BASE_PATH` is the public mount path, `/main` by default, so the development URL looks like `http://127.0.0.1:13000/main/`. `APP_SERVER_PORT` and `APP_SERVER_HOST` change what the server binds to.
 - **Anything a feature you enable requires** — mail delivery, IM webhooks, storage. Every section is already here, commented out where it is optional.
 
-`config.yml` is gitignored because it holds your `auth.secret`. Deploy it through your secret management rather than committing it.
+`config.yml` is gitignored because it holds your `secrets.keys`. Deploy it through your secret management rather than committing it.
+
+Keep the key: what was encrypted under it cannot be read without it. To rotate it, put a new key first in `secrets.keys` with a higher version and keep the old one after it, run `pnpm nocobase secrets rotate` (`pnpm nocobase secrets status` shows what is left to reseal), then remove the old key. Changing the current key signs everyone out.
 
 To run against a production build instead:
 
@@ -120,7 +130,7 @@ client/                  Browser application
 ├── pages/               Your page components
 ├── components/          Your components
 │   └── ui/              shadcn/ui primitives
-├── layouts/             App, Settings and Dev layouts
+├── layouts/             App and Settings layouts
 │   └── components/      Layout containers, navigation, branding and account controls
 ├── routing/             Route rendering, access checks, loading and error UI
 ├── locales/             Your translated strings
@@ -155,8 +165,8 @@ database/
 └── externalCrm/
     └── metadata/        <name>.json per Collection: the external CRM's hand-written metadata
 
-tests/                   Unit and integration tests
-e2e/                     Browser tests needing a real server
+tests/                   Unit and integration tests, run by Vitest
+└── playwright/          Browser tests against a running application, run by Playwright
 config.yml              Your configuration, written by pnpm nocobase config init; gitignored
 config.example.yml       Documented configuration template
 ```
@@ -425,6 +435,28 @@ For example, `pnpm build --target linux-x64 --node-version 24` produces:
 
 If your application has no native modules — `pg`, `mysql2`, and `tedious` are all plain JavaScript — no platform-specific binaries need retargeting. The build still records the selected target, and the deployment runtime must satisfy `engines.node`.
 
+#### Serving static assets from a CDN
+
+Set `CDN_BASE_URL` when building to use a CDN for Vite-generated asset URLs:
+
+```bash
+CDN_BASE_URL=https://cdn.example.com/my-app/v1/ pnpm build
+```
+
+Use a full HTTPS URL ending in `/`. The build reads the process environment first, then `.env.local`, then `.env`. Unset, empty or whitespace-only values keep the default relative base (`./`). Development ignores this variable. This is a build parameter, not a `config.yml` option or a runtime variable listed by `pnpm nocobase config variables` or `dist/variables.json`; changing it requires rebuilding.
+
+Upload the static files in `dist/client/` to the configured CDN prefix, preserving their paths. For example, `dist/client/assets/index-abc.js` must be available at `https://cdn.example.com/my-app/v1/assets/index-abc.js`. Configure the CDN to allow cross-origin module and font requests from the application origin. A release-specific prefix keeps different builds separate; retain assets needed by clients still running an older release.
+
+Keep the complete `dist/client/` tree on the application server, and serve the application's HTML through it so runtime configuration is injected. The CDN setting changes Vite-processed HTML, JavaScript and CSS resource URLs, and static files addressed with `resolveAssetUrl`, including this template's logos:
+
+```tsx
+import { resolveAssetUrl } from '@nocobase/app-client';
+
+<img src={resolveAssetUrl('/assets/logo-mark.png')} alt='Logo' />;
+```
+
+Pass the file's path relative to `dist/client/`, with or without a leading slash. `resolveAssetUrl` reads `import.meta.env.BASE_URL`, which Vite replaces with the configured `base` during the application build; the browser does not read `CDN_BASE_URL` from the server environment. With an absolute HTTP(S) CDN base it returns the CDN URL, otherwise it falls back to `resolveAppUrl` and the runtime `APP_BASE_PATH`. Already resolved URLs are preserved. Use `resolveAppUrl` for API URLs, page links and runtime-generated resources such as workflow artifacts; the CDN must actually contain a file before it can be served there.
+
 #### Packing the build
 
 `pnpm build --tar` writes `storage/exports/dist.tar.gz`, the artifact you upload to a Hub to deploy this application.
@@ -450,6 +482,14 @@ pnpm build --target linux-x64 --tar
 ```
 
 #### Building a Docker image
+
+For a source build using a CDN, pass its URL as a build argument:
+
+```bash
+docker build --build-arg CDN_BASE_URL=https://cdn.example.com/my-app/v1/ -t my-app .
+```
+
+With `DIST=prebuilt`, set `CDN_BASE_URL` on the earlier `pnpm build` command instead: the image packages the existing client files unchanged. Setting `CDN_BASE_URL` on a prebuilt image build or with `docker run -e` cannot change their compiled URLs. The source build does not read the host's `.env`; use the build argument.
 
 `Dockerfile` builds this application from its sources into a production image. From the project root:
 
@@ -522,26 +562,22 @@ Rebuild with a matching `--target` and `--node-version`. ABI 115 is Node 20, 127
 
 ## Configuration
 
-`server/config/` and `client/config/` contain editable TypeScript defaults. `config.yml` holds environment-specific overrides, written by `pnpm nocobase config init` and yours to edit from there. It is gitignored because it carries your `auth.secret`; deploy it through your secret management rather than committing it. It is generated from `config.example.yml`, which is kept beside it as the reference for every option.
+`server/config/` and `client/config/` contain editable TypeScript defaults. `config.yml` holds environment-specific overrides, written by `pnpm nocobase config init` and yours to edit from there. It is gitignored because it carries your `secrets.keys`; deploy it through your secret management rather than committing it. It is generated from `config.example.yml`, which is kept beside it as the reference for every option.
 
 Two settings decide where the application is reachable:
 
 - `APP_BASE_PATH` is the public path the application is mounted at, `/main` by default. The browser API base URL is derived from it as `<APP_BASE_PATH>/api`.
 - `APP_PUBLIC_ORIGIN` is the external origin used to build callback and redirect URLs. Set it in production. It must not repeat the base path — the runtime joins the two.
 
-Configuration is resolved from the file, environment variables, and defaults in that order of precedence.
+An environment variable a section declares takes precedence over the file, and the file over the code defaults. `pnpm nocobase config env` lists the variables and whether each is set; `pnpm nocobase config variables` describes each one — what it sets, whether it is a secret, whether a deployment must supply it — and `pnpm build` writes that description to `dist/variables.json`. `DB_*` set the main database connection, `INITIAL_ADMIN_USERNAME`, `INITIAL_ADMIN_EMAIL` and `INITIAL_ADMIN_PASSWORD` the first administrator, and `APP_SAMPLE_DATA=true` loads the sample data when the database is first installed. `${NAME}` in `config.yml` is not expanded.
 
 ## Testing
 
-Tests live in `tests/`, never beside the source they cover. Put logic and integration tests under `tests/logic/` and component tests under `tests/components/`. Tests needing a real server, real authentication, or a real database belong in `e2e/`.
-
-### AI server end-to-end testing
-
-`pnpm test:e2e` discovers the source workspace’s optional AI server test and skips it unless `AI_LOCAL_E2E=1`. Build first and use a dedicated, installed test application database with a configured LLM service and an API key belonging to a test user. Set `AI_E2E_LLM_SERVICE`, `AI_E2E_MODEL`, and `AI_E2E_API_KEY`; `AI_E2E_EMPLOYEE` defaults to `viz`. The test starts the compiled local server, makes a real model request, and removes its conversation afterward. Never point it at production data. Generated applications ship the Playwright configuration but no template tests, so an empty run succeeds.
+Tests live in `tests/`, never beside the source they cover. Put logic and integration tests under `tests/logic/` and component tests under `tests/components/`. Browser tests belong in `tests/playwright/`, which Vitest skips. Playwright does not start the application: start it first (`pnpm dev`, or `pnpm build` and then the built application), then run `pnpm test:e2e`; each test reads the application URL, including its base path, from `APP_URL`. Tests that only need a real server, real authentication, or a real database run under Vitest with `createAppTest()` from `@nocobase/app-testing/server`.
 
 ### Notification testing
 
-After signing in with the `notification:test` `send` permission, use the notification logs settings page to send a real message through the durable Notification Manager. Examples enables the built-in database-backed In-app channel by default. Choose In-app in **Send test notification**, enter a title and message, and leave the recipient user ID blank to send to yourself, or specify another user's ID. Read the message in **Notifications** (`/notifications`). An explicit `notification.channels` setting in `config.yml` overrides the defaults; include the In-app channel there if you configure other channels.
+After signing in with the `notification:test` `send` permission, use the notification logs settings page to send a real message through the durable Notification Manager. Examples enables the built-in database-backed In-app channel by default. Choose In-app in **Send test notification**, enter a title and message, and leave the recipient user ID blank to send to yourself, or specify another user's ID. Read the message in the **Inbox** (`/inbox`), which the header's inbox button opens. An explicit `notification.channels` setting in `config.yml` overrides the defaults; include the In-app channel there if you configure other channels.
 
 The form is generated from safe Channel test metadata; Email tests require an address and IM tests use the configured logical target. The button remains visible so configuration problems are discoverable. The server enforces the `notification:test` `send` permission only when the message is submitted.
 
@@ -574,14 +610,16 @@ Open **Workflow examples** on the homepage, or **Settings → Automation → Wor
 
 | Workflow                        | Sample input                                    | Expected result                                                                    |
 | ------------------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Example: Quotation routing      | `quotationId: Q-100`, `amountCents: 50000`      | Standard branch, followed by the shared summary node.                              |
-| Example: Quotation routing      | `quotationId: Q-100`, `amountCents: 150000`     | Manual follow-up classification. This is not a human approval or waiting step.     |
+| Example: Quotation routing      | `quotationId: Q-100`, `amountCents: 50000`      | Standard branch, then a review task; the shared summary runs after submission.     |
+| Example: Quotation routing      | `quotationId: Q-100`, `amountCents: 150000`     | Manual follow-up classification, then a review task.                               |
 | Example: Analytics daily report | `date: 2026-09-08`                              | Read four seeded metric rows, calculate totals, and save one report for that date. |
 | Example: Analytics daily report | `date: 2000-01-01`                              | Successful early termination without creating a report.                            |
 | Example: Failure diagnostics    | `reference: DIAG-100`, `simulateFailure: true`  | The execute node fails deliberately; the finish node does not run.                 |
 | Example: Failure diagnostics    | `reference: DIAG-100`, `simulateFailure: false` | A new run completes all three steps.                                               |
 
-Quotation routing exposes an administrator parameter, `reviewThresholdCents`, whose default is `100000`. Amounts at or above the threshold take the follow-up branch. The quotation and diagnostic examples only produce workflow execution evidence, with no external side effects.
+Quotation routing exposes an administrator parameter, `reviewThresholdCents`, whose default is `100000`. Amounts at or above the threshold take the follow-up branch. Each run creates one `quotationReviewTasks` row in the application's default database. The diagnostic example has no business writes.
+
+To test the quotation wait, run either sample input and inspect the pending `awaitRoutingConfirmation` node. Then open **Workflow → Waiting tasks** in the application menu, select the new task, choose Approved or Rejected, optionally add a comment, and submit. The task page sends the signed-in reviewer identity with the result through the application's authenticated API. The task detail polls the persisted resume request until the decision is applied or rejected, and offers Refresh to check again. A recorded decision is not yet applied: rejected requests display their reason. The summary node reads `nodeResults.awaitRoutingConfirmation`, including `taskId`, `reviewerId`, `confirmedBy`, `decision`, and `comment`; refresh the workflow run detail to inspect this downstream result. Applied means the wait consumed the decision, not that the whole workflow succeeded. Historical submissions without a request id show that their outcome is unavailable. A task created before its Wait node becomes ready cannot be submitted until that node is pending; a run that has ended leaves the task visible but unavailable.
 
 The report reads `analytics.dailyMetrics` and upserts `exampleDailyReports` in the application's default database by its unique date. With unchanged seed data, `2026-09-08` produces 96,000 impressions, 3,120 clicks, 168 conversions, 93,000 spend cents, 672,000 revenue cents, and 579,000 profit cents. The `saveReport` node output contains the saved report. Repeating the workflow refreshes that date's report instead of inserting duplicates. Reading analytics and writing the report are separate operations, not a cross-database transaction.
 

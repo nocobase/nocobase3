@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-database-explorer",
   "displayName": "Database Explorer",
   "description": "Read-only browsing of an application's database connections, collections, and fields.",
-  "version": "1.0.0-beta.10",
+  "version": "1.0.0-beta.11",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -86,10 +86,10 @@
     "@nocobase/app-server": "workspace:^",
     "@nocobase/db": "workspace:^",
     "@nocobase/i18n": "workspace:^",
+    "cn": "catalog:",
     "lucide-react": "catalog:",
     "react": "^19.0.0",
-    "react-router": "catalog:",
-    "tailwind-merge": "catalog:"
+    "react-router": "catalog:"
   },
   "devDependencies": {
     "@nocobase/app-testing": "workspace:*",

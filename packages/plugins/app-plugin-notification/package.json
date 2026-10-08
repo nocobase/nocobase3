@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-notification",
   "displayName": "Notification App Plugin",
   "description": "Provides the application notification runtime, storage, delivery, and logs.",
-  "version": "1.0.0-beta.22",
+  "version": "1.0.0-beta.23",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -112,10 +112,10 @@
     "@nocobase/i18n": "workspace:^",
     "@nocobase/jobs": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
+    "cn": "catalog:",
     "lucide-react": "catalog:",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "tailwind-merge": "catalog:"
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
     "@nocobase/app-testing": "workspace:*",

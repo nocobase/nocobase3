@@ -1,7 +1,7 @@
 {
   "name": "@nocobase/app-template-default",
   "displayName": "Default Template",
-  "version": "1.0.0-beta.55",
+  "version": "1.0.0-beta.56",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -10,7 +10,7 @@
   "packageManager": "pnpm@11.7.0",
   "nocobase": {
     "templateKind": "app",
-    "defaultTemplateVersion": "1.0.0-beta.55"
+    "defaultTemplateVersion": "1.0.0-beta.56"
   },
   "devDependencies": {
     "@ai-sdk/react": "2.0.0",
@@ -56,8 +56,7 @@
     "@vitest/coverage-v8": "catalog:",
     "ai": "5.0.0",
     "class-variance-authority": "catalog:",
-    "clsx": "catalog:",
-    "cn": "^0.4.0",
+    "cn": "catalog:",
     "dayjs": "^1.10.7",
     "dingtalk-jsapi": "3.1.1",
     "echarts": "^5.5.0",
@@ -80,7 +79,6 @@
     "react-router": "catalog:",
     "remark-gfm": "^4.0.1",
     "shadcn": "catalog:",
-    "tailwind-merge": "catalog:",
     "tailwindcss": "catalog:",
     "tsc-alias": "^1.9.2",
     "tsx": "catalog:",
@@ -92,6 +90,9 @@
   },
   "files": [
     ".prettierignore",
+    ".mcp.json",
+    ".cursor/mcp.json",
+    ".vscode/mcp.json",
     "cli",
     "client",
     "server",

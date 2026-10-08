@@ -13,7 +13,7 @@ export {
   type AppClientRootProps,
 } from './app-client.js';
 export { ClientApplicationContext } from './application-context.js';
-export { resolveAppBase, resolveAppUrl } from './client.js';
+export { resolveAppBase, resolveAppUrl, resolveAssetUrl } from './client.js';
 export {
   ApiClientError,
   buildFindManyOptions,
@@ -28,6 +28,20 @@ export {
   type RemoteRepositoryQuery,
 } from '@nocobase/api-client';
 export { useApiClient, useClientApplication, useService } from './hooks.js';
+export {
+  PageBreadcrumbProvider,
+  usePageBreadcrumb,
+  usePageBreadcrumbLevels,
+  type PageBreadcrumbLevel,
+} from './page-breadcrumb.js';
+export {
+  UnsavedChangesContext,
+  useGuardedClose,
+  useUnsavedChanges,
+  useUnsavedChangesGuard,
+  type UnsavedChangesGuard,
+  type UnsavedChangesScope,
+} from './unsaved-changes.js';
 export {
   resolveToaster,
   toasterToken,

@@ -1,6 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import { createRequire } from 'node:module';
-import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { authenticationToken } from '@nocobase/app-plugin-authentication/server';
 import { authorizationToken } from '@nocobase/app-plugin-authorization';
@@ -16,8 +14,10 @@ import {
   vi,
 } from 'vitest';
 
+import { ConversationEventHandler } from '../../server/agent/conversation/event-handler.js';
 import { aiEmployeeApiRoutes } from '../../server/route/plugin.js';
 import type { Actor } from '../../server/types.js';
+import { authorizationMigrations } from '../support/migrations.js';
 import { createTestAIEmployeeFixture } from './test-context.js';
 
 const root: Actor = { id: 'root-user', roles: ['root'], isRoot: true };
@@ -55,36 +55,32 @@ describe('app-wide conversation center', async () => {
       collection.boolean('allowNewAiEmployee').nullable();
       collection.primary('name');
     });
+    // One run, so the migrations interleave by name as an application orders them: the authorization plugin's
+    // Permission Set table exists before this plugin rewrites its grants.
     await createMigrator({
       database: deps.database,
-      packageName: '@nocobase/app-plugin-ai-employee',
-      directory: fileURLToPath(
-        new URL('../../database/migrations', import.meta.url),
-      ),
-    }).latest();
-    await createMigrator({
-      database: deps.database,
-      packageName: '@nocobase/app-plugin-authorization',
-      directory: join(
-        dirname(
-          createRequire(import.meta.url).resolve(
-            '@nocobase/app-plugin-authorization/package.json',
+      sources: [
+        ...authorizationMigrations,
+        {
+          packageName: '@nocobase/app-plugin-ai-employee',
+          directory: fileURLToPath(
+            new URL('../../database/migrations', import.meta.url),
           ),
-        ),
-        'database/migrations',
-      ),
+        },
+      ],
     }).latest();
-    for (const [key, page, userId] of [
-      ['system-administrator', '*', String(root.id)],
-      ['ai-settings-reader', 'ai.settings', 'settings-reader'],
-      ['other-settings-reader', 'users.settings', 'other-reader'],
+    // The conversation center reads `ai.conversations`; another AI item, such as usage, is not enough.
+    for (const [key, item, userId] of [
+      ['system-administrator', 'ai.conversations', String(root.id)],
+      ['ai-settings-reader', 'ai.conversations', 'settings-reader'],
+      ['other-settings-reader', 'ai.usage', 'other-reader'],
     ]) {
       await deps.authorization.permissionSets.create({
         key,
         grants: [
           {
-            resource: { type: 'page', id: page },
-            actions: [{ action: 'access' }],
+            resource: { type: 'settings', id: item },
+            actions: [{ action: 'read' }],
           },
         ],
       });
@@ -970,7 +966,8 @@ describe('app-wide conversation center', async () => {
         await expectError(
           await run(sessions.root, 'send', {
             aiEmployee: 'ada',
-            messages: [userMessage],
+            // The chat sends its own `key` with the message, which is not a stored column.
+            messages: [{ ...userMessage, key: randomUUID() }],
           }),
           429,
           {
@@ -987,6 +984,47 @@ describe('app-wide conversation center', async () => {
         await expectError(await run(sessions.root, 'resend', {}), 429, {
           reason: 'CONVERSATION_LIMIT_REACHED',
         });
+      } finally {
+        await repositories.aiConversations.destroy({
+          filter: { sessionId: busy },
+        });
+        await repositories.aiMessages.destroy({
+          filter: { sessionId: sessions.root },
+        });
+      }
+    });
+
+    it('counts a run towards the limit from when it started, not from when its conversation was created', async () => {
+      const busy = Array.from({ length: 3 }, () => randomUUID());
+      const anHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+      await repositories.aiConversations.create({
+        values: busy.map((sessionId) => ({
+          sessionId,
+          userId: root.id,
+          aiEmployeeUsername: 'ada',
+          title: 'Old',
+          category: 'chat',
+          from: 'main-agent',
+          createdAt: anHourAgo,
+          updatedAt: anHourAgo,
+        })),
+      });
+      try {
+        for (const sessionId of busy) {
+          await new ConversationEventHandler(
+            repositories.aiConversations,
+            sessionId,
+          ).beforeExecution('streaming');
+        }
+        sessionUser = { id: root.id };
+        await expectError(
+          await run(sessions.root, 'send', {
+            aiEmployee: 'ada',
+            messages: [userMessage],
+          }),
+          429,
+          { reason: 'CONVERSATION_LIMIT_REACHED' },
+        );
       } finally {
         await repositories.aiConversations.destroy({
           filter: { sessionId: busy },

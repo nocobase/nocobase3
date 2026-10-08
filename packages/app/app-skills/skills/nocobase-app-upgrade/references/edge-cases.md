@@ -112,6 +112,8 @@ Older template releases also shipped a committed `skills/` directory. A target r
 
 Older releases may include `MIGRATION.md`. Treat it as historical context and verify each suggestion against BASE → TARGET and the project's state; never remove a capability that TARGET still provides solely because an old note says to. When TARGET removes the document, delete an unchanged template copy, but preserve or relocate the user's own operational notes before removing a customized copy.
 
+`.mcp.json`, `.cursor/mcp.json` and `.vscode/mcp.json` ship with the template and configure the shadcn MCP server for Claude Code, Cursor and VS Code. The user may have added servers of their own, or created one of these files before the template shipped it. Merge them as JSON objects, never by overwriting: take the template's entry under `mcpServers` (`servers` in `.vscode/mcp.json`) where the user's entry by that name is unchanged or missing, keep every other server and setting the user has, and ask before replacing a `shadcn` entry they changed.
+
 `.agents/skills/` is generated and gitignored. `pnpm nocobase skills sync` replaces each synchronized package-owned Skill directory wholesale, so never merge into or edit it. Local custom guidance belongs in committed application-owned files outside this generated directory.
 
 `config.yml`, optional generated `.env`, `.gitignore`, `.npmrc`, and `pnpm-workspace.yaml` were written by the generator or by `pnpm nocobase config init` and appear in no diff at all.
@@ -127,12 +129,16 @@ A release whose `nocobase-db` Skill documents `database/<connection>/metadata/` 
 
 An application without an external connection only needs step 4.
 
+### Browser tests moved from `e2e/` to `tests/playwright/`
+
+A release whose Default or Examples template has `testDir: './tests/playwright'` in `playwright.config.ts` keeps Playwright tests in `tests/playwright/`; earlier releases kept them in `e2e/`. Move the application's own files from `e2e/` to `tests/playwright/` with `git mv`, then take the template's `playwright.config.ts`, add `exclude: ['tests/playwright/**']` to the `test` section of `vitest.config.ts` so Vitest does not run them, and replace `e2e/**/*.ts` with `tests/playwright/**/*.ts` in `tsconfig.node.json`. Update any `globalSetup` path or script that names `e2e/`. Earlier templates shipped no tests in `e2e/`, so everything there belongs to the application. Run `pnpm exec vitest run` and `pnpm test:e2e` afterward to confirm each runner picks up only its own files.
+
 ## Where the user's code lives
 
 ```text
 Rarely touched by the template — a change landing here deserves a careful read
   client/pages/  client/components/  client/locales/  client/routes.ts
-  server/routes/  server/providers/  database/  cli/commands/  tests/  e2e/
+  server/routes/  server/providers/  database/  cli/commands/  tests/
 
 Template structure — where most of the delta lands
   client/routing/  client/layouts/  client/theme/
@@ -143,6 +149,7 @@ Template structure — where most of the delta lands
 Both sides edit these — the hardest decisions
   client/plugins.ts  server/plugins.ts  cli/plugins.ts
   package.json  config.example.yml  optional .env.example  AGENTS.md  CLAUDE.md
+  .mcp.json  .cursor/mcp.json  .vscode/mcp.json
 
 Legacy application-owned guidance, when present
   skills/
@@ -183,26 +190,25 @@ After the Finish step, run `pnpm typecheck` and `pnpm build`, then show one toas
 
 ## Client runtime configuration and relocatable builds
 
-The release that removes `@nocobase/app-portal-sdk` also changes how the client finds its mount path. The server renders the client configuration into `index.html` as `<script id="nocobase-runtime-config" type="application/json">`, and the client reads `app.basePath`, `api.baseURL` and the public configuration from it; nothing is put on `window`, and Vite injects no environment values. A build uses a relative asset base, so one `dist/` runs at whatever `APP_BASE_PATH` the server starts with. An application that keeps the earlier template files fails at build time on imports that no longer exist, or at run time with `The page carries no app.basePath in its client configuration`.
+The release that removes `@nocobase/app-portal-sdk` also changes how the client finds its mount path. The server renders the client configuration into `index.html` as `<script id="nocobase-runtime-config" type="application/json">`, and the client reads `app.basePath`, `api.baseURL` and the public configuration from it; nothing is put on `window`, and Vite does not supply these runtime values. A build uses a relative asset base by default, or an absolute CDN prefix when built with `CDN_BASE_URL`; either way, one `dist/` runs at whatever `APP_BASE_PATH` the server starts with. The CDN prefix is fixed in the build and changing it requires rebuilding. An application that keeps the earlier template files fails at build time on imports that no longer exist, or at run time with `The page carries no app.basePath in its client configuration`.
 
 Make these changes together, before the [Finish step](../SKILL.md#8-finish) installs dependencies:
 
-1. Remove the package with `pnpm nocobase package remove @nocobase/app-portal-sdk`. Then `grep -rn "app-portal-sdk\|getPortalBase\|assetUrl\|__PORTAL_\|window\.__nocobase\|import\.meta\.env\." client/ tests/` lists what still depends on the old runtime: the mount path comes from `useClientApplication().config.get('app.basePath')`, API requests go through `useApiClient()`, the application name and version from `config.public.get('app.displayName')` and `'app.version'`, and a static asset from a plain relative import or `import.meta.url`. `import.meta.env.PROD`, `DEV` and `MODE` stay; any other `import.meta.env` read is now a lint error.
-2. Take the target's `vite.config.ts`: it calls `createAppViteConfig` from `@nocobase/dev-config/vite/app` and adds `createDevClientConfigPlugin` from `@nocobase/app-cli/dev/proxy`, and it has no `base`, `define` or `envPrefix`. Carry the application's own aliases and plugins across; do not reintroduce a `base` or a `define` for a runtime value.
+1. Remove the package with `pnpm nocobase package remove @nocobase/app-portal-sdk`. Then `grep -rn "app-portal-sdk\|getPortalBase\|assetUrl\|__PORTAL_\|window\.__nocobase\|import\.meta\.env\." client/ tests/` lists what still depends on the old runtime: the mount path comes from `useClientApplication().config.get('app.basePath')`, API requests go through `useApiClient()`, and the application name and version from `config.public.get('app.displayName')` and `'app.version'`. Import bundled static assets, or use `resolveAssetUrl('/assets/…')` from `@nocobase/app-client` for files shipped under the client output root; it uses the build's CDN base when configured. API/page URLs and runtime-generated files use `resolveAppUrl`. `import.meta.env.PROD`, `DEV`, `MODE` and the build-time `BASE_URL` are allowed; other `import.meta.env` reads are lint errors. Prefer `resolveAssetUrl` over reading `BASE_URL` in business code.
+2. Take the target's `vite.config.ts`: it calls `createAppViteConfig` from `@nocobase/dev-config/vite/app` and adds `createDevClientConfigPlugin` from `@nocobase/app-cli/dev/proxy`. Preserve its build-only `base: env.CDN_BASE_URL?.trim() || './'` under `command === 'build'`; development keeps the preset's mount-path base. Carry the application's own aliases and plugins across. Do not set the production `base` from `APP_BASE_PATH`, or add `define` or `envPrefix` to inject runtime configuration into the bundle.
 3. In `eslint.config.js`, `createPortalConfig` is `createApplicationConfig`. In `client/runtime.ts`, drop `basename` from `defineAppRuntime`; the runtime reads it from the page. `client/lib/utils.ts` keeps only `cn`, and `client/vite-env.d.ts` loses the `__PORTAL_*` declarations.
 4. In `server/config/spa.ts`, remove the `runtime` block (`storagePrefix`, `storageType`, `shareToken`); `SpaConfig` no longer has it.
 5. Take the target's `tests/setup/client-config.ts` and its `setupFiles` entry in `vitest.config.ts`. A client test that renders without a configuration block in the page now throws, so a test with its own expectations about the mount path renders one itself, as the target's `client-theme.test.tsx` does.
-6. Take the target's `Dockerfile`. `APP_BASE_PATH` is no longer a build argument; the image defaults to `/main`, and `docker run -e APP_BASE_PATH=<path>` mounts it elsewhere. Remove `--build-arg APP_BASE_PATH` and `APP_BASE_PATH=… pnpm build` from the application's own CI and deployment scripts, and pass the path where the server runs instead: `app.env` or `--base-path` for app-installer, the container environment for Docker. A Hub mounts each application at `/<appId>` whatever it was built for.
+6. Take the target's `Dockerfile`. `APP_BASE_PATH` is no longer a build argument; the image defaults to `/main`, and `docker run -e APP_BASE_PATH=<path>` mounts it elsewhere. Remove `--build-arg APP_BASE_PATH` and `APP_BASE_PATH=… pnpm build` from the application's own CI and deployment scripts, and pass the path where the server runs instead: `app.env` or `--base-path` for app-installer, the container environment for Docker. Preserve the source build's `ARG CDN_BASE_URL` and any `--build-arg CDN_BASE_URL=…` or `CDN_BASE_URL=… pnpm build` in those scripts: the CDN asset prefix is still a build-time setting. A Hub mounts each application at `/<appId>` whatever it was built for.
 
 After the Finish step, run `pnpm typecheck`, `pnpm test` and `pnpm build`, then `pnpm dev` and open a deep route directly and a page that loads its own styles. A build made before this release is tied to the path it was built for, so rebuild before deploying: app-installer and Hub refuse such an archive at another path with `BASE_PATH_MISMATCH`. An upgrade done by hand, outside this Skill, needs the same six steps.
 
-## Components the templates moved to the UI Library
+## Components the templates stopped shipping
 
-The release that stops shipping `DataTable` and `DatePicker` shows their files as `Only in BASE`: `client/components/data-table.tsx` with `data-table-column-header.tsx`, `data-table-pagination.tsx` and `data-table-view-options.tsx`, and `client/components/date-picker.tsx`. The `calendar` primitive goes with them, as do `select` and `table` in Default and Hub, and `@tanstack/react-table`, `date-fns` and `react-day-picker` leave `devDependencies`; Hub keeps `react-day-picker`, which `@nocobase/app-plugin-hub` requires as a peer. Nothing replaced them in the template: they are NocoBase UI Library items now, `@nocobase/data-table` and `@nocobase/date-picker`, which an application adds when a page needs one.
+The release that stops shipping `DataTable` and `DatePicker` shows their files as `Only in BASE`: `client/components/data-table.tsx` with `data-table-column-header.tsx`, `data-table-pagination.tsx` and `data-table-view-options.tsx`, and `client/components/date-picker.tsx`. The `calendar` primitive goes with them, as do `select` and `table` in Default and Hub, and `@tanstack/react-table`, `date-fns` and `react-day-picker` leave `devDependencies`; Hub keeps `react-day-picker`, which `@nocobase/app-plugin-hub` requires as a peer. Nothing replaced them in the template: a `DatePicker` or `DataTable` the application uses stays its own code, and a new one is composed from the `calendar` and `popover` or `table` primitives.
 
 1. Search the application for imports of each file and primitive and of each package before removing any of them, as [step 5](../SKILL.md#5-check-what-the-diff-cannot-show) describes. A file something still imports stays as application-owned code, together with the primitives and packages it needs; nothing about it has to change. Remove only what nothing imports.
-2. An application that wants the library's version of a table it already uses first compares its four `data-table*.tsx` files with BASE: a copy the application changed holds changes the item does not have, to carry over afterwards. Then it deletes them and runs `yes n | pnpm exec shadcn add @nocobase/data-table`; while `data-table.tsx` exists, `@/components/data-table` resolves to it rather than to the item's `data-table/index.tsx`. Last, it rewrites the companion imports to `@/components/data-table/column-header`, `@/components/data-table/pagination` and `@/components/data-table/view-options`.
-3. Keep the `dataTable` and `datePicker` keys in the locale files; the target template keeps them for the items.
+2. Keep the `dataTable` and `datePicker` keys in the locale files; the target template keeps them.
 
 ## Hub publishing commands
 

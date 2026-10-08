@@ -1,6 +1,109 @@
 import type { LocaleResource } from '@nocobase/i18n';
+import deviceApprovalEnUS from '@/extensions/nocobase-device-approval/locales/en-US';
+import inboxEnUS from '@/extensions/nocobase-inbox/locales/en-US';
 
 const enUS = {
+  // The UI Library block of the `/device` page; the keys below may reword it.
+  ...deviceApprovalEnUS,
+  // The UI Library block of the `/inbox` page; the keys below may reword it.
+  ...inboxEnUS,
+  // The UI Library component of the header's inbox button.
+  'inboxButton.title': 'Inbox',
+  'inboxButton.pending': 'Inbox, {{count}} waiting',
+  'inboxButton.unread': 'Inbox, {{count}} unread',
+  'inboxButton.pendingHint':
+    '{{count}} waiting for you; it goes down once they are handled.',
+  'inboxButton.unreadHint': '{{count}} unread; it goes down as you read them.',
+  workflowTasks: {
+    title: 'Waiting tasks',
+    description: 'Review quotation tasks created by the example workflow.',
+    detailTitle: 'Review quotation',
+    detailDescription: 'Submit a decision to resume the waiting workflow.',
+    refresh: 'Refresh',
+    search: 'Search quotation',
+    filterStatus: 'Filter by status',
+    loading: 'Loading tasks…',
+    loadError: 'Could not load tasks.',
+    detailError: 'Could not load this task.',
+    notFound: 'Task not found',
+    notFoundHint:
+      'This task may have been removed. Return to the list to see current tasks.',
+    retry: 'Retry',
+    empty: 'No review tasks yet. Run the quotation workflow to create one.',
+    noResults: 'No tasks match these filters.',
+    emptyHint: 'Run Quotation routing in Automation settings to create a task.',
+    clearFiltersHint: 'Change the search or status filter to see more tasks.',
+    clearFilters: 'Clear filters',
+    quotation: 'Quotation',
+    route: 'Route',
+    amount: 'Amount',
+    statusLabel: 'Status',
+    createdAt: 'Created',
+    action: 'Action',
+    process: 'Process',
+    view: 'View',
+    total: '{{count}} tasks',
+    previous: 'Previous',
+    next: 'Next',
+    back: 'Back to tasks',
+    runId: 'Workflow run',
+    waitStatus: 'Wait node',
+    reviewer: 'Reviewer',
+    decision: 'Decision',
+    comment: 'Comment',
+    chooseDecision: 'Choose a decision',
+    decisionRequired: 'Choose a decision before submitting.',
+    submit: 'Submit decision',
+    submitting: 'Submitting…',
+    submitError:
+      'Could not submit the decision. Refresh the task and try again.',
+    submitSuccess:
+      'Decision recorded. Check the processing result for its final outcome.',
+    resumeStatus: 'Processing result',
+    appliedHint:
+      'The wait node applied this decision. Subsequent nodes can use its result; this does not mean the whole workflow has completed.',
+    resume: {
+      executing: 'Executing',
+      queued: 'Waiting to be applied',
+      processing: 'Applying decision',
+      consumed: 'Decision applied',
+      rejected: 'Decision could not be applied',
+      'not-found': 'Submission record missing',
+      unknown: 'No submission record available',
+    },
+    resumeReason: {
+      stale:
+        'The wait was completed or restarted before this decision was applied.',
+      'run-ended': 'The workflow run ended before this decision was applied.',
+      'target-missing': 'The waiting node run no longer exists.',
+      'commit-failed':
+        'The decision repeatedly failed to commit. The workflow ended in error.',
+    },
+    submitted: 'Submitted decision',
+    unavailable: 'The wait node is not currently available for submission.',
+    status: {
+      all: 'All',
+      pending: 'Pending',
+      submitting: 'Submitting',
+      submitted: 'Submitted',
+      unavailable: 'Unavailable',
+    },
+    routeValue: {
+      standard: 'Standard',
+      'manual-follow-up': 'Manual follow-up',
+    },
+    decisionValue: { approved: 'Approved', rejected: 'Rejected' },
+    wait: {
+      pending: 'Pending',
+      'not-ready': 'Preparing',
+      finished: 'Finished',
+      'run-ended': 'Run ended',
+      'run-not-found': 'Run missing',
+      'node-not-found': 'Node missing',
+      ambiguous: 'Ambiguous',
+      submitted: 'Decision submitted',
+    },
+  },
   i18nExamples: {
     title: 'Internationalization',
     description:
@@ -44,12 +147,6 @@ const enUS = {
     date: 'Date and time (UTC)',
     formatNote:
       'Formatting changes presentation, not value: no currency conversion takes place. These regions do not add interface languages; the comparison stays fixed when you switch language.',
-  },
-  notifications: { unreadLabel: 'Notifications, {{count}} unread' },
-  overrides: {
-    '@nocobase/app-plugin-notification-in-app': {
-      inbox: { title: 'Notifications' },
-    },
   },
   noticeLoading: 'Loading notice…',
   noticeLoadError: 'Unable to load the plugin notice.',
@@ -109,7 +206,6 @@ const enUS = {
   'status.loading': 'Loading',
   'status.loadingPage': 'Loading page',
   'status.loadingSettings': 'Loading settings',
-  'status.loadingDev': 'Loading dev tools',
   'status.denied': 'Access denied',
   'status.pageFailed': 'Unable to load page',
   'status.retry': 'Retry',
@@ -120,7 +216,6 @@ const enUS = {
   'status.routeFailedDescription':
     'Route {{label}} from {{packageName}} could not be loaded.',
   shell: {
-    workspace: 'AI application workspace',
     buildFreely: 'AI builds freely.',
     reliability: '<brand>NocoBase</brand> keeps it reliable.',
   },
@@ -135,13 +230,6 @@ const enUS = {
     emptyTitle: 'No settings available',
     emptyDescription:
       'No enabled plugin contributes a settings page you have access to.',
-  },
-  dev: {
-    componentExamples: 'Component examples',
-    title: 'Dev tools',
-    emptyTitle: 'No dev tools available',
-    emptyDescription:
-      'No enabled plugin contributes a dev page you have access to.',
   },
   routeOverlays: {
     title: 'Route dialogs and drawers',
@@ -272,6 +360,11 @@ const enUS = {
       title: 'Task notifications',
       description:
         'Assign tasks to different users and let recipients update the task from the notification detail page.',
+    },
+    aiEmployeeTasks: {
+      title: 'AI employee tasks',
+      description:
+        'Hand an AI employee a prepared task on a support ticket and follow it in the global AI chat at the lower right.',
     },
     routeOverlays: {
       title: 'Route dialogs and drawers',
@@ -439,8 +532,9 @@ const enUS = {
     signingOut: 'Signing out…',
   },
   navigation: {
+    workflow: 'Workflow',
+    workflowWaitingTasks: 'Waiting tasks',
     i18nExamples: 'Internationalization',
-    notifications: 'Notifications',
     numbers: 'Numeric types',
     externalCrm: 'External CRM',
     routeOverlays: 'Route dialogs and drawers',
@@ -454,6 +548,7 @@ const enUS = {
     label: 'Application navigation',
     description: 'Go to a page of this application.',
     breadcrumb: 'Breadcrumb',
+    breadcrumbMore: 'Show the levels in between',
     back: 'Back',
   },
   dataTable: {

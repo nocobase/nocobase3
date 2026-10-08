@@ -20,7 +20,7 @@ pnpm nocobase config check
 pnpm dev
 ```
 
-`pnpm nocobase config init` writes `config.yml` from `config.example.yml`, keeping its comments and filling in `auth.secret` and `session.secret`. It is only needed once; `pnpm dev` and `pnpm start` refuse to run until it has been. `pnpm nocobase config check` loads the configuration the way a start would, connects to any database other than SQLite, and reports what would stop the application from starting or quietly misbehave.
+`pnpm nocobase config init` writes `config.yml` from `config.example.yml`, keeping its comments and generating the first key of `secrets.keys`, which encrypts what the application stores as a secret and from which the sign-in and session keys are derived. It is only needed once; `pnpm dev` and `pnpm start` refuse to run until it has been. `pnpm nocobase config check` loads the configuration the way a start would, connects to any database other than SQLite, and reports what would stop the application from starting or quietly misbehave.
 
 `pnpm dev` starts the API server and the Vite client together, picks free ports if the defaults are taken, and prints the URL to open. Use the printed URL rather than assuming a port.
 
@@ -61,14 +61,16 @@ APP_SERVER_PORT=13399 PROXY_TARGET_URL=http://127.0.0.1:13000/main pnpm dev
 
 ### Review your configuration
 
-`pnpm nocobase config init` wrote `config.yml` from `config.example.yml`, with `auth.secret` and `session.secret` filled in. It gets you running on SQLite; adjust it for your situation:
+`pnpm nocobase config init` wrote `config.yml` from `config.example.yml`, with a generated `secrets.keys` key filled in. It gets you running on SQLite; adjust it for your situation:
 
 - **Database.** SQLite needs no server and works as it is. Another one means installing its driver first — `pnpm add @nocobase/db-postgres`, and `pnpm remove @nocobase/db-sqlite` if nothing else uses SQLite — then `pnpm nocobase config init --dialect postgres --force` to rewrite the connection, and `pnpm nocobase config set` for its settings, with `--from-env` for the password so it stays out of the shell history. Which dialects the application can run on is decided by what it depends on, not by this file: a driver it does not have cannot be introduced from here.
 - **Change a value** with `pnpm nocobase config set key=value`, which keeps the comments and refuses a section the application does not know. Values that differ per machine — `APP_SERVER_PORT`, `APP_SERVER_HOST`, `APP_PUBLIC_ORIGIN` — are better set in the environment, which is applied over this file; `config set` says when an environment variable overrides what it wrote.
 - **Where the application is served.** `APP_BASE_PATH` is the public mount path, `/main` by default, so the development URL looks like `http://127.0.0.1:13000/main/`. `APP_SERVER_PORT` and `APP_SERVER_HOST` change what the server binds to.
 - **Anything a feature you enable requires** — mail delivery, IM webhooks, storage. Every section is already here, commented out where it is optional.
 
-`config.yml` is gitignored because it holds your `auth.secret`. Deploy it through your secret management rather than committing it.
+`config.yml` is gitignored because it holds your `secrets.keys`. Deploy it through your secret management rather than committing it.
+
+Keep the key: what was encrypted under it cannot be read without it. To rotate it, put a new key first in `secrets.keys` with a higher version and keep the old one after it, run `pnpm nocobase secrets rotate` (`pnpm nocobase secrets status` shows what is left to reseal), then remove the old key. Changing the current key signs everyone out.
 
 To run against a production build instead:
 
@@ -85,7 +87,7 @@ client/                  Browser application
 ├── pages/               Your page components
 ├── components/          Your components
 │   └── ui/              shadcn/ui primitives
-├── layouts/             App, Settings and Dev layouts
+├── layouts/             App and Settings layouts
 │   └── components/      Layout containers, navigation, branding and account controls
 ├── routing/             Route rendering, access checks, loading and error UI
 ├── locales/             Your translated strings
@@ -115,8 +117,8 @@ database/
     ├── migrations/      Your schema history (initially empty)
     └── seeds/           Your required initial data (initially empty)
 
-tests/                   Unit and integration tests
-e2e/                     Browser tests needing a real server
+tests/                   Unit and integration tests, run by Vitest
+└── playwright/          Browser tests against a running application, run by Playwright
 config.yml              Your configuration, written by pnpm nocobase config init; gitignored
 config.example.yml       Documented configuration template
 ```
@@ -255,6 +257,28 @@ For example, `pnpm build --target linux-x64 --node-version 24` produces:
 
 If your application has no native modules — `pg`, `mysql2`, and `tedious` are all plain JavaScript — no platform-specific binaries need retargeting. The build still records the selected target, and the deployment runtime must satisfy `engines.node`.
 
+#### Serving static assets from a CDN
+
+Set `CDN_BASE_URL` when building to use a CDN for Vite-generated asset URLs:
+
+```bash
+CDN_BASE_URL=https://cdn.example.com/my-app/v1/ pnpm build
+```
+
+Use a full HTTPS URL ending in `/`. The build reads the process environment first, then `.env.local`, then `.env`. Unset, empty or whitespace-only values keep the default relative base (`./`). Development ignores this variable. This is a build parameter, not a `config.yml` option or a runtime variable listed by `pnpm nocobase config variables` or `dist/variables.json`; changing it requires rebuilding.
+
+Upload the static files in `dist/client/` to the configured CDN prefix, preserving their paths. For example, `dist/client/assets/index-abc.js` must be available at `https://cdn.example.com/my-app/v1/assets/index-abc.js`. Configure the CDN to allow cross-origin module and font requests from the application origin. A release-specific prefix keeps different builds separate; retain assets needed by clients still running an older release.
+
+Keep the complete `dist/client/` tree on the application server, and serve the application's HTML through it so runtime configuration is injected. The CDN setting changes Vite-processed HTML, JavaScript and CSS resource URLs, and static files addressed with `resolveAssetUrl`, including this template's logos:
+
+```tsx
+import { resolveAssetUrl } from '@nocobase/app-client';
+
+<img src={resolveAssetUrl('/assets/logo-mark.png')} alt='Logo' />;
+```
+
+Pass the file's path relative to `dist/client/`, with or without a leading slash. `resolveAssetUrl` reads `import.meta.env.BASE_URL`, which Vite replaces with the configured `base` during the application build; the browser does not read `CDN_BASE_URL` from the server environment. With an absolute HTTP(S) CDN base it returns the CDN URL, otherwise it falls back to `resolveAppUrl` and the runtime `APP_BASE_PATH`. Already resolved URLs are preserved. Use `resolveAppUrl` for API URLs, page links and runtime-generated resources such as workflow artifacts; the CDN must actually contain a file before it can be served there.
+
 #### Packing the build
 
 `pnpm build --tar` writes `storage/exports/dist.tar.gz`, the artifact you upload to a Hub to deploy this application.
@@ -280,6 +304,14 @@ pnpm build --target linux-x64 --tar
 ```
 
 #### Building a Docker image
+
+For a source build using a CDN, pass its URL as a build argument:
+
+```bash
+docker build --build-arg CDN_BASE_URL=https://cdn.example.com/my-app/v1/ -t my-app .
+```
+
+With `DIST=prebuilt`, set `CDN_BASE_URL` on the earlier `pnpm build` command instead: the image packages the existing client files unchanged. Setting `CDN_BASE_URL` on a prebuilt image build or with `docker run -e` cannot change their compiled URLs. The source build does not read the host's `.env`; use the build argument.
 
 `Dockerfile` builds this application from its sources into a production image. From the project root:
 
@@ -352,22 +384,18 @@ Rebuild with a matching `--target` and `--node-version`. ABI 115 is Node 20, 127
 
 ## Configuration
 
-`server/config/` and `client/config/` contain editable TypeScript defaults. `config.yml` holds environment-specific overrides, written by `pnpm nocobase config init` and yours to edit from there. It is gitignored because it carries your `auth.secret`; deploy it through your secret management rather than committing it. It is generated from `config.example.yml`, which is kept beside it as the reference for every option.
+`server/config/` and `client/config/` contain editable TypeScript defaults. `config.yml` holds environment-specific overrides, written by `pnpm nocobase config init` and yours to edit from there. It is gitignored because it carries your `secrets.keys`; deploy it through your secret management rather than committing it. It is generated from `config.example.yml`, which is kept beside it as the reference for every option.
 
 Two settings decide where the application is reachable:
 
 - `APP_BASE_PATH` is the public path the application is mounted at, `/main` by default. The browser API base URL is derived from it as `<APP_BASE_PATH>/api`.
 - `APP_PUBLIC_ORIGIN` is the external origin used to build callback and redirect URLs. Set it in production. It must not repeat the base path — the runtime joins the two.
 
-Configuration is resolved from the file, environment variables, and defaults in that order of precedence.
+An environment variable a section declares takes precedence over the file, and the file over the code defaults. `pnpm nocobase config env` lists the variables and whether each is set; `pnpm nocobase config variables` describes each one — what it sets, whether it is a secret, whether a deployment must supply it — and `pnpm build` writes that description to `dist/variables.json`. `DB_*` set the main database connection, `INITIAL_ADMIN_USERNAME`, `INITIAL_ADMIN_EMAIL` and `INITIAL_ADMIN_PASSWORD` the first administrator, and `APP_SAMPLE_DATA=true` loads the sample data when the database is first installed. `${NAME}` in `config.yml` is not expanded.
 
 ## Testing
 
-Tests live in `tests/`, never beside the source they cover. Put logic and integration tests under `tests/logic/` and component tests under `tests/components/`. Tests needing a real server, real authentication, or a real database belong in `e2e/`.
-
-### AI server end-to-end testing
-
-`pnpm test:e2e` discovers the source workspace’s optional AI server test and skips it unless `AI_LOCAL_E2E=1`. Build first and use a dedicated, installed test application database with a configured LLM service and an API key belonging to a test user. Set `AI_E2E_LLM_SERVICE`, `AI_E2E_MODEL`, and `AI_E2E_API_KEY`; `AI_E2E_EMPLOYEE` defaults to `viz`. The test starts the compiled local server, makes a real model request, and removes its conversation afterward. Never point it at production data. Generated applications ship the Playwright configuration but no template tests, so an empty run succeeds.
+Tests live in `tests/`, never beside the source they cover. Put logic and integration tests under `tests/logic/` and component tests under `tests/components/`. Browser tests belong in `tests/playwright/`, which Vitest skips. Playwright does not start the application: start it first (`pnpm dev`, or `pnpm build` and then the built application), then run `pnpm test:e2e`; each test reads the application URL, including its base path, from `APP_URL`. Tests that only need a real server, real authentication, or a real database run under Vitest with `createAppTest()` from `@nocobase/app-testing/server`.
 
 ### Notification testing
 

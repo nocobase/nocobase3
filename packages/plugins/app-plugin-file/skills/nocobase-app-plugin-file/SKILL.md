@@ -20,7 +20,7 @@ Inspect `client/extensions/nocobase-file-component-ui/` before writing upload or
 | Legacy DOC / XLS / PPT and OpenDocument              | Office Online fallback            | Internet-accessible absolute URL; cannot use the App session                   |
 | Unsupported or unsafe active content                 | Explanation and optional download | Download still requires permission                                             |
 
-For custom attachment lists, uploads or business associations, reuse `FilePreviewDialog` with file records and `contentUrl`; it requires no repository prop. Extend the existing UI or add the necessary content adapter rather than reimplementing format detection and dropping supported formats. A DOCX download fallback indicates a request/rendering failure or an outdated/custom component, not that the plugin lacks DOCX support. Report the actual failure and preserve its evidence.
+To show a record's files as thumbnails and chips, or take uploads beside a form or a comment, install the UI Library's `attachment-list` component (`yes n | pnpm exec shadcn add @nocobase/attachment-list`; its example is `@nocobase/attachment-list-demo`), map file records to `AttachmentFile`, and open `FilePreviewDialog` from its `onPreview`. For custom attachment lists, uploads or business associations, reuse `FilePreviewDialog` with file records and `contentUrl`; it requires no repository prop. Extend the existing UI or add the necessary content adapter rather than reimplementing format detection and dropping supported formats. A DOCX download fallback indicates a request/rendering failure or an outdated/custom component, not that the plugin lacks DOCX support. Report the actual failure and preserve its evidence.
 
 If the installed package, synchronized Skill and copied UI disagree, inspect the resolved plugin version, run `pnpm nocobase skills sync` to refresh guidance, and reconcile the UI source separately. Skills synchronization does not upgrade Registry copies.
 
@@ -63,6 +63,8 @@ export default migration;
 ```
 
 The fields are fixed; mapping is unsupported. The primary key must accept a 36-character UUID, string fields accept string/char/text, size accepts integer/bigInt, and timestamps accept datetime/datetimeTz. Apply with the App's migration command. Never import a live collection schema from a migration.
+
+Runtime code that selects or checks the full column set imports `FILE_COLUMNS` (and its element type `FileColumn`) from `@nocobase/app-plugin-file/server` instead of copying the list, for example `select: (s) => s.fields(...FILE_COLUMNS)`. A migration still spells its columns out as above, because importing the list would let a later release change an already applied migration.
 
 Upload generates the ID and storage key, normalizes the filename/extension, validates stored size, and supplies timestamps. Extra required columns need defaults because upload accepts no business values. `contentUrl` is derived, never persisted. Save returned file IDs through an App-owned relation or link table when submitting the business form; upload and form submission are separate commits.
 

@@ -123,23 +123,70 @@ function runtimeDependencies(template) {
 function sharedFrameworkSource(template, file) {
   let source = readFileSync(path.join(template.directory, file), 'utf8');
   if (
-    template.kind === 'examples' &&
+    template.kind !== 'hub' &&
     file === 'client/layouts/components/header-actions.tsx'
   ) {
-    // Examples owns the notification-center demonstration. Exclude only its
-    // explicit entry; all shared header behavior must still match Default.
+    // Default and Examples preinstall the UI Library inbox; the Hub registers no in-app notifications. Exclude only
+    // the inbox's explicit entry; all shared header behavior must still match across the three.
     const additions = [
-      /^import \{ NotificationButton \} from '@\/components\/notification-button';\n/gm,
-      /^[\t ]*\{\/\* Examples owns its notification center; keep its unread shortcut on every authenticated surface\. \*\/\}\n[\t ]*<NotificationButton \/>\n/gm,
+      /^import \{ InboxHeaderButton \} from '@\/components\/inbox-header-button';\n/gm,
+      /^[\t ]*\{\/\* The inbox's entry, from the UI Library; keep its unread shortcut on every authenticated surface\. \*\/\}\n[\t ]*<InboxHeaderButton \/>\n/gm,
     ];
     return additions.reduce((shared, addition) => {
       assert.equal(
         [...shared.matchAll(addition)].length,
         1,
-        'Examples header must contain exactly one notification entry',
+        `${template.kind} header must contain exactly one inbox entry`,
       );
       return shared.replace(addition, '');
     }, source);
+  }
+
+  if (
+    template.kind === 'examples' &&
+    file === 'client/layouts/app-layout.tsx'
+  ) {
+    // Examples owns the AI employee demonstration: its global entry wraps the signed-in shell, so every page below
+    // it can start an AI employee task. Remove only that wrapper and re-indent what it wraps; the shell itself must
+    // still match Default.
+    const lines = source.split('\n');
+    const only = (predicate, message) => {
+      const indexes = lines.flatMap((line, index) =>
+        predicate(line) ? [index] : [],
+      );
+      assert.equal(indexes.length, 1, message);
+      return indexes[0];
+    };
+    const importLine = only(
+      (line) =>
+        line ===
+        "import { AIEmployeeEntry } from '../components/ai-employee-entry.js';",
+      'Examples layout must import the AI employee entry exactly once',
+    );
+    const marker = only(
+      (line) =>
+        line.trim() ===
+        '{/* Examples owns the AI employee demonstration; its global entry wraps only the signed-in shell. */}',
+      'Examples layout must explain its AI employee entry exactly once',
+    );
+    const open = only(
+      (line) => line.trim() === '<AIEmployeeEntry>',
+      'Examples layout must open the AI employee entry exactly once',
+    );
+    const close = only(
+      (line) => line.trim() === '</AIEmployeeEntry>',
+      'Examples layout must close the AI employee entry exactly once',
+    );
+    assert.ok(
+      marker + 1 === open && open < close,
+      'Examples layout must wrap its shell in the AI employee entry right after its comment',
+    );
+    return [
+      ...lines.slice(0, importLine),
+      ...lines.slice(importLine + 1, marker),
+      ...lines.slice(open + 1, close).map((line) => line.replace(/^ {2}/u, '')),
+      ...lines.slice(close + 1),
+    ].join('\n');
   }
 
   // The image recipe is shared. Only the template's own directory, named in the usage comment, and Hub's `/hub` runtime
@@ -320,6 +367,29 @@ for (const template of templates) {
         template.manifest.files.includes(entry),
         `${template.kind}: files must list ${entry}`,
       );
+    }
+  });
+
+  test(`${template.kind} publishes the shadcn MCP configuration for each editor`, () => {
+    // Claude Code, Cursor and VS Code read these from the project; each runs the application's own shadcn CLI.
+    for (const entry of ['.mcp.json', '.cursor/mcp.json', '.vscode/mcp.json']) {
+      assert.ok(
+        template.manifest.files.includes(entry),
+        `${template.kind}: files must list ${entry}`,
+      );
+      const config = readFileSync(path.join(template.directory, entry), 'utf8');
+      assert.equal(
+        config,
+        readFileSync(path.join(baseline.directory, entry), 'utf8'),
+      );
+      const servers =
+        JSON.parse(config)[
+          entry === '.vscode/mcp.json' ? 'servers' : 'mcpServers'
+        ];
+      assert.deepEqual(servers.shadcn, {
+        command: 'pnpm',
+        args: ['exec', 'shadcn', 'mcp'],
+      });
     }
   });
 

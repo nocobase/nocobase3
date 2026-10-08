@@ -1,10 +1,12 @@
 import {
   AppWindow,
-  ArrowLeft,
   Blocks,
-  CalendarClock,
-  CalendarDays,
+  Bot,
+  BotMessageSquare,
   Check,
+  ClipboardList,
+  Columns3,
+  Settings,
   Columns2,
   Copy,
   Heading,
@@ -12,17 +14,31 @@ import {
   Layers,
   LayoutTemplate,
   Monitor,
+  MonitorSmartphone,
   Moon,
   PanelRight,
   RefreshCw,
   Rows3,
   Search,
   ShieldCheck,
+  SlidersHorizontal,
   Smartphone,
   Sun,
+  SquareCheck,
   Table2,
   Tablet,
-  TriangleAlert,
+  ToggleRight,
+  History,
+  Inbox,
+  BellDot,
+  PenLine,
+  FileText,
+  FolderKanban,
+  MessageSquareText,
+  UserRoundSearch,
+  MessagesSquare,
+  Paperclip,
+  PanelsTopLeft,
   type LucideIcon,
 } from 'lucide-react';
 import {
@@ -58,15 +74,30 @@ import {
 } from './components/ui/sidebar';
 import { Separator } from './components/ui/separator';
 import { TooltipProvider } from './components/ui/tooltip';
+import { AgentChatDemo } from './demo/agents/agent-chat';
+import { AgentComposerDemo } from './demo/agents/agent-composer';
+import { AgentPickerDemo } from './demo/agents/agent-picker';
+import { AgentQueueDemo } from './demo/agents/agent-queue';
+import { IssueCardDemo } from './demo/projects/issue-card';
+import { PlanCardDemo } from './demo/projects/plan-card';
+import { IssueTableDemo } from './demo/projects/issue-table';
+import { KanbanDemo } from './demo/components/kanban';
 import { AuthenticationDemo } from './demo/auth';
-import { BackButtonDemo } from './demo/components/back-button';
-import { ConfirmDialogDemo } from './demo/components/confirm-dialog';
-import { DataTableDemo } from './demo/components/data-table';
-import { DatePickerDemo } from './demo/components/date-picker';
-import { DateTimePickerDemo } from './demo/components/date-time-picker';
+import { DeviceApprovalDemo } from './demo/auth/device-approval';
 import { PageContainerDemo } from './demo/components/page-container';
 import { PageHeaderDemo } from './demo/components/page-header';
+import { PermissionEditorDemo } from './demo/authorization/permission-editor';
 import { RouteOverlaysDemo } from './demo/components/route-overlays';
+import { IssueDetailDemo } from './demo/projects/issue-detail';
+import { AttachmentListDemo } from './demo/components/attachment-list';
+import { CommentThreadDemo } from './demo/components/comment-thread';
+import { MarkdownViewDemo } from './demo/components/markdown-view';
+import { RichTextEditorDemo } from './demo/components/rich-text-editor';
+import { AgentRunHistoryDemo } from './demo/agents/agent-run-history';
+import { PropertyFieldsDemo } from './demo/components/property-fields';
+import { SettingsDialogDemo } from './demo/components/settings-dialog';
+import { ProjectDetailDemo } from './demo/projects/project-detail';
+import { InboxButtonPreview, InboxDemo } from './demo/inbox';
 
 interface RegistryItem {
   name: string;
@@ -83,7 +114,7 @@ const fallbackItem: RegistryItem = {
   name: 'auth-centered-layout',
   title: 'Auth Centered Layout',
   description:
-    'The page around an authentication form: the brand above a card in the middle of a muted page.',
+    'The page around an authentication form: the brand above a card in the middle of a muted page. Use it for sign-in, sign-up, password and device pages without a brand panel; the templates use auth-split-layout instead.',
   meta: {
     group: 'Authentication',
     iframeHeight: 720,
@@ -106,6 +137,10 @@ const itemPreviews: Record<string, ItemPreview> = {
   'auth-split-layout': { path: '/demo/auth/auth-split-layout', icon: Columns2 },
   'auth-forms': { path: '/demo/auth/auth-forms/login', icon: KeyRound },
   'auth-methods': { path: '/demo/auth/auth-methods', icon: Rows3 },
+  'device-approval': {
+    path: '/demo/auth/device-approval',
+    icon: MonitorSmartphone,
+  },
   'page-container': {
     path: '/demo/components/page-container',
     icon: LayoutTemplate,
@@ -124,20 +159,53 @@ const itemPreviews: Record<string, ItemPreview> = {
     path: '/demo/components/route-overlays/report',
     icon: Layers,
   },
-  'back-button': {
-    path: '/demo/components/back-button/SO-1042',
-    icon: ArrowLeft,
+  'permission-editor': {
+    path: '/demo/authorization/permission-editor',
+    icon: ToggleRight,
   },
-  'date-picker': { path: '/demo/components/date-picker', icon: CalendarDays },
-  'date-time-picker': {
-    path: '/demo/components/date-time-picker',
-    icon: CalendarClock,
+  kanban: { path: '/demo/components/kanban', icon: Columns3 },
+  'issue-table': { path: '/demo/projects/issue-table', icon: Table2 },
+  'issue-card': { path: '/demo/projects/issue-card', icon: SquareCheck },
+  'plan-card': { path: '/demo/projects/plan-card', icon: ClipboardList },
+  'agent-run-history': {
+    path: '/demo/agents/agent-run-history',
+    icon: History,
   },
-  'data-table': { path: '/demo/components/data-table', icon: Table2 },
-  'confirm-dialog': {
-    path: '/demo/components/confirm-dialog',
-    icon: TriangleAlert,
+  'rich-text-editor': {
+    path: '/demo/components/rich-text-editor',
+    icon: PenLine,
   },
+  'markdown-view': { path: '/demo/components/markdown-view', icon: FileText },
+  'comment-thread': {
+    path: '/demo/components/comment-thread',
+    icon: MessagesSquare,
+  },
+  'attachment-list': {
+    path: '/demo/components/attachment-list',
+    icon: Paperclip,
+  },
+  'property-fields': {
+    path: '/demo/components/property-fields',
+    icon: SlidersHorizontal,
+  },
+  'settings-dialog': {
+    path: '/demo/components/settings-dialog',
+    icon: Settings,
+  },
+  'issue-detail': { path: '/demo/projects/issue-detail', icon: PanelsTopLeft },
+  'project-detail': {
+    path: '/demo/projects/project-detail',
+    icon: FolderKanban,
+  },
+  'agent-queue': { path: '/demo/agents/agent-queue', icon: Bot },
+  'agent-composer': {
+    path: '/demo/agents/agent-composer',
+    icon: MessageSquareText,
+  },
+  'agent-picker': { path: '/demo/agents/agent-picker', icon: UserRoundSearch },
+  'agent-chat': { path: '/demo/agents/agent-chat', icon: BotMessageSquare },
+  inbox: { path: '/demo/inbox/inbox', icon: Inbox },
+  'inbox-button': { path: '/demo/inbox/inbox-button', icon: BellDot },
 };
 
 type ThemePreference = 'light' | 'dark' | 'system';
@@ -179,23 +247,11 @@ export function App(): ReactElement {
 
 function AppContent(): ReactElement {
   const { pathname } = window.location;
+  if (pathname.startsWith('/demo/auth/device-approval')) {
+    return <DeviceApprovalDemo />;
+  }
   if (pathname.startsWith('/demo/auth/')) {
     return <AuthenticationDemo />;
-  }
-  if (pathname.startsWith('/demo/components/back-button')) {
-    return <BackButtonDemo />;
-  }
-  if (pathname.startsWith('/demo/components/data-table')) {
-    return <DataTableDemo />;
-  }
-  if (pathname.startsWith('/demo/components/confirm-dialog')) {
-    return <ConfirmDialogDemo />;
-  }
-  if (pathname.startsWith('/demo/components/date-picker')) {
-    return <DatePickerDemo />;
-  }
-  if (pathname.startsWith('/demo/components/date-time-picker')) {
-    return <DateTimePickerDemo />;
   }
   if (pathname.startsWith('/demo/components/page-container')) {
     return <PageContainerDemo />;
@@ -203,8 +259,68 @@ function AppContent(): ReactElement {
   if (pathname.startsWith('/demo/components/page-header')) {
     return <PageHeaderDemo />;
   }
+  if (pathname.startsWith('/demo/authorization/permission-editor')) {
+    return <PermissionEditorDemo />;
+  }
   if (pathname.startsWith('/demo/components/route-overlays')) {
     return <RouteOverlaysDemo />;
+  }
+  if (pathname.startsWith('/demo/components/kanban')) {
+    return <KanbanDemo />;
+  }
+  if (pathname.startsWith('/demo/projects/issue-card')) {
+    return <IssueCardDemo />;
+  }
+  if (pathname.startsWith('/demo/projects/plan-card')) {
+    return <PlanCardDemo />;
+  }
+  if (pathname.startsWith('/demo/projects/issue-table')) {
+    return <IssueTableDemo />;
+  }
+  if (pathname.startsWith('/demo/agents/agent-run-history')) {
+    return <AgentRunHistoryDemo />;
+  }
+  if (pathname.startsWith('/demo/components/rich-text-editor')) {
+    return <RichTextEditorDemo />;
+  }
+  if (pathname.startsWith('/demo/components/markdown-view')) {
+    return <MarkdownViewDemo />;
+  }
+  if (pathname.startsWith('/demo/components/comment-thread')) {
+    return <CommentThreadDemo />;
+  }
+  if (pathname.startsWith('/demo/components/attachment-list')) {
+    return <AttachmentListDemo />;
+  }
+  if (pathname.startsWith('/demo/components/property-fields')) {
+    return <PropertyFieldsDemo />;
+  }
+  if (pathname.startsWith('/demo/components/settings-dialog')) {
+    return <SettingsDialogDemo />;
+  }
+  if (pathname.startsWith('/demo/projects/issue-detail')) {
+    return <IssueDetailDemo />;
+  }
+  if (pathname.startsWith('/demo/projects/project-detail')) {
+    return <ProjectDetailDemo />;
+  }
+  if (pathname.startsWith('/demo/agents/agent-queue')) {
+    return <AgentQueueDemo />;
+  }
+  if (pathname.startsWith('/demo/agents/agent-composer')) {
+    return <AgentComposerDemo />;
+  }
+  if (pathname.startsWith('/demo/agents/agent-picker')) {
+    return <AgentPickerDemo />;
+  }
+  if (pathname.startsWith('/demo/agents/agent-chat')) {
+    return <AgentChatDemo />;
+  }
+  if (pathname.startsWith('/demo/inbox/inbox-button')) {
+    return <InboxButtonPreview />;
+  }
+  if (pathname.startsWith('/demo/inbox/inbox')) {
+    return <InboxDemo />;
   }
 
   return <RegistryDocs />;
@@ -214,28 +330,36 @@ function RegistryDocs(): ReactElement {
   const [items, setItems] = useState<RegistryItem[]>([fallbackItem]);
   const [query, setQuery] = useState('');
   const [activeName, setActiveName] = useState<string>(fallbackItem.name);
+  // The section the address named on load (`#name` from the sidebar, or `/registry/<name>`), read before anything
+  // rewrites the hash.
+  const initialSlugRef = useRef(
+    decodeURIComponent(window.location.hash.slice(1)) ||
+      window.location.pathname.match(/^\/registry\/([^/]+)/)?.[1],
+  );
 
   useEffect(() => {
     const controller = new AbortController();
     fetch('/r/registry.json', { signal: controller.signal })
       .then((response) => response.json())
       .then((data: { items?: RegistryItem[] }) => {
-        const nextItems = data.items?.length ? data.items : [fallbackItem];
-        const slug =
-          window.location.pathname.match(/^\/registry\/([^/]+)/)?.[1];
-        setItems(nextItems);
-        setActiveName((current) =>
-          slug && nextItems.some((item) => item.name === slug)
-            ? slug
-            : current && nextItems.some((item) => item.name === current)
-              ? current
-              : nextItems[0]?.name,
+        // Example items (`<item>-demo`) are the demos below, published for `shadcn view` and the MCP server.
+        const installable = (data.items ?? []).filter(
+          (item) => item.type !== 'registry:example',
         );
-        if (slug && nextItems.some((item) => item.name === slug)) {
-          window.requestAnimationFrame(() => {
-            document.getElementById(slug)?.scrollIntoView({ block: 'start' });
-          });
-        }
+        const nextItems = installable.length ? installable : [fallbackItem];
+        const slug = initialSlugRef.current;
+        setItems(nextItems);
+        const linked =
+          slug && nextItems.some((item) => item.name === slug) ? slug : null;
+        const first = groupItems(nextItems)[0]?.items[0]?.name;
+        if (linked ?? first) setActiveName(linked ?? first ?? '');
+        // Go to the linked section, or back to the top: a demo that focuses a field on mount (the sign-in form's
+        // autoFocus) has scrolled the page to itself.
+        window.requestAnimationFrame(() => {
+          if (linked)
+            document.getElementById(linked)?.scrollIntoView({ block: 'start' });
+          else window.scrollTo({ top: 0 });
+        });
       })
       .catch(() => {
         if (!controller.signal.aborted) setItems([fallbackItem]);
@@ -243,10 +367,13 @@ function RegistryDocs(): ReactElement {
     return () => controller.abort();
   }, []);
 
-  const visibleItems = items.filter((item) => {
-    const text = `${item.name} ${item.title ?? ''} ${item.description ?? ''}`;
-    return text.toLowerCase().includes(query.trim().toLowerCase());
-  });
+  // In the sidebar's order (groups alphabetically), so the page reads like the menu.
+  const visibleItems = groupItems(
+    items.filter((item) => {
+      const text = `${item.name} ${item.title ?? ''} ${item.description ?? ''}`;
+      return text.toLowerCase().includes(query.trim().toLowerCase());
+    }),
+  ).flatMap((group) => group.items);
 
   useEffect(() => {
     const sections = visibleItems
@@ -254,21 +381,40 @@ function RegistryDocs(): ReactElement {
       .filter((section): section is HTMLElement => Boolean(section));
     if (!sections.length) return;
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((entry) => entry.isIntersecting)
-          .sort(
-            (left, right) =>
-              left.boundingClientRect.top - right.boundingClientRect.top,
-          );
-        if (visible[0]) setActiveName(visible[0].target.id);
-      },
-      { rootMargin: '-18% 0px -68% 0px', threshold: 0 },
-    );
-    sections.forEach((section) => observer.observe(section));
-    return () => observer.disconnect();
-  }, [visibleItems]);
+    // Not until the registry has loaded, or the placeholder section would overwrite the address.
+    if (items.length <= 1) return;
+
+    // The section under the top fifth of the viewport, or the first one at the very top of the page.
+    const update = () => {
+      const line = window.innerHeight * 0.2;
+      const current =
+        window.scrollY < 1
+          ? sections[0]
+          : sections.findLast(
+              (section) => section.getBoundingClientRect().top <= line,
+            );
+      if (!current) return;
+      setActiveName(current.id);
+      // Keep the address on the section in view, so a reload comes back to it; none at the top of the page.
+      const hash = window.scrollY < 1 ? '' : `#${current.id}`;
+      if (window.location.hash !== hash)
+        window.history.replaceState(
+          null,
+          '',
+          `${window.location.pathname}${window.location.search}${hash}`,
+        );
+    };
+    let frame = 0;
+    const onScroll = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(update);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.cancelAnimationFrame(frame);
+    };
+  }, [visibleItems, items.length]);
 
   return (
     <TooltipProvider>
@@ -752,10 +898,9 @@ function groupItems(items: RegistryItem[]): {
     group.push(item);
     groups.set(label, group);
   }
-  return [...groups.entries()].map(([label, groupItems]) => ({
-    label,
-    items: groupItems,
-  }));
+  return [...groups.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([label, groupItems]) => ({ label, items: groupItems }));
 }
 
 function formatGroupLabel(label: string): string {

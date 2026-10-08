@@ -1,6 +1,6 @@
 {
   "name": "@nocobase/app-cli",
-  "version": "1.0.0-beta.13",
+  "version": "1.0.0-beta.14",
   "description": "The NocoBase application command line: runtime commands, plugin management, and the dev and build tooling.",
   "type": "module",
   "license": "Apache-2.0",
@@ -89,6 +89,7 @@
     "@clack/prompts": "catalog:",
     "@nocobase/cli-envelope": "workspace:^",
     "@nocobase/logging": "workspace:^",
+    "@nocobase/secrets": "workspace:^",
     "@oclif/core": "catalog:",
     "cross-spawn": "catalog:",
     "execa": "^10.0.1",

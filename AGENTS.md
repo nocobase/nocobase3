@@ -171,6 +171,10 @@ Apply all applicable sides in one change and run each affected template's `check
 
 When a template, application runtime, or CLI change affects how an agent develops, configures, builds, deploys, or upgrades an application, review `packages/app/app-skills` and update the relevant Skill or reference in the same change. Keep the guidance concise and actionable; record the current rule rather than implementation history, and link to existing detail instead of duplicating it.
 
+## Business Permissions of a Plugin
+
+A plugin registers its own businesses with the authorization plugin from its `shared/access.ts`: a resource type of its own named by the business ids' prefix (`pm` for `pm.issues`), titles and one-line descriptions in its namespace, each level of an action its own action (`edit.related`, `edit.all`; an action without related records as itself), placed in the permission workspace. An application reads what is registered at runtime rather than keeping a union of the plugins' constants. `packages/tools/create-plugin/template/AGENTS.md` carries the rule for generated plugins; change both together.
+
 ## Application Themes and UI Styling
 
 For creating or editing theme presets, read `packages/app/app-skills/skills/nocobase-app-development/references/frontend/references/theme.md` from the repository root.
@@ -257,13 +261,17 @@ An application has two, and the question is which half imports it: `server/`, `d
 
 `build-server-dist-package.mjs` used to walk the built output for bare imports and expand every transitive dependency by hand. It had to, because applications declared their server packages in `devDependencies` and nothing else could tell which of them a deployment needed. Once those moved to `dependencies` the walk had nothing left to discover, and it was removed: `pnpm install` applies the same rules, and a scan that resolves specifiers is a scan that can miss one. Workspace packages remain the exception, vendored into `dist/vendor` under a `file:` path because a `workspace:` range means nothing to a deployment.
 
-The shared UI packages — `@base-ui/react`, `class-variance-authority`, `clsx`, `lucide-react`, `shadcn`, `tailwind-merge`, `tw-animate-css` — resolve through `catalog:` wherever they are declared, peers included; `pnpm pack` expands the reference before publishing.
+The shared UI packages — `@base-ui/react`, `class-variance-authority`, `cn`, `lucide-react`, `shadcn`, `tw-animate-css` — resolve through `catalog:` wherever they are declared, peers included; `pnpm pack` expands the reference before publishing.
 
 An earlier version of this pruned `dist/node_modules` with a `@vercel/nft` file trace. It produced a far smaller tree, but what it could not see it deleted — the pino transports named in a `target:` string, each plugin's `dist/database` read by directory scan, `@nocobase/app-cli`'s registry module handed to oclif as a path. Every one surfaced only by running the built `dist/`, and every one would have shipped as a successful build. Declarations cannot fail that way.
 
 ### Building for another platform
 
 `retarget-native.mjs` is unrelated to the above and stays: a `.node` binary is compiled for one platform, architecture, C library, and Node ABI at once, so a build for another target obtains different binaries. It classifies packages by manifest signal rather than by name — `cpu`/`os` fields, an install script invoking a native build helper, bundled `.node` files — so a native dependency an application adds later is handled without extending a list. Keep that.
+
+A platform package — one member of a set its parent lists in `optionalDependencies` — is swapped for the target's member under the napi-rs name first (`linux-x64-gnu`, `win32-x64-msvc`), then under the bare platform and architecture some sets use instead (`sqlite-vec-linux-x64`, glibc only, and `sqlite-vec-windows-x64`). When npm answers 404 for every name, the set has no build for the target and the stale member is removed rather than failing the build, as an install there would leave it out; any other fetch failure still fails. `sqlite-vec` is the case: it publishes no musl build, so on Alpine the agents plugin's default vector store reports itself unavailable instead of stopping the deployment build.
+
+A package whose build `allowBuilds` sets to `false` never ran its install script, so it is classified by the binaries it was published with rather than by that script. `better-sqlite3`'s bundled prebuilds are still trimmed to the target's, and a package that ships none, such as `cpu-features`, has no compiled addon to retarget and is left as installed rather than failing the build for a prebuilt binary nobody publishes.
 
 The build targets the machine it runs on so `pnpm build && pnpm start` works, and `--target` plus `--node-version` select another. A forgotten `--target` produces a `dist/` that fails only on the server, so every build states the platform it produced and records it in `dist/package.json` under `nocobase.buildTarget`.
 
@@ -355,7 +363,7 @@ A plugin's client dependency is also easy to believe is fine when it is not. Ten
 So the question is who resolves the import, and then what the import actually is:
 
 - **An ordinary server value import belongs in `dependencies`; shared identity-sensitive imports are peers.** `import ts from 'typescript'` in `server/` needs a runtime dependency even though TypeScript sounds like build tooling. A shared database connection follows the host-provided peer contract instead.
-- **A client value import belongs in `peerDependencies`.** `sonner`, `lucide-react`, `@base-ui/react`, `clsx` — the installing application resolves them from the published manifest and provides one shared copy, while a server deployment installs none.
+- **A client value import belongs in `peerDependencies`.** `sonner`, `lucide-react`, `@base-ui/react`, `cn` — the installing application resolves them from the published manifest and provides one shared copy, while a server deployment installs none.
 - **A type-only import can belong in `devDependencies` only if consumers do not need to resolve it.** JavaScript erases `import type`, but emitted `.d.ts` files can retain references to that package. Inspect the published declarations and use a dependency or peer contract when those references survive; shared classes with private members follow the peer rule.
 - **A dynamic `import()` counts as a value import.** Deferring the load changes when a package is needed, not whether.
 - **The `files` field decides whether code ships at all.** A test, an eval harness, or a build script excluded from `files` never reaches a consumer, so its imports are correctly devDependencies.
@@ -405,6 +413,8 @@ Every hand-written `/api` route declares itself with what `@nocobase/app-server/
 - Settings routes behind the `/api/authorization` dispatcher are registered as `authz.routes.add(path, createRouteHandler(router))` with `createRouteHandler` from `@nocobase/app-plugin-authorization/server/extension`, and each route of `router` declares itself with `describeRoute()`. Routes registered this way are documented automatically at their full `/api/authorization/...` path and checked like any other route. A plain function passed to `authz.routes.add` cannot be described: the plugin registers it as undeclared, and `findUndeclaredApiRoutes(app)` reports it.
 - A plugin that forwards requests through its own runtime dispatcher registers each router with `apiDocsToken`'s `addApiRouter({ owner, prefix, scope?, router })`, so its routes are documented, reported by `findUndeclaredApiRoutes(app)` and `pnpm openapi:check` when undeclared, and included in the duplicate-route check, and each target it cannot see into with `addUndeclaredApiRoute({ owner, method, path, reason })`, which is always reported and never documented. `scope` names the sub-path below `prefix` the dispatcher actually forwards to the router, such as `/sharingRules` below `/api/authorization`; a route the router declares outside it is never reached, so it is left out of the document and the duplicate-route check and reported as undeclared. The authorization plugin's `documentAuthorizationRoutes()` is built on these, with each `authz.routes` registration's path as `scope`.
 - Routes a library defines are merged in as a fragment through `apiDocsToken`'s `addFragment()`: the authentication plugin merges Better Auth's endpoints under `/api/auth/` from Better Auth's own generator, tagged `Authentication`, leaving out its browser-only steps. A colliding `operationId` or a differing component is renamed with the fragment's namespace. The document is cached until `invalidate()`, which a change to what it describes, such as a Collection's fields, calls.
+
+The document is also the command line: `GET /api/cli/manifest` derives a CLI command from every documented operation (`x-cli`, `cliRoute()`, `deriveCliCommands`), filtered by the caller a plugin resolves on `cliToken`, so a route an agent's CLI should reach declares its hints with `...cliRoute({ command, args, flags, columns, action })` in `describeRoute()`; there are no hand-registered commands. `cliRoute(false)` keeps a route off the command line, and an application leaves whole areas off with `exclude()` on `cliToken`. A route a run may call lists `runToken` in its `security` and opts in to scoped credentials: the application's authentication accepts an issued credential such as a run token only on a route whose own security names its scheme.
 
 Who may read the documentation is decided by access checks registered through `apiDocsToken`'s `addAccess()`, because app-server knows nothing about authentication. The authentication plugin allows a signed-in session and the API keys plugin a valid API key, and neither extends a session or sets a cookie. With no check registered both routes answer `404 ROUTE_NOT_FOUND`, so an application that cannot tell who is asking publishes nothing; with checks registered and none allowing, they answer `401` with reason `API_DOCS_UNAUTHENTICATED`. There is no switch that makes the documentation public. A script or an agent reads the JSON with an API key, `curl -H "x-api-key: <key>" http://127.0.0.1:13000/main/api/swagger`, and an agent working on an application learns its endpoints from that document rather than from route sources.
 
@@ -495,7 +505,10 @@ Library packages that emit `.d.ts` files (`declaration: true`) enable both `isol
 | `packages/libs/db-mssql/tsconfig.json`                     | MSSQL dialect              |
 | `packages/libs/db-dameng/tsconfig.json`                    | Dameng dialect             |
 | `packages/app/app-cli/tsconfig.json`                       | Application CLI            |
+| `packages/app/app-cli-client/tsconfig.json`                | Remote application CLI     |
+| `packages/app/agent-runner/tsconfig.json`                  | Agent runner               |
 | `packages/app/app-host/tsconfig.json`                      | Application host           |
+| `packages/app/app-host-docker/tsconfig.json`               | Docker host backend        |
 | `packages/app/app-server/tsconfig.json`                    | Application server library |
 | `packages/libs/caching/tsconfig.json`                      | Caching library            |
 | `packages/libs/drive/tsconfig.json`                        | File storage library       |
@@ -504,6 +517,7 @@ Library packages that emit `.d.ts` files (`declaration: true`) enable both `isol
 | `packages/libs/queue/tsconfig.json`                        | Queue library              |
 | `packages/libs/jobs/tsconfig.json`                         | Jobs library               |
 | `packages/libs/session/tsconfig.json`                      | Session library            |
+| `packages/libs/secrets/tsconfig.json`                      | Secrets library            |
 
 Within these scopes, every exported API must be declarable from the current file alone, without relying on cross-file type inference.
 

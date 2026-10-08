@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-workflow",
   "displayName": "Workflow App Plugin",
   "description": "Adds workflow runtime, persistence, and HTTP APIs to a NocoBase app.",
-  "version": "2.0.0-beta.0",
+  "version": "2.0.0-beta.1",
   "type": "module",
   "sideEffects": [
     "**/*.css"
@@ -111,6 +111,7 @@
   "dependencies": {
     "@nocobase/drive": "workspace:^",
     "@nocobase/logging": "workspace:^",
+    "@nocobase/snowflake": "workspace:^",
     "@sinclair/typebox": "catalog:",
     "hono": "catalog:",
     "zod": "catalog:"
@@ -129,11 +130,11 @@
     "@nocobase/service-provider": "workspace:^",
     "@oclif/core": "catalog:",
     "@xyflow/react": "^12.11.3",
+    "cn": "catalog:",
     "elkjs": "^0.10.2",
     "lucide-react": "catalog:",
     "react": "catalog:",
     "react-router": "catalog:",
-    "tailwind-merge": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:"
@@ -148,6 +149,7 @@
     "@nocobase/app-testing": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@testing-library/react": "catalog:",
+    "@testing-library/user-event": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "eslint": "catalog:",

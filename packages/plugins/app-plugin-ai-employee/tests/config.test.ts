@@ -295,7 +295,6 @@ describe('AI application config', () => {
       const issues = await issuesFor({
         mcpServers: {
           tools: { transport: 'http', url: 'http://127.0.0.1:1/mcp' },
-          testConnection: { transport: 'http', url: 'http://127.0.0.1:2/mcp' },
           search: { transport: 'http', url: 'http://127.0.0.1:3/mcp' },
         },
       });
@@ -303,19 +302,77 @@ describe('AI application config', () => {
         expect.objectContaining({
           level: 'error',
           path: 'ai.mcpServers.tools',
-          message: expect.stringContaining(
-            'Reserved names: tools, testConnection',
-          ),
-        }),
-        expect.objectContaining({
-          level: 'error',
-          path: 'ai.mcpServers.testConnection',
+          message: expect.stringContaining('Reserved names: tools.'),
         }),
       ]);
     });
 
     it('reports nothing for a configuration without services', async () => {
       await expect(issuesFor({})).resolves.toEqual([]);
+    });
+
+    it('accepts a checkpoint cleanup schedule in a time zone', async () => {
+      await expect(
+        issuesFor({
+          checkpointCleanup: {
+            enabled: false,
+            cron: '30 2 * * 1',
+            tz: 'Asia/Shanghai',
+            retentionDays: 0.5,
+            batchSize: 50,
+            jobs: 'redis',
+          },
+        }),
+      ).resolves.toEqual([]);
+    });
+
+    it('reports an invalid checkpoint cleanup as an error, by path', async () => {
+      await expect(
+        issuesFor({
+          checkpointCleanup: {
+            enabled: 'yes',
+            retentionDays: 0,
+            batchSize: 1.5,
+            cron: '0 3 * *',
+          },
+        }),
+      ).resolves.toEqual([
+        expect.objectContaining({
+          level: 'error',
+          path: 'ai.checkpointCleanup.enabled',
+        }),
+        expect.objectContaining({
+          level: 'error',
+          path: 'ai.checkpointCleanup.retentionDays',
+        }),
+        expect.objectContaining({
+          level: 'error',
+          path: 'ai.checkpointCleanup.batchSize',
+        }),
+        expect.objectContaining({
+          level: 'error',
+          path: 'ai.checkpointCleanup.cron',
+          message: expect.stringContaining('five or six fields'),
+        }),
+      ]);
+      await expect(
+        issuesFor({
+          checkpointCleanup: { cron: '0 3 * * *', tz: 'Mars/Base' },
+        }),
+      ).resolves.toEqual([
+        expect.objectContaining({
+          level: 'error',
+          path: 'ai.checkpointCleanup.cron',
+        }),
+      ]);
+      await expect(
+        issuesFor({ checkpointCleanup: { tz: 'Mars/Base' } }),
+      ).resolves.toEqual([
+        expect.objectContaining({
+          level: 'error',
+          path: 'ai.checkpointCleanup.tz',
+        }),
+      ]);
     });
 
     it('reports a structural problem as an error, by path', async () => {

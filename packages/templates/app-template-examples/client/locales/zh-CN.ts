@@ -1,6 +1,100 @@
 import type { AppResource } from './en-US.js';
+import deviceApprovalZhCN from '@/extensions/nocobase-device-approval/locales/zh-CN';
+import inboxZhCN from '@/extensions/nocobase-inbox/locales/zh-CN';
 
 const zhCN: AppResource = {
+  // The UI Library block of the `/device` page; the keys below may reword it.
+  ...deviceApprovalZhCN,
+  // The UI Library block of the `/inbox` page; the keys below may reword it.
+  ...inboxZhCN,
+  // The UI Library component of the header's inbox button.
+  'inboxButton.title': '收件箱',
+  'inboxButton.pending': '收件箱，{{count}} 项待处理',
+  'inboxButton.unread': '收件箱，{{count}} 条未读',
+  'inboxButton.pendingHint': '{{count}} 项等你处理，处理后减少。',
+  'inboxButton.unreadHint': '{{count}} 条未读，阅读后减少。',
+  workflowTasks: {
+    title: '等待处理任务',
+    description: '处理示例工作流生成的报价任务。',
+    detailTitle: '处理报价任务',
+    detailDescription: '提交处理决定，继续等待中的工作流。',
+    refresh: '刷新',
+    search: '搜索报价编号',
+    filterStatus: '按状态筛选',
+    loading: '正在加载任务…',
+    loadError: '任务加载失败。',
+    detailError: '任务加载失败。',
+    notFound: '任务不存在',
+    notFoundHint: '该任务可能已被移除。返回列表查看当前任务。',
+    retry: '重试',
+    empty: '暂无处理任务。运行报价工作流即可生成任务。',
+    noResults: '没有符合筛选条件的任务。',
+    emptyHint: '在自动化设置中运行“Quotation routing”即可生成任务。',
+    clearFiltersHint: '调整报价编号或状态筛选，查看更多任务。',
+    clearFilters: '清除筛选',
+    quotation: '报价编号',
+    route: '路由',
+    amount: '金额',
+    statusLabel: '状态',
+    createdAt: '创建时间',
+    action: '操作',
+    process: '处理',
+    view: '查看',
+    total: '共 {{count}} 个任务',
+    previous: '上一页',
+    next: '下一页',
+    back: '返回任务列表',
+    runId: '工作流运行',
+    waitStatus: '等待节点',
+    reviewer: '处理人',
+    decision: '处理决定',
+    comment: '处理意见',
+    chooseDecision: '请选择决定',
+    decisionRequired: '提交前请选择处理决定。',
+    submit: '提交决定',
+    submitting: '正在提交…',
+    submitError: '提交失败，请刷新任务后重试。',
+    submitSuccess: '决定已记录，请查看处理结果确认最终状态。',
+    resumeStatus: '处理结果',
+    appliedHint:
+      '等待节点已应用此决定，后续节点可以使用其结果。这不代表整个工作流已完成。',
+    resume: {
+      executing: '执行中',
+      queued: '等待应用',
+      processing: '正在应用决定',
+      consumed: '决定已应用',
+      rejected: '决定未能应用',
+      'not-found': '提交记录不存在',
+      unknown: '没有可查询的提交记录',
+    },
+    resumeReason: {
+      stale: '此决定应用前，等待节点已完成或重新执行。',
+      'run-ended': '此决定应用前，工作流运行已结束。',
+      'target-missing': '等待节点的运行记录已不存在。',
+      'commit-failed': '决定多次提交失败，工作流已因错误结束。',
+    },
+    submitted: '已提交的决定',
+    unavailable: '等待节点当前不可处理。',
+    status: {
+      all: '全部',
+      pending: '待处理',
+      submitting: '提交中',
+      submitted: '已提交',
+      unavailable: '不可处理',
+    },
+    routeValue: { standard: '标准处理', 'manual-follow-up': '人工跟进' },
+    decisionValue: { approved: '通过', rejected: '驳回' },
+    wait: {
+      pending: '等待中',
+      'not-ready': '准备中',
+      finished: '已完成',
+      'run-ended': '运行已结束',
+      'run-not-found': '运行不存在',
+      'node-not-found': '节点不存在',
+      ambiguous: '节点状态不明确',
+      submitted: '决定已提交',
+    },
+  },
   i18nExamples: {
     title: '多语言示例',
     description:
@@ -44,12 +138,6 @@ const zhCN: AppResource = {
     date: '日期与时间（UTC）',
     formatNote:
       '格式化只改变显示方式，不改变数值，也不进行汇率换算。这些区域不会新增界面语言；切换语言后，对照结果保持不变。',
-  },
-  notifications: { unreadLabel: '通知中心，{{count}} 条未读' },
-  overrides: {
-    '@nocobase/app-plugin-notification-in-app': {
-      inbox: { title: '通知中心' },
-    },
   },
   noticeLoading: '正在加载通知…',
   noticeLoadError: '无法加载插件通知。',
@@ -105,7 +193,6 @@ const zhCN: AppResource = {
   'status.loading': '加载中',
   'status.loadingPage': '正在加载页面',
   'status.loadingSettings': '正在加载设置',
-  'status.loadingDev': '正在加载开发工具',
   'status.denied': '无权访问',
   'status.pageFailed': '无法加载页面',
   'status.retry': '重试',
@@ -116,7 +203,6 @@ const zhCN: AppResource = {
   'status.routeFailedDescription':
     '无法加载 {{packageName}} 的路由 {{label}}。',
   shell: {
-    workspace: 'AI 应用工作区',
     buildFreely: 'AI 自由构建。',
     reliability: '<brand>NocoBase</brand> 保障可靠。',
   },
@@ -130,12 +216,6 @@ const zhCN: AppResource = {
     title: '设置',
     emptyTitle: '暂无可用设置',
     emptyDescription: '没有已启用的插件提供你有权访问的设置页面。',
-  },
-  dev: {
-    componentExamples: '组件示例',
-    title: '开发工具',
-    emptyTitle: '暂无可用开发工具',
-    emptyDescription: '没有已启用的插件提供你有权访问的开发页面。',
   },
   routeOverlays: {
     title: '路由弹窗与抽屉',
@@ -258,6 +338,11 @@ const zhCN: AppResource = {
     notificationTasks: {
       title: '任务通知',
       description: '将任务分配给不同用户，收件人可以从通知进入详情并调整任务。',
+    },
+    aiEmployeeTasks: {
+      title: 'AI 员工任务',
+      description:
+        '把工单上的预设任务交给 AI 员工，并在右下角的全局 AI 对话中跟进结果。',
     },
     routeOverlays: {
       title: '路由弹窗与抽屉',
@@ -415,8 +500,9 @@ const zhCN: AppResource = {
     signingOut: '正在退出…',
   },
   navigation: {
+    workflow: '工作流',
+    workflowWaitingTasks: '等待节点',
     i18nExamples: '多语言示例',
-    notifications: '通知中心',
     numbers: '数字类型',
     externalCrm: '外部 CRM',
     routeOverlays: '路由弹窗与抽屉',
@@ -430,6 +516,7 @@ const zhCN: AppResource = {
     label: '应用导航',
     description: '前往本应用的页面。',
     breadcrumb: '面包屑',
+    breadcrumbMore: '显示中间层级',
     back: '返回',
   },
   dataTable: {

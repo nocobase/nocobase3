@@ -19,6 +19,9 @@ export default createReactVitestConfig({
       deps: {
         // Transform the public Client surfaces so vi.mock applies, without duplicating the Server packages' identity tokens.
         inline: [
+          // The authentication guards read the location, so they share the test's react-router rather than Node's copy,
+          // together with every client that resolves the authentication tokens and provider.
+          /@nocobase\/app-plugin-(?:authentication|api-keys|users)\/(?:dist\/)?client\//u,
           /@nocobase\/app-plugin-authorization\/(?:dist\/)?client\//u,
           /@nocobase\/app-plugin-notification-in-app\/(?:dist\/)?client\//u,
         ],
@@ -28,6 +31,8 @@ export default createReactVitestConfig({
     // silently drifted: it named a file that no longer existed while several real test files were absent from it, so
     // those tests were never run at all.
     include: ['tests/**/*.test.{ts,tsx}'],
+    // Playwright runs tests/playwright/ against a built application; its files are named *.test.ts too.
+    exclude: ['tests/playwright/**'],
     setupFiles: ['./tests/setup/client-config.ts'],
     // Keep the command usable if an application intentionally removes all scaffold tests before adding its own.
     passWithNoTests: true,

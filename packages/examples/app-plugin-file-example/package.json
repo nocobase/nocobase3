@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-file-example",
   "displayName": "File Example App Plugin",
   "description": "Attachments collection, API routes, and an upload page demonstrating File Repository.",
-  "version": "1.0.0-beta.15",
+  "version": "1.0.0-beta.16",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "sideEffects": false,
@@ -84,9 +84,9 @@
     "@nocobase/i18n": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
     "@silurus/ooxml": "0.85.1",
+    "cn": "catalog:",
     "lucide-react": "catalog:",
-    "react": "^19.0.0",
-    "tailwind-merge": "catalog:"
+    "react": "^19.0.0"
   },
   "engines": {
     "node": ">=24.0.0"

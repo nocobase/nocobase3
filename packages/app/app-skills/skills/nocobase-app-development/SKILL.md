@@ -55,6 +55,8 @@ NocoBase packages may publish Skills under `.agents/skills/`. Current applicatio
 
 Read the relevant Skill before writing the feature, but treat this table as a map rather than an installed-package list. Implementing a permission system, a notification sender, or a scheduler by hand when a registered plugin provides one is the most expensive mistake available here.
 
+For a workflow that pauses for an external decision, use the workflow plugin's `wait` node and its App-facing Skill. Persist the `runId` alongside the application's business identity and share the wait node's stable `nodeKey` with the authorized resumer; submit a stable event id through `workflowService.getInstructionApi('wait').resume()`. Keep early events for retry when the node is not ready, and keep authentication, authorization, and business side-effect idempotency in the application.
+
 For notification configuration or sending, follow the notification plugin Skill: `notification.channels` maps each name to one flat Provider configuration, and `send({ idempotencyKey, messages })` supplies a complete message per Channel. Use native addresses; email and in-app arrays create independent deliveries, while Webhooks forbid `to`.
 
 Skills synchronization reads direct `@nocobase/*` dependencies from the application manifest and retains compatibility with explicitly registered plugins. It does not make an unregistered runtime plugin active; the composition roots remain the authority for registration and contribution order.
@@ -138,7 +140,7 @@ Everything else — `client/routing/`, `client/layouts/`, `client/theme/`, the s
 
 When the built-in mechanism genuinely cannot express the requirement, changing that structure is a legitimate answer. Comment what you changed and why the built-in path did not fit, and update the application's `AGENTS.md` in the same change so it still describes the real application. The synchronized NocoBase Skills are package-owned; propose a change to their source package when the shared framework guidance itself is wrong.
 
-When you do change the shell (`client/layouts/`, `client/routing/`), keep the behaviors listed in [customizing the shell](references/frontend/references/shell.md#1-behaviors-to-keep): the Settings and Dev tools header entries, the language submenu, navigation group state, permission refresh and sign-out handling.
+When you do change the shell (`client/layouts/`, `client/routing/`), keep the behaviors listed in [customizing the shell](references/frontend/references/shell.md#1-behaviors-to-keep): the Settings header entry, dev pages inside the App shell, the language submenu, navigation group state, permission refresh and sign-out handling.
 
 ## Ownership
 
@@ -179,7 +181,7 @@ These cause real damage and appear in every reference:
 - **Route paths never include the deployment base path.** The runtime restores it.
 - **Route navigation creates sidebar entries.** Declare `navigation` in `client/routes.ts`. Refine resources create no menu entries and, with no data provider registered, load nothing; pages load data with `useApiClient` (see [calling the API](references/frontend/references/api.md)).
 - **Reach for the built-in mechanism first.** Changing framework structure is allowed when nothing else fits — comment it and update the docs.
-- **Tests live in `tests/` or `e2e/`,** never beside the source.
+- **Tests live in `tests/`,** never beside the source; browser tests against a running application go in `tests/playwright/`.
 - **Remove direct NocoBase packages with `package remove` after reviewing their usage.** Do not hand-delete only the manifest entry or leave synchronized Skills and plugin registrations behind.
 
 ## Development file watching
