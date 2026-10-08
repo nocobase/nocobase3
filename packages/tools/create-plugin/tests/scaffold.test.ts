@@ -1,13 +1,17 @@
+import { spawnSync } from 'node:child_process';
 import {
   mkdir,
   mkdtemp,
   readFile,
   readdir,
   rm,
+  symlink,
   writeFile,
 } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { PluginCapability } from '../src/lib/capabilities.ts';
@@ -475,7 +479,51 @@ describe('createPlugin', () => {
     // The Node preset carries the shared timeouts a database test needs; Vitest's own 5-second default is too short.
     expect(vitestConfig).toContain('createNodeVitestConfig');
     expect(vitestConfig).not.toContain('createReactVitestConfig');
-    expect(vitestConfig).toContain("include: ['tests/**/*.test.ts']");
+    expect(vitestConfig).toContain("include: ['tests/**/*.test.{ts,tsx}']");
+  });
+
+  it('executes TSX tests in a generated Node-only plugin', async () => {
+    const result = await createWith(['server.routes']);
+    await symlink(
+      fileURLToPath(new URL('../node_modules', import.meta.url)),
+      path.join(result.targetDirectory, 'node_modules'),
+      'junction',
+    );
+    const testPath = 'tests/project/node-discovery.test.tsx';
+    await mkdir(path.join(result.targetDirectory, 'tests/project'));
+    await writeFile(
+      path.join(result.targetDirectory, testPath),
+      `import { expect, it } from 'vitest';
+it('runs TSX tests under Node', () => {
+  expect(typeof process.versions.node).toBe('string');
+  expect(typeof document).toBe('undefined');
+});
+`,
+    );
+    const require = createRequire(import.meta.url);
+    const run = spawnSync(
+      process.execPath,
+      [
+        path.join(
+          path.dirname(require.resolve('vitest/package.json')),
+          'vitest.mjs',
+        ),
+        'run',
+        testPath,
+        '--reporter=json',
+      ],
+      { cwd: result.targetDirectory, encoding: 'utf8', timeout: 20_000 },
+    );
+
+    expect(run.error).toBeUndefined();
+    expect({ status: run.status, stderr: run.stderr }).toEqual({
+      status: 0,
+      stderr: '',
+    });
+    expect(JSON.parse(run.stdout)).toMatchObject({
+      numTotalTests: 1,
+      numPassedTests: 1,
+    });
   });
 
   it('adds no Vitest configuration to a plugin without tests', async () => {

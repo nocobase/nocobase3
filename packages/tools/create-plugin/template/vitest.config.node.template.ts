@@ -11,7 +11,7 @@ export default defineConfig({
       createNodeVitestConfig({
         test: {
           name: 'node',
-          include: ['tests/**/*.test.ts'],
+          include: ['tests/**/*.test.{ts,tsx}'],
           exclude: ['tests/client/**'],
         },
       }),
