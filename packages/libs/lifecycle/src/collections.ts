@@ -7,7 +7,8 @@
  * `EffectRun`: a `bigInt` auto-increment `id`; strings for names, ids
  * and statuses; `json` for `input` and `result`; `text` for `error`; integers
  * for `version`, `attempts` and `maxAttempts`; and `datetimeTz` for every
- * instant. The transitions collection also takes a unique index on
+ * instant; and a non-null boolean `stayBound` on effect runs recording whether
+ * they belong to the entered state. The transitions collection also takes a unique index on
  * `(lifecycle, recordId, version)`. The effect runs also take a nullable
  * `json` `continuation` and two nullable `datetimeTz` columns:
  * `continuationDueAt`, when that continuation may be tried next, null

@@ -110,3 +110,78 @@ it.each([false, true])(
     expect(store.record('jobs', row.id)?.status).toBe('busy');
   },
 );
+it('retains a transition effect continuation when the same effect is also declared onEnter', async () => {
+  const store = new MemoryLifecycleStore();
+  const runtime = new LifecycleRuntime({
+    store,
+    dispatcher: { dispatch: async () => {} },
+  });
+  runtime.register(
+    defineLifecycle<Types>({
+      name: 'jobs',
+      initial: 'idle',
+      states: ['idle', 'busy', 'review', { name: 'done', final: true }],
+      transitions: {
+        begin: {
+          from: 'idle',
+          to: 'busy',
+          effects: [delivery],
+          onTransition: async ({ tx, record }) => {
+            await tx.fire('jobs', record.id, 'review', { actor: SYSTEM_ACTOR });
+          },
+        },
+        review: { from: 'busy', to: 'review' },
+        complete: { from: 'review', to: 'done' },
+      },
+      onEnter: { busy: [delivery] },
+    }),
+  );
+  const row = store.insertRecord('jobs', {
+    status: 'idle',
+    lifecycleVersion: 0,
+  });
+  const fired = await runtime.fire('jobs', row.id, 'begin', {
+    actor: SYSTEM_ACTOR,
+  });
+  expect(fired.effectRuns).toHaveLength(1);
+  await runtime.runEffect(fired.effectRuns[0].id);
+  expect(store.record('jobs', row.id)?.status).toBe('done');
+});
+
+it.each([false, true])(
+  'keeps the queued stay binding after a definition change (stayBound: %s)',
+  async (stayBound) => {
+    const store = new MemoryLifecycleStore();
+    const definition = (bind: boolean) =>
+      defineLifecycle<Types>({
+        name: 'jobs',
+        initial: 'idle',
+        states: ['idle', 'busy', { name: 'done', final: true }],
+        transitions: {
+          begin: { from: 'idle', to: 'busy', effects: bind ? [] : [delivery] },
+          touch: { from: 'busy', to: 'busy' },
+          complete: { from: 'busy', to: 'done' },
+        },
+        onEnter: { busy: bind ? [delivery] : [] },
+      });
+    const dispatcher = { dispatch: () => Promise.resolve() };
+    const before = new LifecycleRuntime({ store, dispatcher });
+    before.register(definition(stayBound));
+    const row = store.insertRecord('jobs', {
+      status: 'idle',
+      lifecycleVersion: 0,
+    });
+    const begun = await before.fire('jobs', row.id, 'begin', {
+      actor: SYSTEM_ACTOR,
+    });
+    expect(begun.effectRuns[0].stayBound).toBe(stayBound);
+    await before.fire('jobs', row.id, 'touch', { actor: SYSTEM_ACTOR });
+    // A new process moves the same effect to the other place in its definition.
+    const after = new LifecycleRuntime({ store, dispatcher });
+    after.register(definition(!stayBound));
+    await after.runEffect(begun.effectRuns[0].id);
+    expect(store.record('jobs', row.id)?.status).toBe(
+      stayBound ? 'busy' : 'done',
+    );
+  },
+);

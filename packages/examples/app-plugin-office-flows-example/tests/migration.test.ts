@@ -70,6 +70,9 @@ describeMigration('202610010001_office_flows_example_create_collections', {
       unique: true,
     });
     await expectRequestKeysUnique(connection);
+    await expectCollection('officeFlowsEffectRuns').toHaveField('stayBound', {
+      nullable: false,
+    });
     // A continuation waiting on its run, and when the sweep tries it next:
     // both null while nothing waits, and the sweep reads the due time.
     await expectCollection(COLLECTIONS.effectRuns).toHaveField('continuation', {

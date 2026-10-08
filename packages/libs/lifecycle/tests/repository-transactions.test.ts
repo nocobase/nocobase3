@@ -71,6 +71,7 @@ async function createTables(): Promise<void> {
     table.string('lifecycle').notNull();
     table.string('recordId').notNull();
     table.string('effect').notNull();
+    table.boolean('stayBound').notNull();
     table.string('status').notNull();
     table.integer('attempts').notNull().defaultTo(0);
     table.integer('maxAttempts').notNull().defaultTo(1);

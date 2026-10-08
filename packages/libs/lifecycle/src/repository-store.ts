@@ -156,6 +156,7 @@ function toEffectRun(row: Row): EffectRun {
     lifecycle: String(row.lifecycle),
     recordId: String(row.recordId),
     effect: String(row.effect),
+    stayBound: Boolean(row.stayBound),
     status: String(row.status) as EffectRunStatus,
     attempts: Number(row.attempts),
     maxAttempts: Number(row.maxAttempts),

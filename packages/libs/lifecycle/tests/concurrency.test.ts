@@ -430,6 +430,7 @@ describe('lifecycle concurrency', () => {
       updatedAt: '2026-10-01T09:00:00.000Z',
       claimedAt: null,
       runAfter: null,
+      stayBound: true,
     });
     advance(60);
     expect(await runtime.reclaim()).toBe(0);

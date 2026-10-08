@@ -75,6 +75,10 @@ describeMigration('202610010001_lifecycle_example_create_collections', {
       { unique: true },
     );
     await expectRequestKeysUnique(connection);
+    await expectCollection('lifecycleExampleEffectRuns').toHaveField(
+      'stayBound',
+      { nullable: false },
+    );
     // A continuation waiting on its run, and when the sweep tries it next:
     // both null while nothing waits, and the sweep reads the due time.
     await expectCollection('lifecycleExampleEffectRuns').toHaveField(

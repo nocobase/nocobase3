@@ -298,6 +298,7 @@ describe('operating runs', () => {
       updatedAt: '2026-10-01T09:00:00.000Z',
       claimedAt: null,
       runAfter: null,
+      stayBound: true,
     });
     await expect(runtime.retryRun(run.id)).rejects.toMatchObject({
       code: 'UNKNOWN_EFFECT',
@@ -360,6 +361,7 @@ describe('operating runs', () => {
       updatedAt: '2026-10-01T09:00:00.000Z',
       claimedAt: null,
       runAfter: null,
+      stayBound: true,
     });
     expect(
       (await runtime.listEffectRuns({ status: 'queued' })).map(

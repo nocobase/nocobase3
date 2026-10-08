@@ -62,6 +62,7 @@ async function createTables(): Promise<void> {
     table.string('lifecycle').notNull();
     table.string('recordId').notNull();
     table.string('effect').notNull();
+    table.boolean('stayBound').notNull();
     table.string('status').notNull();
     table.integer('attempts').notNull().defaultTo(0);
     table.integer('maxAttempts').notNull().defaultTo(1);
@@ -244,6 +245,67 @@ describe.runIf(process.env.NOCOBASE_TEST_DB_DIALECT === 'postgres')(
 );
 
 describe('Repository lifecycle store', () => {
+  it.each([false, true])(
+    'persists whether a shared effect actually belonged to the entered stay (hook moved: %s)',
+    async (move) => {
+      type Types = {
+        record: LifecycleRecord;
+        state: 'open' | 'waiting' | 'review' | 'closed';
+      };
+      const effect = defineEffect<Types>({
+        name: 'tickets.deliver',
+        onSuccess: 'finish',
+        run: () => ({}),
+      });
+      const lifecycle = defineLifecycle<Types>({
+        name: 'tickets',
+        initial: 'open',
+        states: ['open', 'waiting', 'review', { name: 'closed', final: true }],
+        transitions: {
+          begin: {
+            from: 'open',
+            to: 'waiting',
+            effects: [effect],
+            onTransition: async ({ tx, record }) => {
+              if (move)
+                await tx.fire('tickets', record.id, 'review', {
+                  actor: SYSTEM_ACTOR,
+                });
+            },
+          },
+          review: { from: 'waiting', to: 'review' },
+          finish: { from: ['waiting', 'review'], to: 'closed' },
+        },
+        onEnter: { waiting: [effect] },
+      });
+      const dispatcher: EffectDispatcher = {
+        dispatch: () => Promise.resolve(),
+      };
+      const first = new LifecycleRuntime({ store, dispatcher });
+      first.register(lifecycle);
+      const id = await createTicket();
+      const begun = await first.fire('tickets', id, 'begin', {
+        actor: SYSTEM_ACTOR,
+      });
+      expect(begun.effectRuns.map((run) => run.stayBound)).toEqual(
+        move ? [false] : [false, true],
+      );
+      const runId = begun.effectRuns[0].id;
+      // Read through a fresh store, as another worker would, to prove the
+      // origin survives persistence rather than living only in the dispatcher.
+      const reloaded = createRepositoryLifecycleStore(database);
+      expect((await reloaded.findEffectRun(runId))?.stayBound).toBe(false);
+      if (!move)
+        expect(
+          (await reloaded.findEffectRun(begun.effectRuns[1].id))?.stayBound,
+        ).toBe(true);
+      const next = new LifecycleRuntime({ store: reloaded, dispatcher });
+      next.register(lifecycle);
+      await next.runEffect(runId);
+      expect((await reloaded.findRecord('tickets', id))?.status).toBe('closed');
+    },
+  );
+
   it('writes the state, the log entry and the effect runs together', async () => {
     const id = await createTicket();
     const result = await runtime().fire('tickets', id, 'replyToCustomer', {

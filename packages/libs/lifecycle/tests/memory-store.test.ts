@@ -25,6 +25,7 @@ const queued: NewEffectRun = {
   updatedAt: '2026-10-01T09:00:00.000Z',
   claimedAt: null,
   runAfter: null,
+  stayBound: true,
 };
 
 /** A promise and the function that settles it. */

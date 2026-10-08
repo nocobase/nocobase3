@@ -49,6 +49,8 @@ export interface EffectRun {
   readonly lifecycle: string;
   readonly recordId: string;
   readonly effect: string;
+  /** Whether this run was queued for an onEnter stay; fixed when queued, independent of later definitions. */
+  readonly stayBound: boolean;
   readonly status: EffectRunStatus;
   readonly attempts: number;
   readonly maxAttempts: number;
@@ -163,7 +165,10 @@ export type NewEffectRun = Omit<EffectRun, 'id' | 'continuation'> & {
   readonly continuation?: PendingContinuation | null;
 };
 export type EffectRunChanges = Partial<
-  Omit<EffectRun, 'id' | 'transitionId' | 'lifecycle' | 'recordId' | 'effect'>
+  Omit<
+    EffectRun,
+    'id' | 'transitionId' | 'lifecycle' | 'recordId' | 'effect' | 'stayBound'
+  >
 >;
 
 /**

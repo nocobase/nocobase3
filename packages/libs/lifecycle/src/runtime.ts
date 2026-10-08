@@ -464,24 +464,6 @@ function recordMovedOn(error: LifecycleError): boolean {
   return MOVED_ON.has(error.code) && !raisedInStep.has(error);
 }
 
-/**
- * Whether a run of `effect`, queued by `entry`, serves the stay `entry`
- * began rather than the transition itself: an effect of the entered
- * state's `onEnter` does, and so does one the definition no longer names
- * in either place, to be safe; an effect only the transition declares
- * does not. One named in both is taken as `onEnter`'s.
- */
-function servesStay(
-  lifecycle: Lifecycle<LifecycleTypes>,
-  entry: TransitionEntry,
-  effect: string,
-): boolean {
-  const named = (effects: readonly EffectDefinition<LifecycleTypes>[]) =>
-    effects.some((each) => each.name === effect);
-  if (named(lifecycle.onEnter.get(entry.to) ?? [])) return true;
-  return !named(lifecycle.transitions.get(entry.transition)?.effects ?? []);
-}
-
 /** Whether a run of failed tries has reached a count worth a log line: 1, 2, 4, 8… */
 function isLogworthy(attempts: number): boolean {
   return attempts > 0 && (attempts & (attempts - 1)) === 0;
@@ -1071,6 +1053,7 @@ export class LifecycleRuntime {
                 lifecycle,
                 entry,
                 lifecycle.onEnter.get(state) ?? [],
+                true,
               ),
             },
             written: record,
@@ -2078,8 +2061,8 @@ export class LifecycleRuntime {
     run: EffectRun,
   ): Promise<LifecycleError | undefined> {
     const { lifecycle } = registered;
+    if (!run.stayBound) return undefined;
     const entry = await store.findTransition(run.transitionId);
-    if (entry && !servesStay(lifecycle, entry, run.effect)) return undefined;
     const own = `$run:${run.id}:`;
     // Any later transition ends the stay, a self-transition included: it
     // leaves and enters the state again and queues its onEnter effects anew.
@@ -2412,12 +2395,28 @@ export class LifecycleRuntime {
             lifecycle,
             entry,
             lifecycle.transitions.get(transition)?.effects ?? [],
+            false,
           ),
         },
         written: record,
         movedOn: true,
       };
-    const effectRuns = await this.owe(store, lifecycle, entry, plan.effects);
+    const effectRuns = [
+      ...(await this.owe(
+        store,
+        lifecycle,
+        entry,
+        lifecycle.transitions.get(transition)?.effects ?? [],
+        false,
+      )),
+      ...(await this.owe(
+        store,
+        lifecycle,
+        entry,
+        lifecycle.onEnter.get(plan.to) ?? [],
+        true,
+      )),
+    ];
     return {
       result: { record, entry, effectRuns },
       written: record,
@@ -2505,6 +2504,7 @@ export class LifecycleRuntime {
     lifecycle: Lifecycle<LifecycleTypes>,
     entry: TransitionEntry,
     effects: readonly EffectDefinition<LifecycleTypes>[],
+    stayBound: boolean,
   ): Promise<EffectRun[]> {
     const runs: EffectRun[] = [];
     for (const effect of effects)
@@ -2514,6 +2514,7 @@ export class LifecycleRuntime {
           lifecycle: lifecycle.name,
           recordId: entry.recordId,
           effect: effect.name,
+          stayBound,
           status: 'queued',
           attempts: 0,
           maxAttempts: effect.retry?.attempts ?? 1,

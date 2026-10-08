@@ -291,6 +291,7 @@ const Run: z.ZodType<EffectRun> = z
     lifecycle: z.string(),
     recordId: z.string(),
     effect: z.string(),
+    stayBound: z.boolean(),
     status: z.enum([
       'queued',
       'running',
