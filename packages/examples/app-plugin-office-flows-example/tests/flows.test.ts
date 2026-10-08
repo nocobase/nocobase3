@@ -675,6 +675,45 @@ describe('office store under retries and races', () => {
     ]);
   });
 
+  it('retries an aborted serial allocation, but stops after five retries', async () => {
+    const repository = store.repository(COLLECTIONS.serials);
+    vi.spyOn(store, 'repository').mockReturnValue(repository);
+    const deadlock = Object.assign(new Error('Transaction aborted'), {
+      code: 'ER_LOCK_DEADLOCK',
+    });
+    const upsert = vi
+      .spyOn(repository, 'upsertOne')
+      .mockRejectedValueOnce(deadlock);
+    expect(await store.nextNumber('RETRY')).toMatch(/-0001$/);
+    expect(upsert).toHaveBeenCalledTimes(2);
+    upsert.mockClear().mockRejectedValue(deadlock);
+    await expect(store.nextNumber('EXHAUSTED')).rejects.toBe(deadlock);
+    expect(upsert).toHaveBeenCalledTimes(6);
+  });
+
+  it('does not retry an unknown serial outcome or a caller-owned transaction', async () => {
+    const repository = store.repository(COLLECTIONS.serials);
+    vi.spyOn(store, 'repository').mockReturnValue(repository);
+    const uncertain = new Error('Connection lost');
+    const upsert = vi
+      .spyOn(repository, 'upsertOne')
+      .mockRejectedValue(uncertain);
+    await expect(store.nextNumber('UNKNOWN')).rejects.toBe(uncertain);
+    expect(upsert).toHaveBeenCalledTimes(1);
+    const deadlock = Object.assign(new Error('Transaction aborted'), {
+      code: 'ER_LOCK_DEADLOCK',
+    });
+    upsert.mockClear().mockRejectedValue(deadlock);
+    await expect(
+      database.transaction(async (connection) => {
+        const bound = store.bound(connection);
+        vi.spyOn(bound, 'repository').mockReturnValue(repository);
+        await bound.nextNumber('BOUND');
+      }),
+    ).rejects.toBe(deadlock);
+    expect(upsert).toHaveBeenCalledTimes(1);
+  });
+
   it('writes a keyed trace once however often it is retried', async () => {
     const trace = {
       key: 'incoming:42',

@@ -42,6 +42,8 @@ The source requirements leave these open; the example takes the first reading an
 
 Task dispatch stores each assignee in `officeFlowsTaskAssignees` in the same transaction as the task. The personal task list filters those scalar memberships before loading tasks; it does not require a database driver's JSON filtering support. The task's `assignees` array remains the snapshot used by its guards.
 
+Serial allocation retries a confirmed deadlock at most five times when it owns the transaction. Inside a caller transaction it propagates the failure so the caller can retry the whole operation; a connection error with an uncertain commit outcome is never retried here.
+
 ## Testing
 
 `tests/calendar.test.ts` and `tests/data-request-form.test.ts` cover the scheduling and the form rules as plain functions. `tests/flows.test.ts` runs both processes on the test database (SQLite by default) with the migration and seed applied, and their routes on the real service; `tests/routes.test.ts` covers the HTTP boundary.

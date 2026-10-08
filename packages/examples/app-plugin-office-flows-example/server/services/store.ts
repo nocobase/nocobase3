@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 
 import type {
   DatabaseConnection,
@@ -79,6 +80,24 @@ export function people(value: unknown): string[] {
   if (typeof value === 'string' && value.startsWith('['))
     return (JSON.parse(value) as unknown[]).map(String);
   return [];
+}
+
+/** These errors confirm a deadlock victim's transaction was aborted. */
+function isDeadlock(error: unknown): boolean {
+  const visited = new Set<unknown>();
+  let current = error;
+  while (current && typeof current === 'object' && !visited.has(current)) {
+    visited.add(current);
+    const record = current as Record<string, unknown>;
+    if (
+      record.code === 'ER_LOCK_DEADLOCK' ||
+      record.code === '40P01' ||
+      record.number === 1205
+    )
+      return true;
+    current = record.cause ?? record.originalError;
+  }
+  return false;
 }
 
 function unique(values: readonly string[]): string[] {
@@ -179,12 +198,24 @@ export class OfficeStore {
     const key = `${prefix}-${period}`;
     // The value the upsert itself wrote: a separate read could see another
     // caller's increment and hand out the same number twice.
-    const { record } = await this.repository(COLLECTIONS.serials).upsertOne({
-      filter: { key },
-      create: { key, value: 1 },
-      update: { value: (value) => value.increment(1) },
-    });
-    return `${key}-${text(Number(record.value)).padStart(4, '0')}`;
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const { record } = await this.repository(COLLECTIONS.serials).upsertOne(
+          {
+            filter: { key },
+            create: { key, value: 1 },
+            update: { value: (value) => value.increment(1) },
+          },
+        );
+        return `${key}-${text(Number(record.value)).padStart(4, '0')}`;
+      } catch (error) {
+        // A new counter can deadlock with another insert. Retry only the
+        // implicit transaction we own, never part of a caller's aborted
+        // transaction or an error with an unknown commit outcome.
+        if (this.connection || attempt >= 5 || !isDeadlock(error)) throw error;
+        await delay(5 * 2 ** attempt + Math.floor(Math.random() * 5));
+      }
+    }
   }
 
   public async calendar(): Promise<WorkCalendar> {
