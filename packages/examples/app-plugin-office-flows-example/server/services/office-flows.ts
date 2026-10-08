@@ -812,12 +812,20 @@ export class OfficeFlowsService {
     actor: string,
     page: Paging = FIRST_PAGE,
   ): Promise<PlainPage> {
+    const memberships = await this.database
+      .repository(COLLECTIONS.taskAssignees)
+      .findMany({ filter: { personId: actor } });
     const tasks: Plain[] = [];
     for (const kind of ['clerk', 'team', 'executor'] as const) {
+      const ids = memberships
+        .filter((membership) => membership.kind === kind)
+        .map((membership) => idOf(membership.taskId));
+      if (ids.length === 0) continue;
       const rows = await this.database
         .repository(TASK_COLLECTIONS[kind])
         .findMany({
-          filter: (filter) => filter.json('assignees').has(actor),
+          filter: (filter) =>
+            filter.or(ids.map((id) => filter.number('id').eq(id))),
           sort: (sort) => sort.field('id').desc(),
         });
       tasks.push(...rows.map((row) => ({ ...row, kind })));

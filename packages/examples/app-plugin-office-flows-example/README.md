@@ -40,6 +40,8 @@ The process vocabulary — field names, options, states and steps — is Chinese
 
 The source requirements leave these open; the example takes the first reading and says so here. A date falling on a weekend or holiday moves to the next workday, or the workday before when that would pass the last delivery date. "每季度第几天" counts from the first day of the quarter. "其他固定频次" creates no task by itself. All three managers may return a request, and accepting it finishes it. A department's clerks all countersign "[C]" before its task moves on, while "[Y]" or "[B]" from any of them ends it. Voided extraction tasks do not count against returning or finishing a request. Reminders are deduplicated per root document and level.
 
+Task dispatch stores each assignee in `officeFlowsTaskAssignees` in the same transaction as the task. The personal task list filters those scalar memberships before loading tasks; it does not require a database driver's JSON filtering support. The task's `assignees` array remains the snapshot used by its guards.
+
 ## Testing
 
 `tests/calendar.test.ts` and `tests/data-request-form.test.ts` cover the scheduling and the form rules as plain functions. `tests/flows.test.ts` runs both processes on the test database (SQLite by default) with the migration and seed applied, and their routes on the real service; `tests/routes.test.ts` covers the HTTP boundary.

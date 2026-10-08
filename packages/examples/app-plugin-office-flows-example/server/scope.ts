@@ -12,6 +12,7 @@ export const COLLECTIONS: {
   readonly clerkTasks: 'officeFlowsClerkTasks';
   readonly teamTasks: 'officeFlowsTeamTasks';
   readonly executorTasks: 'officeFlowsExecutorTasks';
+  readonly taskAssignees: 'officeFlowsTaskAssignees';
   readonly departments: 'officeFlowsDepartments';
   readonly managementGroups: 'officeFlowsManagementGroups';
   readonly holidays: 'officeFlowsHolidays';
@@ -29,6 +30,7 @@ export const COLLECTIONS: {
   clerkTasks: 'officeFlowsClerkTasks',
   teamTasks: 'officeFlowsTeamTasks',
   executorTasks: 'officeFlowsExecutorTasks',
+  taskAssignees: 'officeFlowsTaskAssignees',
   departments: 'officeFlowsDepartments',
   managementGroups: 'officeFlowsManagementGroups',
   holidays: 'officeFlowsHolidays',

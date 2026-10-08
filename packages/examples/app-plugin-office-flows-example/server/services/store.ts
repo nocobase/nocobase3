@@ -417,6 +417,13 @@ export class OfficeStore {
             },
           });
         const id = idOf(record.record.id);
+        // Publish ownership with the task and the dispatch claim. A retry
+        // reuses the existing task, so it cannot duplicate these memberships.
+        for (const personId of unique(people(row.assignees))) {
+          await connection.repository(COLLECTIONS.taskAssignees).createOne({
+            values: { kind: target.kind, taskId: id, personId },
+          });
+        }
         await rows.updateMany({
           filter: { id: rowId },
           values: { childId: id },

@@ -149,6 +149,16 @@ const migration: MigrationDefinition = defineMigration({
     await builder.createCollection('officeFlowsTeamTasks', taskColumns);
     await builder.createCollection('officeFlowsExecutorTasks', taskColumns);
 
+    // Query task ownership through scalar columns on every supported dialect.
+    // Task ids are scoped by kind because each kind has its own collection.
+    await builder.createCollection('officeFlowsTaskAssignees', (table) => {
+      table.bigInt('id').primary().autoIncrement().notNull();
+      table.string('kind').notNull();
+      table.bigInt('taskId').notNull();
+      table.string('personId').notNull();
+      table.unique(['personId', 'kind', 'taskId'], { mode: 'index' });
+    });
+
     await builder.createCollection('officeFlowsDepartments', (table) => {
       table.bigInt('id').primary().autoIncrement().notNull();
       table.string('name').notNull().unique({ mode: 'index' });
@@ -275,6 +285,7 @@ const migration: MigrationDefinition = defineMigration({
       'officeFlowsHolidays',
       'officeFlowsManagementGroups',
       'officeFlowsDepartments',
+      'officeFlowsTaskAssignees',
       'officeFlowsExecutorTasks',
       'officeFlowsTeamTasks',
       'officeFlowsClerkTasks',

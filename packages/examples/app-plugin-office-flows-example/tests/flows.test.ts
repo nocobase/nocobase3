@@ -694,6 +694,51 @@ describe('office store under retries and races', () => {
     ).toBe(2);
   });
 
+  it('lists only the assignee’s tasks across kinds, with stable pagination', async () => {
+    for (const level of [1, 2, 3] as const) {
+      const { record } = await database
+        .repository(COLLECTIONS.assignments)
+        .createOne({
+          values: {
+            rootId: 1,
+            parentKind: 'incoming',
+            parentId: 1,
+            level,
+            departmentName: '财务部',
+            assignees: ['clerk-a', 'clerk-a', 'clerk-b'],
+            ccHeads: ['head-only'],
+            createdBy: 'registrar',
+            createdAt: new Date().toISOString(),
+          },
+        });
+      await store.dispatch(level, [Number(record.id)]);
+      await store.dispatch(level, [Number(record.id)]);
+    }
+    const all = await service.myTasks('clerk-a');
+    expect(all.total).toBe(3);
+    expect(all.records.map((task) => task.kind)).toEqual([
+      'clerk',
+      'team',
+      'executor',
+    ]);
+    expect(await service.myTasks('clerk-a', { page: 2, pageSize: 1 })).toEqual({
+      total: 3,
+      records: [all.records[1]],
+    });
+    expect((await service.myTasks('clerk-b')).total).toBe(3);
+    expect(await service.myTasks('head-only')).toEqual({
+      total: 0,
+      records: [],
+    });
+    expect(await service.myTasks('stranger')).toEqual({
+      total: 0,
+      records: [],
+    });
+    expect(await database.repository(COLLECTIONS.taskAssignees).count()).toBe(
+      6,
+    );
+  });
+
   it('reports a row an earlier attempt dispatched instead of skipping it', async () => {
     const row = await database.repository(COLLECTIONS.assignments).createOne({
       values: {

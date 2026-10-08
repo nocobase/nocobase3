@@ -52,7 +52,11 @@ async function expectRequestKeysUnique(
 describeMigration('202610010001_office_flows_example_create_collections', {
   sources: migrations,
   up: async ({ connection, expectCollection }) => {
-    expect(names).toHaveLength(16);
+    expect(names).toHaveLength(17);
+    await expectCollection(COLLECTIONS.taskAssignees).toHaveIndex(
+      ['personId', 'kind', 'taskId'],
+      { unique: true },
+    );
     for (const name of names) await expectCollection(name).toExist();
     // The log and the traces are unique where a retry must not write twice.
     await expectCollection(COLLECTIONS.transitions).toHaveIndex(
