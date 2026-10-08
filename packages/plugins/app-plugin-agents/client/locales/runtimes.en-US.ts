@@ -19,6 +19,16 @@ const runtimesEnUS = {
       offline: 'Offline · {{time}}',
       offlineNever: 'Offline',
     },
+    toolUsage: {
+      label: 'Runs by coding tool',
+      item: '{{tool}} {{used}}/{{limit}}',
+    },
+    toolSlots: {
+      label: 'Limits per coding tool',
+      hint: 'How many runs of each coding tool it takes at once, such as fewer for a tool whose subscription allows fewer sessions. Leave one empty to bound it by the concurrent runs only.',
+      none: 'No limit',
+      invalid: 'Enter whole numbers from 1 to 64, or leave them empty.',
+    },
     policy: {
       title: 'Local policy',
       description:
@@ -161,6 +171,7 @@ const runtimesEnUS = {
     slotsHint:
       'How many runs the runtime takes at once. You can change it on the Runtimes page at any time.',
     tokenSlots: 'Max concurrent runs: {{slots}}.',
+    tokenToolSlots: 'Per coding tool: {{limits}}.',
     connected: '{{name}} is connected.',
     done: 'Done',
     system: {

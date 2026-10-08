@@ -27,7 +27,7 @@ describe('--slots', () => {
       'claude=',
       '',
     ])
-      expect(() => parseSlotsFlag(value), value).toThrow(UsageError);
+      expect(() => parseSlotsFlag(value)).toThrow(UsageError);
   });
 
   it('words limits per tool in the protocol order', () => {

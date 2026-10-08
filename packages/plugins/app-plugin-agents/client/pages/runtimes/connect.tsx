@@ -58,6 +58,8 @@ import {
   registerCommand,
 } from '../../lib/install.js';
 import { RunnerToolsCell } from './runner-cells.js';
+import { readToolSlots, type ToolSlotsDraft } from '../../lib/tool-slots.js';
+import { ToolSlotsFields } from './tool-slots-fields.js';
 
 /** How often the dialog asks for runners while it waits, besides the realtime announcement. */
 const WAIT_POLL_MS = 3000;
@@ -88,17 +90,21 @@ function AddRunnerSteps(): ReactElement {
   const [toolsMissing, setToolsMissing] = useState(false);
   const [slots, setSlots] = useState('1');
   const [slotsInvalid, setSlotsInvalid] = useState(false);
+  const [toolSlots, setToolSlots] = useState<ToolSlotsDraft>({});
+  const [toolSlotsInvalid, setToolSlotsInvalid] = useState(false);
   // The runners that existed when the token was made: a runner not among them is the one that just registered.
   const [known, setKnown] = useState<ReadonlySet<string>>();
 
   const create = useMutation({
     mutationFn: async () => {
+      const limits = readToolSlots(toolSlots, tools);
       const before = await api.runners();
       const token = await api.createRegistrationToken({
         trust: canShare ? trust : 'ownerOnly',
         // Every tool is no choice at all, so a tool the protocol adds later is offered too.
         enabledTools: tools.length === AGENT_TOOLS.length ? null : tools,
         slots: Number(slots),
+        ...(limits ? { toolSlots: limits } : {}),
       });
       setKnown(new Set(before.map((runner) => runner.id)));
       return token;
@@ -119,9 +125,11 @@ function AddRunnerSteps(): ReactElement {
     event.preventDefault();
     const count = Number(slots);
     const badSlots = !(Number.isInteger(count) && count >= 1 && count <= 64);
+    const badToolSlots = readToolSlots(toolSlots, tools) === undefined;
     setToolsMissing(tools.length === 0);
     setSlotsInvalid(badSlots);
-    if (tools.length === 0 || badSlots) return;
+    setToolSlotsInvalid(badToolSlots);
+    if (tools.length === 0 || badSlots || badToolSlots) return;
     create.mutate();
   }
 
@@ -207,6 +215,16 @@ function AddRunnerSteps(): ReactElement {
           <FieldDescription>{t('connect.slotsHint')}</FieldDescription>
         )}
       </Field>
+      <ToolSlotsFields
+        idPrefix='ag-add-tool-slots'
+        tools={tools}
+        draft={toolSlots}
+        invalid={toolSlotsInvalid}
+        onChange={(draft) => {
+          setToolSlotsInvalid(false);
+          setToolSlots(draft);
+        }}
+      />
       <div className='flex justify-end gap-2'>
         <Button type='button' variant='outline' onClick={() => void close()}>
           {t('actions.cancel')}
@@ -298,6 +316,17 @@ function InstallStep({
         })}
         {token.slots
           ? ` ${t('connect.tokenSlots', { slots: token.slots })}`
+          : null}
+        {token.toolSlots
+          ? ` ${t('connect.tokenToolSlots', {
+              limits: AGENT_TOOLS.filter(
+                (tool) => token.toolSlots?.[tool] !== undefined,
+              )
+                .map(
+                  (tool) => `${t(`tools.${tool}`)} ${token.toolSlots?.[tool]}`,
+                )
+                .join(', '),
+            })}`
           : null}
       </p>
       <div

@@ -68,6 +68,12 @@ import {
   ToolStateTag,
 } from './runner-cells.js';
 import { POLICY_FIELDS, policyRule } from './runner-policy.js';
+import {
+  readToolSlots,
+  toolSlotsDraft,
+  type ToolSlotsDraft,
+} from '../../lib/tool-slots.js';
+import { ToolSlotsFields } from './tool-slots-fields.js';
 
 interface Update {
   readonly patch: RunnerPatch;
@@ -222,24 +228,43 @@ function GeneralForm({
   const [slots, setSlots] = useState(String(runner.slots));
   const [trust, setTrust] = useState<RunnerTrust>(runner.trust);
   const [acceptJobs, setAcceptJobs] = useState(runner.acceptJobs);
-  const [errors, setErrors] = useState<{ name?: string; slots?: string }>({});
+  const [toolSlots, setToolSlots] = useState<ToolSlotsDraft>(() =>
+    toolSlotsDraft(runner.toolSlots),
+  );
+  const [errors, setErrors] = useState<{
+    name?: string;
+    slots?: string;
+    toolSlots?: boolean;
+  }>({});
+  // The tools it reports, and any it has a limit for though it no longer reports them (so the limit can be cleared).
+  const limitTools = AGENT_TOOLS.filter(
+    (tool) =>
+      listedTools(runner).includes(tool) ||
+      runner.toolSlots?.[tool] !== undefined,
+  );
   const [sharing, setSharing] = useState<RunnerPatch | null>(null);
   const jobKinds = jobKindsOf(runner);
 
   function submit(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
     const count = Number(slots);
+    const limits = readToolSlots(toolSlots, limitTools);
     const found = {
       ...(name.trim() ? {} : { name: t('runtimes.edit.nameRequired') }),
       ...(Number.isInteger(count) && count >= 1 && count <= 64
         ? {}
         : { slots: t('runtimes.edit.slotsInvalid') }),
+      ...(limits === undefined ? { toolSlots: true } : {}),
     };
     setErrors(found);
     if (Object.keys(found).length > 0) return;
     const patch: RunnerPatch = {
       ...(name.trim() === runner.name ? {} : { name: name.trim() }),
       ...(count === runner.slots ? {} : { slots: count }),
+      ...(limits === undefined ||
+      JSON.stringify(limits) === JSON.stringify(runner.toolSlots)
+        ? {}
+        : { toolSlots: limits }),
       ...(trust === runner.trust ? {} : { trust }),
       ...(acceptJobs === runner.acceptJobs ? {} : { acceptJobs }),
     };
@@ -284,6 +309,14 @@ function GeneralForm({
             <FieldDescription>{t('runtimes.edit.slotsHint')}</FieldDescription>
           )}
         </Field>
+        <ToolSlotsFields
+          idPrefix='ag-runner-tool-slots'
+          tools={limitTools}
+          draft={toolSlots}
+          invalid={errors.toolSlots === true}
+          disabled={!editable}
+          onChange={setToolSlots}
+        />
         <FieldSet>
           <FieldLegend variant='label'>{t('runtimes.trust.label')}</FieldLegend>
           <RadioGroup

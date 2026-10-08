@@ -10,6 +10,7 @@ import {
   listedTools,
   runnerActivity,
   toolState,
+  toolUsage,
   type Runner,
   type RunnerActivity,
   type RunnerSummary,
@@ -38,14 +39,21 @@ const ACTIVITY_TONE: Readonly<Record<RunnerActivity, Tone>> = {
 
 /**
  * Its state at a glance: online or busy with the slots it uses ("Busy 1/1"), offline since when, revoked, or waiting
- * for an upgrade.
+ * for an upgrade; below it, the runs by coding tool against each tool's limit ("Claude Code 2/2 · Codex 0/1") when it
+ * limits a tool or runs any.
  */
 export function RunnerStatusCell({
   runner,
 }: {
   readonly runner: Pick<
     RunnerSummary,
-    'status' | 'slots' | 'activeRuns' | 'activeJobs' | 'lastSeenAt'
+    | 'status'
+    | 'slots'
+    | 'activeRuns'
+    | 'activeJobs'
+    | 'lastSeenAt'
+    | 'toolSlots'
+    | 'activeByTool'
   >;
 }): ReactElement {
   const { t } = useTranslation();
@@ -64,7 +72,7 @@ export function RunnerStatusCell({
       ? t('runtimes.activity.offline', values)
       : t('runtimes.activity.offlineNever');
   else label = t(`runtimes.status.${activity}`);
-  return (
+  const tag = (
     <AgTag
       tone={ACTIVITY_TONE[activity]}
       dot
@@ -73,6 +81,31 @@ export function RunnerStatusCell({
     >
       {label}
     </AgTag>
+  );
+  const usage = toolUsage(runner);
+  if (usage.length === 0) return tag;
+  return (
+    <div className='flex flex-col items-start gap-1'>
+      {tag}
+      <ul
+        className='flex flex-wrap gap-x-2 text-xs text-muted-foreground tabular-nums'
+        aria-label={t('runtimes.toolUsage.label')}
+      >
+        {usage.map((item) => (
+          <li
+            key={item.tool}
+            data-full={item.used >= item.limit ? true : undefined}
+            className='data-full:text-foreground'
+          >
+            {t('runtimes.toolUsage.item', {
+              tool: t(`tools.${item.tool}`),
+              used: item.used,
+              limit: item.limit,
+            })}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
