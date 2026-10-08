@@ -133,7 +133,11 @@ describe('lifecycle example provider', () => {
       });
       const detail = await eventually(
         () => service.runtime.view('expenses', id, { id: 'lin' }),
-        (value) => value.record.status === 'paid',
+        // Reaching paid does not wait for independently dispatched notices.
+        // Observe the whole workflow before asserting every effect settled.
+        (value) =>
+          value.record.status === 'paid' &&
+          value.history.effectRuns.every((run) => run.status === 'succeeded'),
       );
       expect(
         detail.history.transitions.map((entry) => entry.transition),
