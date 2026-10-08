@@ -119,6 +119,8 @@ stateDiagram-v2
 
 The default dispatcher runs each effect in process before `fire()` returns, which suits scripts; it runs a retry at once and does not wait out its backoff. The test kit's `InProcessDispatcher` from `@nocobase/lifecycle/testing` waits for the fake clock instead, or runs retries at once with `retries: 'immediate'`. Production hands runs to the jobs service through `@nocobase/lifecycle/jobs`; a job carries only the run id, and the state stays in the database.
 
+A continuation reads its record before checking whether its stay ended, and its conditional update compares that same record version. A transition committed while the history is being read therefore causes a conflict instead of applying an old outcome to a new stay. The next attempt sees the committed transition and drops the stale continuation.
+
 ## Trigger sweeps
 
 `runTriggers()` asks each trigger's store for records in one of its `when` states whose `statusChangedAt` is older than `now − after`, oldest first, and fires the transition on each as the system.

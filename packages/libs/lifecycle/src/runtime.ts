@@ -1307,17 +1307,6 @@ export class LifecycleRuntime {
         );
         if (!recorded) return undefined;
         if (next === undefined) return null;
-        // An onEnter effect's outcome belongs to the stay the run was queued
-        // for. A record that has left it since — even to return to the same
-        // state — is in a stay this outcome knows nothing about.
-        const ended = await this.stayEnded(store, registered, run);
-        if (ended) {
-          this.logger.warn(
-            `Effect "${run.effect}" could not continue with "${next}": ${ended.message}`,
-            { runId, code: ended.code },
-          );
-          return null;
-        }
         const continued: { decided?: Decision } = {};
         // Registered before deciding, as fire() does, so after the commit
         // the continuation is told about before anything its onTransition
@@ -1345,6 +1334,7 @@ export class LifecycleRuntime {
                   requestId: continuationKey(runId, status),
                 },
                 this.clock(),
+                run,
               ),
             { within: store.transactionHandle },
           );
@@ -1941,8 +1931,6 @@ export class LifecycleRuntime {
             )
           )
             return { kind: 'continued' };
-          const ended = await this.stayEnded(store, registered, run);
-          if (ended) return { kind: 'movedOn', error: ended };
           const continued: { decided?: Decision } = {};
           store.afterCommit(() => {
             const { decided } = continued;
@@ -1960,6 +1948,7 @@ export class LifecycleRuntime {
                   pending.transition,
                   { actor: SYSTEM_ACTOR, input: pending.input, requestId },
                   now,
+                  run,
                 ),
               { within: store.transactionHandle },
             );
@@ -2231,6 +2220,7 @@ export class LifecycleRuntime {
     transition: string,
     options: FireOptions,
     now: Date,
+    continuing?: EffectRun,
   ): Promise<Decision> {
     const { lifecycle } = registered;
     if (
@@ -2279,6 +2269,13 @@ export class LifecycleRuntime {
           written: current,
           movedOn: false,
         };
+    }
+    // Read the record before checking its stay. The conditional update below
+    // uses this same version, so a transition committed during or after the
+    // history read cannot make an old outcome apply to a newer stay.
+    if (continuing) {
+      const ended = await this.stayEnded(store, registered, continuing);
+      if (ended) throw ended;
     }
     const expected = options.expect;
     if (

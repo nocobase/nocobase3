@@ -11,6 +11,8 @@ import {
   LifecycleRuntime,
   type EffectDispatcher,
   type LifecycleStore,
+  type LifecycleRecord,
+  type TransactionOptions,
   SYSTEM_ACTOR,
 } from '../src/index.js';
 import { ticketLifecycle, type TicketTypes } from './fixtures/ticket.js';
@@ -114,6 +116,132 @@ beforeEach(async () => {
 afterEach(async () => {
   await testDatabase.destroy();
 });
+
+/** Pause after the history read in every nested transaction, without changing its connection. */
+function interceptHistory(
+  source: LifecycleStore,
+  afterRead: () => Promise<void>,
+): LifecycleStore {
+  return new Proxy(source, {
+    get(target, property, receiver) {
+      if (property === 'transaction')
+        return <R>(
+          work: (nested: LifecycleStore) => Promise<R>,
+          options?: TransactionOptions,
+        ): Promise<R> =>
+          target.transaction(
+            (nested) => work(interceptHistory(nested, afterRead)),
+            options,
+          );
+      if (property === 'listTransitions')
+        return async (
+          ...args: Parameters<LifecycleStore['listTransitions']>
+        ) => {
+          const rows = await target.listTransitions(...args);
+          if (args[2]?.after !== undefined) await afterRead();
+          return rows;
+        };
+      const value: unknown = Reflect.get(target, property, receiver);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+}
+
+// This interleaving needs concurrent connections and statement-level snapshots.
+// SQLite's single connection cannot stage it; PostgreSQL's default READ COMMITTED can.
+describe.runIf(process.env.NOCOBASE_TEST_DB_DIALECT === 'postgres')(
+  'a concurrent stay change',
+  () => {
+    it.each([false, true])(
+      'refuses the old outcome after another transaction commits a self-transition (pending: %s)',
+      async (pending) => {
+        let afterRead: (() => Promise<void>) | undefined;
+        let broken = pending;
+        type Types = {
+          record: LifecycleRecord;
+          state: 'open' | 'waiting' | 'closed';
+        };
+        const effect = defineEffect<Types>({
+          name: 'tickets.deliver',
+          onSuccess: 'finish',
+          retry: { attempts: 2 },
+          run: () => ({}),
+        });
+        const lifecycle = defineLifecycle<Types>({
+          name: 'tickets',
+          initial: 'open',
+          states: ['open', 'waiting', { name: 'closed', final: true }],
+          transitions: {
+            begin: { from: 'open', to: 'waiting' },
+            touch: { from: 'waiting', to: 'waiting' },
+            finish: {
+              from: 'waiting',
+              to: 'closed',
+              set: () => (broken ? { status: 'closed' } : {}),
+            },
+          },
+          onEnter: { waiting: [effect] },
+        });
+        const intercepted = interceptHistory(store, async () => {
+          const commit = afterRead;
+          afterRead = undefined;
+          await commit?.();
+        });
+        const dispatcher: EffectDispatcher = {
+          dispatch: () => Promise.resolve(),
+        };
+        const first = new LifecycleRuntime({
+          store: intercepted,
+          dispatcher,
+          clock: () => now,
+        });
+        const other = new LifecycleRuntime({
+          store,
+          dispatcher,
+          clock: () => now,
+        });
+        first.register(lifecycle);
+        other.register(lifecycle);
+        const id = await createTicket();
+        const begun = await first.fire('tickets', id, 'begin', {
+          actor: SYSTEM_ACTOR,
+        });
+        const runId = begun.effectRuns[0].id;
+        if (pending) {
+          await first.runEffect(runId);
+          expect((await store.findEffectRun(runId))?.continuation?.code).toBe(
+            'INVALID_SET',
+          );
+          broken = false;
+        }
+        afterRead = async () => {
+          await other.fire('tickets', id, 'touch', { actor: SYSTEM_ACTOR });
+        };
+        if (pending)
+          await expect(first.continueRun(runId)).rejects.toMatchObject({
+            code: 'CONFLICT',
+          });
+        else await first.runEffect(runId);
+        expect((await store.findRecord('tickets', id))?.status).toBe('waiting');
+        if (pending)
+          await expect(first.continueRun(runId)).rejects.toMatchObject({
+            code: 'INVALID_STATE',
+          });
+        else {
+          now = new Date(now.getTime() + 60_000);
+          await first.runEffect(runId);
+        }
+        expect((await store.findRecord('tickets', id))?.status).toBe('waiting');
+        expect((await store.findEffectRun(runId))?.continuation).toBeNull();
+        expect(
+          (await store.listTransitions('tickets', id)).map(
+            (entry) => entry.transition,
+          ),
+        ).toEqual(['begin', 'touch']);
+      },
+    );
+  },
+);
 
 describe('Repository lifecycle store', () => {
   it('writes the state, the log entry and the effect runs together', async () => {
