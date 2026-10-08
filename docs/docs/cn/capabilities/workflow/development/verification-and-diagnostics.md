@@ -1,42 +1,42 @@
 ---
-title: '检查、构建与诊断'
-description: '检查工作流源码和运行模块，构建发布版本，并根据运行证据诊断异常。'
-keywords: 'NocoBase,工作流检查,workflow check,Artifact,诊断'
+title: '检查、构建与发布'
+description: '检查工作流定义和应用集成，构建 Artifact、部署并启用新版本，验收发布结果。'
+keywords: 'NocoBase,工作流检查,workflow check,Artifact,构建,发布'
 ---
 
-# 检查、构建与诊断
+# 检查、构建与发布
 
-工作流从源码到运行需要经过定义检查、应用编译、Artifact 构建、运行时加载和版本启用。每个阶段验证的边界不同，不能相互替代。
+工作流从源码到运行要经过：定义检查、应用编译、Artifact 构建、运行时加载和管理员启用。每一步验证的范围不同，不能互相替代。以下命令都在应用根目录执行。
 
-Commands below run from the initialized application root. `workflow check` is the subcommand name; the complete invocation is `pnpm nocobase workflow check <package>`. For custom node types, use the checker/build entry in [Service API](./service-api.md#custom-instructions), which supplies the extension contracts. Configure the application in `config.yml`.
+## 开发环境：保存即可试跑
+
+`pnpm dev` 启动的服务端按需编译 `workflows/` 下的源码，不读取构建产物：
+
+- 保存 `workflow.ts` 后，刷新管理界面就能看到一个新的未启用版本，不需要构建，也不需要重启；
+- 启用这个版本后，才能设置参数和手动运行；
+- 之后再修改源码会产生新的候选版本。已启用的版本保持不变，需要启用新版本才能使用修改后的代码。
+
+开发环境按运行时实际注册的节点类型校验，所以其他插件注册的节点无需额外配置。在开发环境执行构建只有两个理由：产出可部署的 Artifact，或验证部署时会拿到什么。
 
 ## 检查工作流定义
 
-在应用根目录运行：
-
 ```bash
-pnpm nocobase workflow check workflows/<workflow-directory>
+pnpm nocobase workflow check workflows/<工作流目录>
 ```
 
-检查按顺序执行五个阶段：
+检查按顺序执行五个阶段，出错时从最早的阶段开始修复：
 
-1. `typecheck`：使用严格 NodeNext 和 source export condition 检查 TypeScript；
-2. `evaluate`：在受限临时进程中加载声明文件，读取默认 AST；
-3. `schema`：检查输入、参数、节点配置、条件和结果 Schema；
-4. `semantic`：检查节点类型、key、分支、参数和结果引用可见性；
-5. `compile`：检查树形拓扑是否完整、可达且无环。
+1. `typecheck`：对定义做严格的 TypeScript 类型检查；
+2. `evaluate`：在一次性的受限进程中执行 `workflow.ts`，读取默认导出；
+3. `schema`：检查输入、参数和节点配置；
+4. `semantic`：检查节点类型、key、分支和参数引用；
+5. `compile`：检查流程拓扑完整、可达且无环。
 
-它不会加载 Run 模块，也不会写数据库。出现问题时按阶段从前往后修复，不要跳过错误继续发布。
+它不会加载处理函数，也不会写数据库。加 `--ir` 可以打印编译后的扁平定义，即 Artifact 中 `workflow.json` 的内容。这个命令只认识内置节点，使用自定义节点的工作流见[自定义节点](../reference/custom-instructions.md)。
 
-加 `--ir` 可以直接打印编译后的扁平 IR，也就是 Artifact 中 `workflow.json` 承载的那份定义：
+## 检查处理函数和应用集成
 
-```bash
-pnpm nocobase workflow check workflows/<workflow-directory> --ir
-```
-
-## 检查运行模块和应用集成
-
-Run 模块由应用的普通服务端构建处理，因此还要运行应用要求的验证：
+处理函数由应用的普通服务端构建处理，所以还需要运行应用的验证。以下是模板应用的命令；按目标应用的实际脚本执行，并将测试范围限定到相关业务：
 
 ```bash
 pnpm typecheck
@@ -45,85 +45,48 @@ pnpm lint
 pnpm build
 ```
 
-根据修改范围执行目标应用的实际脚本。重点验证：模块路径存在、提供命名 `run` 导出、依赖位于正确清单、Service token 可解析、业务副作用测试通过。
+重点确认：模块路径存在并命名导出 `run`；依赖声明在正确的清单中；Service token 能够解析；覆盖了代表性的分支、结果结构和副作用的幂等。
 
 ## 构建 Workflow Artifact
 
-Artifact 是应用构建后交给运行时加载的不可变工作流版本产物。可以单独构建：
+Artifact 是交给运行时加载的不可变工作流版本。默认应用的 `pnpm build` 已包含这一步，也可以单独运行：
 
 ```bash
 pnpm nocobase workflow build
 ```
 
-默认应用的正常 `pnpm build` 也包含此步骤。使用源码作为资源单独构建时，Artifact 保留包内 `.ts` 文件；生产构建则收集应用服务端在相同相对路径输出的 `.js` 文件，并对实际产物内容计算摘要。生产 Artifact 的摘要在存储和加载时会重新计算并校验。
-
-不要把输出目录指向源码或无关目录。Artifact 构建不会自动启用定义，也不能替代应用编译。
-
-## 开发环境不需要构建
-
-`pnpm dev` 启动的服务端不读取 `dist/workflows`，而是按需编译工作流源码根目录。修改 `workflow.ts` 保存后，它会作为一个新版本直接出现在管理界面，既不需要执行命令，也不需要重启进程；源码没有变化时不会重复编译。
-
-开发态源码加载与构建流程共用 schema 校验、语义校验、扁平 IR 编译和资源收集代码，但省略 `ts.createProgram` 类型检查（应用自身的 `pnpm typecheck` 已经覆盖）与一次性求值子进程（开发服务端本身就跑在 TypeScript loader 下）。开发态摘要只标识本地源码快照；生产 Artifact 的摘要标识编译后的实际文件，两者不要求相同。部署和持久化校验应使用生产 Artifact 的摘要。
-
-开发环境按运行时实际注册的 Instruction 集合校验，因此插件在运行时注册的 Instruction 无需额外配置构建入口即可通过。只存在于 `dist/workflows` 的 key 仍会被列出；同一个 key 同时存在时，以源码为准。
-
-所以在开发环境执行构建的理由只有两个：产出可部署的 Artifact，或验证部署将拿到什么。仅仅为了查看或试跑一个定义，不需要构建。
+生产构建会收集应用服务端编译输出中相同相对路径的 `.js` 文件，并对产物内容计算摘要，存储和加载时都会重新校验。不要把输出目录指向源码或其他目录。构建 Artifact 不会启用工作流，也不能替代应用编译。
 
 ## 发布和启用新版本
 
-标准路径是：
+1. 修改工作流和业务代码；
+2. 完成定义检查、应用测试和构建；
+3. 部署新的应用代码和 Artifact；
+4. 管理员在管理界面中确认新版本并启用。
 
-1. 修改工作流与业务代码；
-2. 完成 DSL 检查、应用测试和构建；
-3. 部署新的 Artifact 与应用代码；
-4. 在管理界面查看部署版本；
-5. 管理员确认后启用目标版本。
+启用某个版本会让它成为当前版本；之前的运行仍固定在各自的原始版本上。不要编辑已存储的定义或历史运行来“更新”旧版本。
 
-启用某个版本会使它成为当前且已启用的版本，之前的运行仍固定到各自原始 definition id 和 Artifact hash。不要编辑已物化定义或历史运行来“更新”旧版本。
+可以让 Agent 一次完成验证：
 
-## 使用 Skill 完成验证
+```text
+请按应用实际脚本和节点类型验证本次工作流修改：内置节点运行 workflow check，自定义节点使用包含扩展节点契约的检查与构建入口；运行 typecheck、相关测试、lint 和 build。
+逐项报告命令、退出结果和跳过原因，说明 Artifact 是否生成，以及哪些运行时和外部系统行为尚未验证。不要把没有运行的检查说成通过。
+```
 
-可以要求应用 Agent：
+验收时确认：报告包含工作流目录、检查覆盖范围、测试结果与 Artifact 生成结果；涉及业务集成时，还应提供测试输入、预期路径和实际运行 ID。
 
-> 请使用 Workflow Skill 检查本次工作流修改。依次运行真实的 DSL check、应用 typecheck、相关测试、lint 和 build，逐项报告命令与结果。说明 Artifact 是否生成、运行时与外部系统哪些边界尚未验证，不要把未运行的检查描述为通过。
+## 发布后验证
 
-## 根据运行证据诊断异常
+部署与启用完成后，确认当前版本与本次发布一致，管理员参数仍然适用，业务触发入口或定时任务指向正确工作流。需要试跑时，应事先确认环境、输入和副作用，并查看最终运行状态、实际路径和业务数据。
 
-历史运行必须按它实际使用的版本分析，不能只看当前源码：
+运行异常时，先记录运行 ID、实际版本和触发时间，按[执行记录与诊断](../management/run-inspection.md)取证。交给 Agent 的诊断示例也在该页；诊断任务本身不应自动创建新运行、启停工作流或修改数据。
 
-1. 记录触发结果；`skipped` 时不要轮询不存在的运行；
-2. 确认工作流 key、definition id、版本、hash 和启用状态；
-3. 查看运行 ID、eventKey、输入快照、状态、原因和时间；
-4. 按执行顺序检查节点，定位第一个失败的叶子节点；
-5. 有多次尝试时查看最新尝试，而不是第一条记录；
-6. 只读取相关节点的结果、错误和日志；
-7. 标记内容是否脱敏或截断；
-8. 决定修正源码、参数、重试原事件、创建新事件还是补偿。
+## 常见检查与构建问题
 
-父 Condition 可能因为分支子节点失败而显示失败，根因仍在叶子节点。Terminate 从分支结束整个流程时，父 Condition 可能保持 Pending，这并不一定是卡死。
+### 定义检查通过，但应用构建失败
 
-## 常见故障
+定义检查不加载处理函数。检查模块是否存在、是否被应用 tsconfig 包含、依赖能否解析，以及是否命名导出 `run`。
 
-### 源码检查通过但应用构建失败
+### 处理函数加载失败
 
-源码检查不加载 Run 文件。检查模块是否存在、是否被应用 tsconfig 包含、依赖是否可解析，以及是否导出命名 `run`。
-
-### 触发结果为 not-found 或 disabled
-
-`not-found` 表示没有当前定义或部署未加载；`disabled` 表示当前版本已停用。两者都不会为本次触发创建运行。
-
-### 工作流长时间处于排队中
-
-检查工作流运行时、Worker 和队列是否启动，以及队列失败、重试或死信证据。短暂排队属于异步执行的正常状态。
-
-### Run 模块加载失败
-
-检查 Artifact 中是否包含资源、相对路径是否一致、开发 `.ts`/生产 `.js` 是否对应，以及命名导出是否存在。
-
-### 节点结果无法序列化
-
-将 BigInt、Date、模型实例或循环对象转换为普通 JSON 值，排除函数、Symbol 和非有限数字。
-
-### 工作流因超时中止
-
-查看运行 `reason`、工作流顶层超时配置和日志，确认 Run 模块是否响应 signal。已经发生的外部副作用不会自动回滚，需要幂等或补偿。
+检查 Artifact 中是否包含该模块、相对路径是否一致、开发环境的 `.ts` 与生产环境的 `.js` 是否对应，以及命名导出是否存在。

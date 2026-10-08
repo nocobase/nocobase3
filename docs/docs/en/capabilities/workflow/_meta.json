@@ -2,7 +2,7 @@
   {
     "type": "file",
     "name": "index",
-    "label": "Workflow overview"
+    "label": "Overview"
   },
   {
     "type": "file",
@@ -20,5 +20,11 @@
     "collapsed": true,
     "name": "management",
     "label": "Manage workflows"
+  },
+  {
+    "type": "dir",
+    "collapsed": true,
+    "name": "reference",
+    "label": "Reference"
   }
 ]

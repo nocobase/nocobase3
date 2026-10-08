@@ -2,37 +2,16 @@
   {
     "type": "file",
     "name": "index",
-    "label": "概览"
+    "label": "准备"
   },
   {
     "type": "file",
-    "name": "using-skill",
-    "label": "使用 Workflow Skill"
-  },
-  {
-    "type": "file",
-    "name": "design",
-    "label": "从业务需求到工作流"
-  },
-  {
-    "type": "file",
-    "name": "dsl",
-    "label": "工作流定义 DSL"
-  },
-  {
-    "type": "dir",
-    "collapsed": true,
-    "name": "nodes",
-    "label": "节点"
-  },
-  {
-    "type": "file",
-    "name": "service-api",
-    "label": "Service API"
+    "name": "process",
+    "label": "开发流程"
   },
   {
     "type": "file",
     "name": "verification-and-diagnostics",
-    "label": "检查、构建与诊断"
+    "label": "检查、构建与发布"
   }
 ]

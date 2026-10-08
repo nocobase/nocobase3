@@ -1,0 +1,23 @@
+[
+  {
+    "type": "file",
+    "name": "dsl",
+    "label": "Workflow definition DSL"
+  },
+  {
+    "type": "dir",
+    "collapsed": true,
+    "name": "nodes",
+    "label": "Nodes"
+  },
+  {
+    "type": "file",
+    "name": "service-api",
+    "label": "Trigger workflows"
+  },
+  {
+    "type": "file",
+    "name": "custom-instructions",
+    "label": "Custom nodes"
+  }
+]
