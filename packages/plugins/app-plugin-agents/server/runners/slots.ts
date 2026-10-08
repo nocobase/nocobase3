@@ -10,8 +10,11 @@ import { ACTIVE_JOB, activeJobsOn, jobsRepo } from '../jobs/job.store.js';
 export interface HeldItems {
   readonly jobs: number;
   readonly runs: number;
-  /** The runs by the coding tool each runs with; a tool it runs nothing of is left out. */
-  readonly byTool: Readonly<Partial<Record<AgentTool, number>>>;
+  /**
+   * The runs by the coding tool each runs with; a tool it runs nothing of is left out. Optional so a `Slots` written
+   * elsewhere needs none; `createSlots` always counts it.
+   */
+  readonly byTool?: Readonly<Partial<Record<AgentTool, number>>>;
 }
 
 export interface Slots {

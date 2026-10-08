@@ -4,7 +4,9 @@ import type { AgentTool, ToolSlots } from '@nocobase/agent-protocol';
 /** What the fields hold: the text of each tool's limit, empty for none. */
 export type ToolSlotsDraft = Readonly<Partial<Record<AgentTool, string>>>;
 
-export function toolSlotsDraft(toolSlots: ToolSlots | null): ToolSlotsDraft {
+export function toolSlotsDraft(
+  toolSlots: ToolSlots | null | undefined,
+): ToolSlotsDraft {
   return Object.fromEntries(
     Object.entries(toolSlots ?? {}).map(([tool, count]) => [
       tool,

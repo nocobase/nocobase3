@@ -262,6 +262,26 @@ describe('runtimes page', () => {
     ).toBeNull();
   });
 
+  it('shows a runtime built without limits per tool, as code from before them builds it', async () => {
+    const {
+      toolSlots: _toolSlots,
+      toolLoad: _toolLoad,
+      activeByTool: _activeByTool,
+      ...older
+    } = runner('r1', { activeRuns: 1, slots: 2, canManage: true });
+    runners = [older];
+    renderPage(<RuntimesPage />);
+    const row = await screen.findByTestId('runner-r1');
+    within(row).getByText(/^runtimes\.activity\.online\(active=1,slots=2,/u);
+    expect(
+      within(row).queryByRole('list', { name: 'runtimes.toolUsage.label' }),
+    ).toBeNull();
+    const sheet = await openSheet();
+    expect(
+      within(sheet).getByLabelText('tools.claude', { selector: 'input' }),
+    ).toHaveValue('');
+  });
+
   it('saves limits per coding tool, and clears them', async () => {
     runners[0] = { ...runners[0]!, toolSlots: { codex: 1 } };
     renderPage(<RuntimesPage />);

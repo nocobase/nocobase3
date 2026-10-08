@@ -229,7 +229,7 @@ function GeneralForm({
   const [trust, setTrust] = useState<RunnerTrust>(runner.trust);
   const [acceptJobs, setAcceptJobs] = useState(runner.acceptJobs);
   const [toolSlots, setToolSlots] = useState<ToolSlotsDraft>(() =>
-    toolSlotsDraft(runner.toolSlots),
+    toolSlotsDraft(runner.toolSlots ?? null),
   );
   const [errors, setErrors] = useState<{
     name?: string;
@@ -262,7 +262,7 @@ function GeneralForm({
       ...(name.trim() === runner.name ? {} : { name: name.trim() }),
       ...(count === runner.slots ? {} : { slots: count }),
       ...(limits === undefined ||
-      JSON.stringify(limits) === JSON.stringify(runner.toolSlots)
+      JSON.stringify(limits) === JSON.stringify(runner.toolSlots ?? null)
         ? {}
         : { toolSlots: limits }),
       ...(trust === runner.trust ? {} : { trust }),

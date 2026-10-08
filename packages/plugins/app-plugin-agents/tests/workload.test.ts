@@ -236,6 +236,11 @@ describe('explainWait', () => {
         runners: [runner({ toolLoad: { claude: { slots: 2, free: 0 } } })],
       }).reason,
     ).toBe('toolSlotsFull');
+    // A runner built without the fields for limits per tool has none.
+    const { toolSlots: _toolSlots, toolLoad: _toolLoad, ...older } = runner();
+    expect(
+      explainWait(run, { ...context, runners: [older as Runner] }).reason,
+    ).toBe('next');
     // A full machine reads as the machine's slots, whatever its tools say.
     expect(
       explainWait(run, {
