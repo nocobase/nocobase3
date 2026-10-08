@@ -295,7 +295,9 @@ export class RunnerDaemon {
           (link) =>
             `${link.connection.registration.app.name || link.key} (${link.connection.registration.runnerId})`,
         )
-        .join(', ')}; ${this.slots} slot(s)${this.limitedTools.length > 0 ? ` (${this.limitedTools.map((tool) => `${tool} ${this.toolLimit(tool)}`).join(', ')})` : ''}`,
+        .join(
+          ', ',
+        )}; ${this.slots} slot(s)${this.limitedTools.length > 0 ? ` (${this.limitedTools.map((tool) => `${tool} ${this.toolLimit(tool)}`).join(', ')})` : ''}`,
     );
 
     const recovered = await recoverOrphans({
@@ -629,7 +631,8 @@ export class RunnerDaemon {
       const limit = this.toolSlots[payload.tool.kind];
       if (
         limit !== undefined &&
-        this.supervisor.heldOf(payload.tool.kind) >= this.toolLimit(payload.tool.kind)
+        this.supervisor.heldOf(payload.tool.kind) >=
+          this.toolLimit(payload.tool.kind)
       )
         this.options.log(
           `run ${payload.run.id}: ${payload.tool.kind} is over its limit of ${this.toolLimit(payload.tool.kind)}; ${link.key} does not apply limits per tool`,

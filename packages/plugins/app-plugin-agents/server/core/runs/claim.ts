@@ -43,11 +43,7 @@ import {
   type WorkspaceDir,
 } from '@nocobase/agent-protocol';
 import type { DistService } from '../../distribution/index.js';
-import {
-  runsTool,
-  toolLimit,
-  type Runner,
-} from '../../../shared/runners.js';
+import { runsTool, toolLimit, type Runner } from '../../../shared/runners.js';
 import type { DatabaseConnection } from '@nocobase/db';
 import { createHash } from 'node:crypto';
 
@@ -1045,8 +1041,7 @@ export function createClaimService(deps: ClaimDeps): ClaimService {
       const agent = agents.get(candidate.agentId);
       if (!agent || !fits(runner, agent, candidate)) continue;
       // None of its tools has room on the runner's side: the runs behind it may still fit.
-      if (!pickOpenEntry(runner, agent, (tool) => reported.has(tool)))
-        continue;
+      if (!pickOpenEntry(runner, agent, (tool) => reported.has(tool))) continue;
       try {
         const result = await attempt(runner, agent, candidate, reported);
         if (result.kind === 'claimed') return result.payload;

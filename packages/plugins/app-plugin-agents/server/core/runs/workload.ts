@@ -11,11 +11,7 @@ import type { AgentTool, RunnerFeature } from '@nocobase/agent-protocol';
 import type { DatabaseConnection } from '@nocobase/db';
 
 import { entryTools, type Agent } from '../../../shared/agents.js';
-import {
-  runsTool,
-  toolLimit,
-  type Runner,
-} from '../../../shared/runners.js';
+import { runsTool, toolLimit, type Runner } from '../../../shared/runners.js';
 import {
   RUN_ACTIVITY_TEXT_MAX,
   type AgentLoad,

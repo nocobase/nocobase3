@@ -113,10 +113,14 @@ describe('limits per coding tool', () => {
 
   it('keeps limits per tool on tokens and changes them on the runner', async () => {
     h = await createHarness();
-    const token = await h.request('POST', '/agents/runners/registrationTokens', {
-      user: 'owner',
-      body: { slots: 2, toolSlots: { codex: 1 } },
-    });
+    const token = await h.request(
+      'POST',
+      '/agents/runners/registrationTokens',
+      {
+        user: 'owner',
+        body: { slots: 2, toolSlots: { codex: 1 } },
+      },
+    );
     expect(token.status).toBe(201);
     expect(token.body.data.toolSlots).toEqual({ codex: 1 });
     // A runner that names no limits of its own takes the token's.

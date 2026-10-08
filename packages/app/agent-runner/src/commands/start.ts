@@ -93,9 +93,7 @@ export default class Start extends RunnerCommand {
           ...args,
           'start',
           '--foreground',
-          ...(flags.slots === undefined
-            ? []
-            : ['--slots', flags.slots]),
+          ...(flags.slots === undefined ? [] : ['--slots', flags.slots]),
         ],
         { detached: true, stdio: ['ignore', fd, fd], env: process.env },
       );

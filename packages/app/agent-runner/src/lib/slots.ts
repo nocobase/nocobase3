@@ -1,6 +1,10 @@
 // How many runs this machine takes at once: a total across every application, and optionally a limit per coding tool
 // beside it (`claude=2,codex=1`), for tools whose subscription or rate limits allow fewer sessions than the machine.
-import { AGENT_TOOLS, type AgentTool, type ToolSlots } from '../protocol/index.ts';
+import {
+  AGENT_TOOLS,
+  type AgentTool,
+  type ToolSlots,
+} from '../protocol/index.ts';
 import { UsageError } from './command.ts';
 
 /** The most runs at once `--slots` accepts, in total and per tool. */
