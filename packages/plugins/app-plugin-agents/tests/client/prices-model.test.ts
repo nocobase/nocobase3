@@ -28,7 +28,6 @@ function service(
     baseUrl: null,
     apiKeySet: true,
     headers: [],
-    sessionHeader: null,
     enabled: true,
     models: [{ value: 'gpt-x', label: 'gpt-x' }],
   };

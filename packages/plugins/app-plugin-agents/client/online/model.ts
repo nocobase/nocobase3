@@ -228,13 +228,12 @@ export function headerInputsOf(rows: readonly HeaderRow[]): ModelHeaderInput[] {
 
 /** What is wrong with a header name, as the server would refuse it; null when nothing is. */
 export type HeaderProblem =
-  'invalid' | 'reserved' | 'duplicate' | 'session' | 'noValue' | 'tooMany';
+  'invalid' | 'reserved' | 'duplicate' | 'noValue' | 'tooMany';
 
-/** Why the row `id` cannot be saved, given the other rows and the session header; null when it can. */
+/** Why the row cannot be saved, given the other rows; null when it can. */
 export function headerProblem(
   rows: readonly HeaderRow[],
   row: HeaderRow,
-  sessionHeader: string,
 ): HeaderProblem | null {
   const name = row.name.trim();
   if (!name && !row.value.trim()) return null;
@@ -243,20 +242,7 @@ export function headerProblem(
   if (RESERVED_MODEL_HEADERS.includes(lower)) return 'reserved';
   if (rows.find((other) => other.name.trim().toLowerCase() === lower) !== row)
     return 'duplicate';
-  if (lower === sessionHeader.trim().toLowerCase()) return 'session';
   if (!row.value.trim() && !(row.secret && row.saved)) return 'noValue';
   if (rows.indexOf(row) >= MODEL_HEADERS_MAX) return 'tooMany';
   return null;
-}
-
-/** What is wrong with the session header name; null when it is empty or fine. */
-export function sessionHeaderProblem(
-  value: string,
-): 'invalid' | 'reserved' | null {
-  const name = value.trim();
-  if (!name) return null;
-  if (!MODEL_HEADER_NAME_PATTERN.test(name)) return 'invalid';
-  return RESERVED_MODEL_HEADERS.includes(name.toLowerCase())
-    ? 'reserved'
-    : null;
 }

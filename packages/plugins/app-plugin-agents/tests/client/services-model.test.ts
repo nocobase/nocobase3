@@ -15,7 +15,6 @@ import {
   modelRows,
   newServiceTitle,
   serviceStatus,
-  sessionHeaderProblem,
   setModelDimensions,
   setModelKind,
   sortServices,
@@ -43,7 +42,6 @@ function service(
     baseUrl: null,
     apiKeySet: true,
     headers: [],
-    sessionHeader: null,
     enabled: true,
     models: [{ value: 'gpt-x', label: 'gpt-x' }],
     ...extra,
@@ -223,24 +221,18 @@ describe('the model services UI model', () => {
       saved: false,
       ...extra,
     });
-    const problem = (rows: HeaderRow[], at: number, session = '') =>
-      headerProblem(rows, rows[at]!, session);
+    const problem = (rows: HeaderRow[], at: number) =>
+      headerProblem(rows, rows[at]!);
     expect(problem([row(0, 'X-A')], 0)).toBeNull();
     expect(problem([row(0, '', '')], 0)).toBeNull();
     expect(problem([row(0, 'Bad Name')], 0)).toBe('invalid');
     expect(problem([row(0, 'authorization')], 0)).toBe('reserved');
     expect(problem([row(0, 'X-A'), row(1, 'x-a')], 1)).toBe('duplicate');
     expect(problem([row(0, 'X-A'), row(1, 'x-a')], 0)).toBeNull();
-    expect(
-      problem([row(0, 'x-opencode-session')], 0, 'X-OpenCode-Session'),
-    ).toBe('session');
+    expect(problem([row(0, 'x-opencode-session')], 0)).toBeNull();
     expect(problem([row(0, 'X-A', '')], 0)).toBe('noValue');
     expect(
       problem([row(0, 'X-A', '', { secret: true, saved: true })], 0),
     ).toBeNull();
-    expect(sessionHeaderProblem('')).toBeNull();
-    expect(sessionHeaderProblem('x-opencode-session')).toBeNull();
-    expect(sessionHeaderProblem('User-Agent')).toBe('reserved');
-    expect(sessionHeaderProblem('a b')).toBe('invalid');
   });
 });

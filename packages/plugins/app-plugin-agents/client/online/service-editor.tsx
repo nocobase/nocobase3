@@ -7,10 +7,9 @@
  * row's Test checks the model as its kind, saying when it looks like a model of another kind instead. The form scrolls
  * between a fixed header and footer. Who only reads services sees the same form, unchangeable.
  *
- * Below the key: the header a session id goes under (one per conversation; filled in with OpenCode's
- * `x-opencode-session` when the base URL is OpenCode's) and the service's own request headers, each with a name, a
- * value and whether it is secret (written only, like the key). The connection test and the model list use them as
- * edited.
+ * Below the key: the service's own request headers, each with a name, a value and whether it is secret (written
+ * only, like the key), and, for an OpenCode base URL, a note on which provider type serves which of its model
+ * families. The connection test and the model list use the headers as edited.
  */
 import { useTranslation } from '@nocobase/i18n/client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -21,7 +20,6 @@ import {
   isOpenCodeUrl,
   MODEL_HEADERS_MAX,
   MODEL_PROVIDERS,
-  OPENCODE_SESSION_HEADER,
   providerOf,
   type ModelCheck,
   type ModelConnectionRequest,
@@ -68,7 +66,6 @@ import {
   headerProblem,
   headerRowsOf,
   modelRows,
-  sessionHeaderProblem,
   newServiceTitle,
   setModelDimensions,
   setModelKind,
@@ -152,9 +149,6 @@ function ServiceForm({
   const [headers, setHeaders] = useState<readonly HeaderRow[]>(() =>
     headerRowsOf(service),
   );
-  const [sessionHeader, setSessionHeader] = useState(
-    service?.sessionHeader ?? '',
-  );
   const [enabled, setEnabled] = useState(service?.enabled ?? true);
   const [models, setModels] = useState<readonly ModelOption[]>(
     service?.models ?? [],
@@ -173,7 +167,6 @@ function ServiceForm({
     baseUrl: baseUrlOf(url, provider),
     ...(key.trim() ? { apiKey: key.trim() } : service ? {} : { apiKey: null }),
     headers: headerInputsOf(headers),
-    sessionHeader: sessionHeader.trim() || null,
   });
   const listed = useQuery({
     queryKey: agentsKeys.providerModels(service?.name ?? ''),
@@ -228,7 +221,6 @@ function ServiceForm({
         models: [...models],
         enabled,
         headers: headerInputsOf(headers),
-        sessionHeader: sessionHeader.trim() || null,
         ...(key.trim() ? { apiKey: key.trim() } : {}),
       };
       return service
@@ -260,12 +252,6 @@ function ServiceForm({
       setUrl(next.defaultBaseUrl ?? '');
     setProvider(next);
   };
-  const changeUrl = (next: string) => {
-    setUrl(next);
-    // OpenCode asks for a session id on every request.
-    if (isOpenCodeUrl(next.trim()) && !sessionHeader.trim())
-      setSessionHeader(OPENCODE_SESSION_HEADER);
-  };
   const changeHeader = (id: number, change: Partial<HeaderRow>) =>
     setHeaders((current) =>
       current.map((row) => (row.id === id ? { ...row, ...change } : row)),
@@ -291,13 +277,12 @@ function ServiceForm({
   const urlInvalid =
     !validBaseUrl(url) ||
     (provider !== null && !provider.defaultBaseUrl && !url.trim());
-  const sessionProblem = sessionHeaderProblem(sessionHeader);
   const headerProblems = new Map(
-    headers.map((row) => [row.id, headerProblem(headers, row, sessionHeader)]),
+    headers.map((row) => [row.id, headerProblem(headers, row)]),
   );
-  const headersInvalid =
-    sessionProblem !== null ||
-    [...headerProblems.values()].some((problem) => problem !== null);
+  const headersInvalid = [...headerProblems.values()].some(
+    (problem) => problem !== null,
+  );
   const canSave =
     canManage &&
     provider !== null &&
@@ -384,7 +369,7 @@ function ServiceForm({
             disabled={!canManage}
             aria-invalid={!validBaseUrl(url) || undefined}
             placeholder={provider?.defaultBaseUrl ?? 'https://'}
-            onChange={(event) => changeUrl(event.target.value)}
+            onChange={(event) => setUrl(event.target.value)}
           />
           <FieldDescription>
             {!validBaseUrl(url)
@@ -409,26 +394,6 @@ function ServiceForm({
             disabled={!canManage}
             onChange={(event) => setKey(event.target.value)}
           />
-        </Field>
-
-        <Field data-invalid={sessionProblem ? true : undefined}>
-          <FieldLabel htmlFor={id('session')}>
-            {t('services.connection.sessionHeader')}
-          </FieldLabel>
-          <Input
-            id={id('session')}
-            className='font-mono'
-            value={sessionHeader}
-            disabled={!canManage}
-            aria-invalid={sessionProblem ? true : undefined}
-            placeholder={OPENCODE_SESSION_HEADER}
-            onChange={(event) => setSessionHeader(event.target.value)}
-          />
-          <FieldDescription>
-            {sessionProblem
-              ? t(`services.connection.headerProblems.${sessionProblem}`)
-              : t('services.connection.sessionHeaderHint')}
-          </FieldDescription>
         </Field>
 
         {isOpenCodeUrl(url.trim()) ? (

@@ -81,7 +81,6 @@ interface ServiceRecord {
   readonly apiKeyEncrypted: string | null;
   readonly headers: unknown;
   readonly headersEncrypted: string | null;
-  readonly sessionHeader: string | null;
   readonly enabled: boolean | number;
   readonly models: unknown;
   readonly sort: number;
@@ -118,8 +117,6 @@ const HeadersSchema = z
   )
   .max(MODEL_HEADERS_MAX);
 
-const SessionHeaderSchema = z.string().trim().max(100).nullable().optional();
-
 const ProviderSchema = z.enum(
   MODEL_PROVIDER_NAMES as [ModelProviderName, ...ModelProviderName[]],
 );
@@ -131,7 +128,6 @@ export const CreateServiceSchema: z.ZodType<CreateModelServiceRequest> =
     baseUrl: z.string().trim().max(500).nullable().optional(),
     apiKey: z.string().max(4000).nullable().optional(),
     headers: HeadersSchema.optional(),
-    sessionHeader: SessionHeaderSchema,
     models: ModelsSchema.optional(),
     enabled: z.boolean().optional(),
   });
@@ -142,7 +138,6 @@ export const UpdateServiceSchema: z.ZodType<UpdateModelServiceRequest> =
     baseUrl: z.string().trim().max(500).nullable().optional(),
     apiKey: z.string().max(4000).nullable().optional(),
     headers: HeadersSchema.optional(),
-    sessionHeader: SessionHeaderSchema,
     models: ModelsSchema.optional(),
     enabled: z.boolean().optional(),
   });
@@ -159,7 +154,6 @@ export const ConnectionSchema: z.ZodType<ModelConnectionRequest> =
     baseUrl: z.string().trim().max(500).nullable().optional(),
     apiKey: z.string().max(4000).nullable().optional(),
     headers: HeadersSchema.optional(),
-    sessionHeader: SessionHeaderSchema,
   });
 
 export const ConnectionCheckSchema: z.ZodType<ModelConnectionCheckRequest> =
@@ -169,7 +163,6 @@ export const ConnectionCheckSchema: z.ZodType<ModelConnectionCheckRequest> =
     baseUrl: z.string().trim().max(500).nullable().optional(),
     apiKey: z.string().max(4000).nullable().optional(),
     headers: HeadersSchema.optional(),
-    sessionHeader: SessionHeaderSchema,
     model: z.string().trim().min(1).max(200),
     kind: KindSchema.optional(),
     dimensions: DimensionsSchema.optional(),
@@ -365,24 +358,6 @@ function planHeaders(
   return { stored, secrets };
 }
 
-/** The session header as set: null for none, else a header name that is not reserved nor one of `headers`. */
-function cleanSessionHeader(
-  value: string | null | undefined,
-  headers: readonly StoredHeader[],
-): string | null {
-  const trimmed = text(value);
-  if (!trimmed) return null;
-  const name = checkHeaderName(trimmed, 'sessionHeader');
-  if (
-    headers.some((header) => header.name.toLowerCase() === name.toLowerCase())
-  )
-    throw invalid(
-      `${name} is the session header: the session id goes under it, so it is not one of the headers too.`,
-      { field: 'sessionHeader' },
-    );
-  return name;
-}
-
 /** The headers of a connection by lower-case name, as `planHeaders` takes the saved ones. */
 const byLowerName = (
   headers: Readonly<Record<string, string>>,
@@ -409,7 +384,6 @@ function view(record: ServiceRecord): ModelServiceView {
         ? record.headersEncrypted !== null
         : header.value !== null,
     })),
-    sessionHeader: record.sessionHeader ?? null,
     enabled: Boolean(record.enabled),
     models: modelsOf(record.models),
   };
@@ -561,7 +535,6 @@ export function createModelServices(deps: {
       stored: storedHeadersOf(record.headers),
       secrets: secretsOf(record),
     }),
-    sessionHeader: record.sessionHeader ?? null,
   });
 
   /** The connection being tried: the edited values over the saved service's. */
@@ -589,17 +562,6 @@ export function createModelServices(deps: {
           ? (saved?.apiKey ?? null)
           : text(request.apiKey),
       headers,
-      sessionHeader:
-        request.sessionHeader === undefined
-          ? (saved?.sessionHeader ?? null)
-          : cleanSessionHeader(
-              request.sessionHeader,
-              Object.keys(headers).map((name) => ({
-                name,
-                secret: false,
-                value: null,
-              })),
-            ),
     };
   }
 
@@ -613,7 +575,6 @@ export function createModelServices(deps: {
     if (!baseUrl && !providerOf(input.provider)?.defaultBaseUrl)
       throw invalid('This provider needs a base URL.');
     const plan = planHeaders(input.headers ?? [], {});
-    const sessionHeader = cleanSessionHeader(input.sessionHeader, plan.stored);
     const services = await all(conn);
     const now = deps.clock.now().toISOString();
     await repo(conn).createOne({
@@ -624,7 +585,6 @@ export function createModelServices(deps: {
         baseUrl,
         ...sealed(name, text(input.apiKey)),
         ...sealedHeaders(name, plan),
-        sessionHeader,
         enabled: input.enabled !== false,
         models: cleanModels(input.provider, input.models ?? []),
         sort: services.reduce((top, row) => Math.max(top, row.sort), 0) + 1,
@@ -726,15 +686,6 @@ export function createModelServices(deps: {
                     )
                   : {},
               );
-        const sessionHeader =
-          input.sessionHeader === undefined && plan === null
-            ? undefined
-            : cleanSessionHeader(
-                input.sessionHeader === undefined
-                  ? current.sessionHeader
-                  : input.sessionHeader,
-                plan?.stored ?? currentHeaders,
-              );
         await repo(conn).updateMany({
           filter: { name },
           values: {
@@ -744,7 +695,6 @@ export function createModelServices(deps: {
               ? {}
               : sealed(name, text(input.apiKey))),
             ...(plan === null ? {} : sealedHeaders(name, plan)),
-            ...(sessionHeader === undefined ? {} : { sessionHeader }),
             ...(input.models === undefined
               ? {}
               : { models: cleanModels(providerName(current), input.models) }),

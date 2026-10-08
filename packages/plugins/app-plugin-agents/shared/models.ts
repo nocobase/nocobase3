@@ -18,14 +18,14 @@
  *
  * The catalog names services and models, never keys or URLs. An API key is write-only: a service answers whether it
  * has one (`apiKeySet`), and so is a request header marked secret (`ModelHeaderView.valueSet`). Listing models and
- * checking take a connection being edited (`provider`, `baseUrl`, `apiKey`, `headers`, `sessionHeader`) over a saved
- * service (`service`), so a form can try a new key before saving it and an unchanged one without sending it; neither
- * fails for the provider's sake, they answer what it said.
+ * checking take a connection being edited (`provider`, `baseUrl`, `apiKey`, `headers`) over a saved service (`service`), so a
+ * form can try a new key before saving it and an unchanged one without sending it; neither fails for the provider's
+ * sake, they answer what it said.
  *
  * Every request to a provider says who sends it (`User-Agent: nocobase-agents/<version>`) and carries the service's
- * own headers (`headers`). A service that names a session header (`sessionHeader`, such as OpenCode's
- * `x-opencode-session`) sends a session id under it: the same one for every model call of a conversation, a new one
- * for each call outside any.
+ * own headers (`headers`). A call to an OpenCode base URL (Zen or Go) additionally carries `x-opencode-session` with
+ * a session id the server derives: the same one for every model call of a conversation, a new one for each call
+ * outside any.
  */
 
 export type ModelProviderName =
@@ -168,7 +168,7 @@ export const RESERVED_MODEL_HEADERS: readonly string[] = [
   'x-goog-api-key',
 ];
 
-/** The session header OpenCode Zen and Go ask for, one stable id per conversation. */
+/** The session header OpenCode Zen and Go require; a call to an OpenCode base URL sends it without being asked. */
 export const OPENCODE_SESSION_HEADER = 'x-opencode-session';
 
 /** Whether a base URL is OpenCode's (Zen or Go), which wants `OPENCODE_SESSION_HEADER`. */
@@ -304,8 +304,6 @@ export interface ModelServiceView {
   readonly apiKeySet: boolean;
   /** The request headers it sends with every call, in order. */
   readonly headers: readonly ModelHeaderView[];
-  /** The header it sends a session id under (one per conversation); null sends none. */
-  readonly sessionHeader: string | null;
   readonly enabled: boolean;
   /** The models it offers, in order. */
   readonly models: readonly ModelOption[];
@@ -327,7 +325,6 @@ export interface CreateModelServiceRequest {
   readonly baseUrl?: string | null;
   readonly apiKey?: string | null;
   readonly headers?: readonly ModelHeaderInput[];
-  readonly sessionHeader?: string | null;
   readonly models?: readonly ModelInput[];
   /** True when absent. */
   readonly enabled?: boolean;
@@ -335,22 +332,21 @@ export interface CreateModelServiceRequest {
 
 /**
  * `PATCH agents/services/:serviceName`: what is absent stays; `apiKey` null clears the key, `headers` replaces the
- * headers (a secret one without a value keeping its own) and `sessionHeader` null sends no session id.
+ * headers (a secret one without a value keeping its own).
  */
 export interface UpdateModelServiceRequest {
   readonly title?: string;
   readonly baseUrl?: string | null;
   readonly apiKey?: string | null;
   readonly headers?: readonly ModelHeaderInput[];
-  readonly sessionHeader?: string | null;
   readonly models?: readonly ModelInput[];
   readonly enabled?: boolean;
 }
 
 /**
  * A connection to try: a saved service (`service`), what is being edited, or both, the edited values winning. `apiKey`
- * null tries without a key; absent, the saved service's key. `headers` and `sessionHeader` absent are the saved
- * service's; a secret header without a value is the saved one of that name.
+ * null tries without a key; absent, the saved service's key. `headers` absent are the saved service's; a secret
+ * header without a value is the saved one of that name.
  */
 export interface ModelConnectionRequest {
   readonly service?: string;
@@ -358,7 +354,6 @@ export interface ModelConnectionRequest {
   readonly baseUrl?: string | null;
   readonly apiKey?: string | null;
   readonly headers?: readonly ModelHeaderInput[];
-  readonly sessionHeader?: string | null;
 }
 
 /**

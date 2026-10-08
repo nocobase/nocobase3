@@ -92,19 +92,15 @@ import { onlineTools, type OnlineSkill } from './sandbox.js';
 import { errorOutput, type ServerTool } from './tools.js';
 
 /**
- * The session id a run's model calls send under its service's session header (such as OpenCode's
- * `x-opencode-session`): the same for every run of one conversation — its agent, subject and thread — so the provider
- * routes and caches it as one, and a hash, so it names none of them.
+ * The session id a run's model calls send in the session header an OpenCode base URL requires
+ * (`x-opencode-session`): the same for every run of one conversation — its subject and thread — so the provider
+ * routes and caches it as one, and a hash, so it names neither.
  */
 export function sessionOf(
-  run: Pick<ServerClaim['run'], 'agentId' | 'subject' | 'threadScope'>,
+  run: Pick<ServerClaim['run'], 'subject' | 'threadScope'>,
 ): string {
   const hex = createHash('sha256')
-    .update(
-      [run.agentId, run.subject.kind, run.subject.id, run.threadScope].join(
-        '\n',
-      ),
-    )
+    .update([run.subject.kind, run.subject.id, run.threadScope].join('\n'))
     .digest('hex');
   return [
     hex.slice(0, 8),

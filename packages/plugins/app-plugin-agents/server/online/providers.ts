@@ -30,7 +30,12 @@ import packageMetadata from '@nocobase/app-plugin-agents/package.json' with { ty
 import { randomUUID } from 'node:crypto';
 import { createOllama } from 'ollama-ai-provider-v2';
 
-import { providerOf, type ModelProviderName } from '../../shared/models.js';
+import {
+  isOpenCodeUrl,
+  OPENCODE_SESSION_HEADER,
+  providerOf,
+  type ModelProviderName,
+} from '../../shared/models.js';
 
 type JSONObject = Record<string, JSONValue>;
 /** The SDK's reranking model specification, as `ai` names it (`RerankingModel` minus model ids and older versions). */
@@ -46,8 +51,6 @@ export interface ModelConnection {
   readonly apiKey: string | null;
   /** The service's own request headers, secret ones opened; never the credentials, which go as `apiKey`. */
   readonly headers: Readonly<Record<string, string>>;
-  /** The header a session id goes under; null sends none. */
-  readonly sessionHeader: string | null;
 }
 
 /** Who sends every request to a provider: this plugin, at its version, before what the SDK says of itself. */
@@ -76,8 +79,9 @@ interface Settings {
 }
 
 /**
- * The headers every request over the connection carries besides the provider's own: the service's, and the session
- * id under its session header (`session`, else a new one).
+ * The headers every request over the connection carries besides the provider's own: the service's, and — for an
+ * OpenCode base URL (Zen or Go), which requires it — `x-opencode-session` with `session`, the conversation's
+ * session id, or a new one when the call is outside any.
  */
 export function headersOf(
   connection: ModelConnection,
@@ -85,8 +89,8 @@ export function headersOf(
 ): Record<string, string> {
   return {
     ...connection.headers,
-    ...(connection.sessionHeader
-      ? { [connection.sessionHeader]: session ?? randomUUID() }
+    ...(isOpenCodeUrl(connection.baseUrl)
+      ? { [OPENCODE_SESSION_HEADER]: session ?? randomUUID() }
       : {}),
   };
 }
@@ -131,8 +135,8 @@ export function baseUrlOf(connection: ModelConnection): string | null {
 }
 
 /**
- * The language model `model` of the connection's provider; every call it makes sends `session` under the
- * connection's session header (a conversation's), else one new session id for the model.
+ * The language model `model` of the connection's provider; every call it makes sends `session`, a conversation's
+ * session id, in the session header an OpenCode base URL requires, else a new session id for the model.
  */
 export function languageModel(
   connection: ModelConnection,

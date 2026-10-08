@@ -92,7 +92,6 @@ function service(extra: Partial<ModelServiceView> = {}): ModelServiceView {
     baseUrl: 'http://127.0.0.1:9999/v1',
     apiKeySet: true,
     headers: [],
-    sessionHeader: null,
     enabled: true,
     models: [
       {
@@ -227,7 +226,6 @@ describe('Agent team › Models', () => {
           baseUrl: 'http://127.0.0.1:9998/v1',
           apiKey: 'mock-key',
           headers: [],
-          sessionHeader: null,
           models: [
             {
               value: 'mock-model',
@@ -327,7 +325,6 @@ describe('Agent team › Models', () => {
           provider: 'openai-compatible',
           baseUrl: 'http://127.0.0.1:9999/v1',
           headers: [],
-          sessionHeader: null,
         },
       ]),
     );
@@ -358,7 +355,6 @@ describe('Agent team › Models', () => {
           title: 'Team EU',
           baseUrl: 'http://127.0.0.1:9999/v1',
           headers: [],
-          sessionHeader: null,
           models: [
             {
               value: 'mock-model',
@@ -379,7 +375,7 @@ describe('Agent team › Models', () => {
     );
   });
 
-  it('fills in OpenCode’s session header and sends the headers, a saved secret one without its value', async () => {
+  it('notes an OpenCode base URL and sends the headers, a saved secret one without its value', async () => {
     state.services = [
       service({
         baseUrl: 'https://opencode.ai/zen/go/v1',
@@ -399,15 +395,7 @@ describe('Agent team › Models', () => {
     expect(
       within(dialog).getByText('services.connection.openCodeHint'),
     ).toBeInTheDocument();
-    const session = within(dialog).getByLabelText(
-      'services.connection.sessionHeader',
-    );
-    expect(session).toHaveValue('');
-    // Typing an OpenCode address fills in its session header.
-    const url = within(dialog).getByLabelText('services.connection.baseUrl');
-    await userEvent.clear(url);
-    await userEvent.type(url, 'https://opencode.ai/zen/go/v1');
-    expect(session).toHaveValue('x-opencode-session');
+    // An OpenCode address sends its session header automatically, so the form sets nothing up.
 
     const rows = within(dialog).getAllByTestId('ag-service-header');
     expect(rows).toHaveLength(2);
@@ -452,7 +440,6 @@ describe('Agent team › Models', () => {
           { name: 'X-Team', value: 'agents' },
           { name: 'X-Tenant-Key', secret: true },
         ],
-        sessionHeader: 'x-opencode-session',
       }),
     );
     expect(

@@ -17,13 +17,11 @@ describeMigration('202610080001_ag_add_model_service_headers', {
     const services = expectCollection('agModelServices');
     await services.toHaveField('headers', { nullable: false });
     await services.toHaveField('headersEncrypted', { nullable: true });
-    await services.toHaveField('sessionHeader', { nullable: true });
   },
   down: async ({ expectCollection }) => {
     const services = expectCollection('agModelServices');
     await services.toExist();
     await services.not.toHaveField('headers');
     await services.not.toHaveField('headersEncrypted');
-    await services.not.toHaveField('sessionHeader');
   },
 });

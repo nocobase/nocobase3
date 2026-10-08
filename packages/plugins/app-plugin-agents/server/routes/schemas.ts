@@ -1030,10 +1030,6 @@ export const ModelServiceViewSchema: z.ZodType<ModelServiceView> = z
       .meta({
         description: 'The request headers the service sends with every call.',
       }),
-    sessionHeader: z.string().nullable().meta({
-      description:
-        'The header the service sends a session id under, one per conversation (such as `x-opencode-session`); null sends none.',
-    }),
     enabled: z.boolean(),
     models: z.array(modelOption),
   })
