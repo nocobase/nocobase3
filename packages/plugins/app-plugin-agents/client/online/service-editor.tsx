@@ -7,18 +7,16 @@
  * row's Test checks the model as its kind, saying when it looks like a model of another kind instead. The form scrolls
  * between a fixed header and footer. Who only reads services sees the same form, unchangeable.
  *
- * Below the key: the service's own request headers, each with a name, a value and whether it is secret (written
- * only, like the key), and, for an OpenCode base URL, a note on which provider type serves which of its model
- * families. The connection test and the model list use the headers as edited.
+ * For an OpenCode base URL the form says which provider type serves which of its model families; the session
+ * header is sent automatically.
  */
 import { useTranslation } from '@nocobase/i18n/client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { FlaskConicalIcon, PlusIcon, RefreshCwIcon, XIcon } from 'lucide-react';
+import { FlaskConicalIcon, PlusIcon, RefreshCwIcon } from 'lucide-react';
 import { useState, type ReactElement } from 'react';
 
 import {
   isOpenCodeUrl,
-  MODEL_HEADERS_MAX,
   MODEL_PROVIDERS,
   providerOf,
   type ModelCheck,
@@ -62,9 +60,6 @@ import { useAgentsApi } from '../hooks/use-agents-api.js';
 import { useNotify } from '../hooks/use-notify.js';
 import {
   baseUrlOf,
-  headerInputsOf,
-  headerProblem,
-  headerRowsOf,
   modelRows,
   newServiceTitle,
   setModelDimensions,
@@ -72,7 +67,6 @@ import {
   testModelOf,
   toggleModel,
   validBaseUrl,
-  type HeaderRow,
 } from './model.js';
 
 const messageOf = (error: unknown): string =>
@@ -146,9 +140,6 @@ function ServiceForm({
   const [title, setTitle] = useState(service?.title ?? '');
   const [url, setUrl] = useState(service?.baseUrl ?? '');
   const [key, setKey] = useState('');
-  const [headers, setHeaders] = useState<readonly HeaderRow[]>(() =>
-    headerRowsOf(service),
-  );
   const [enabled, setEnabled] = useState(service?.enabled ?? true);
   const [models, setModels] = useState<readonly ModelOption[]>(
     service?.models ?? [],
@@ -166,7 +157,6 @@ function ServiceForm({
     ...(provider ? { provider: provider.name } : {}),
     baseUrl: baseUrlOf(url, provider),
     ...(key.trim() ? { apiKey: key.trim() } : service ? {} : { apiKey: null }),
-    headers: headerInputsOf(headers),
   });
   const listed = useQuery({
     queryKey: agentsKeys.providerModels(service?.name ?? ''),
@@ -220,7 +210,6 @@ function ServiceForm({
         baseUrl: baseUrlOf(url, chosen),
         models: [...models],
         enabled,
-        headers: headerInputsOf(headers),
         ...(key.trim() ? { apiKey: key.trim() } : {}),
       };
       return service
@@ -252,21 +241,6 @@ function ServiceForm({
       setUrl(next.defaultBaseUrl ?? '');
     setProvider(next);
   };
-  const changeHeader = (id: number, change: Partial<HeaderRow>) =>
-    setHeaders((current) =>
-      current.map((row) => (row.id === id ? { ...row, ...change } : row)),
-    );
-  const addHeader = () =>
-    setHeaders((current) => [
-      ...current,
-      {
-        id: Math.max(-1, ...current.map((row) => row.id)) + 1,
-        name: '',
-        value: '',
-        secret: false,
-        saved: false,
-      },
-    ]);
   const addModel = () => {
     const value = added.trim();
     if (!value) return;
@@ -277,18 +251,8 @@ function ServiceForm({
   const urlInvalid =
     !validBaseUrl(url) ||
     (provider !== null && !provider.defaultBaseUrl && !url.trim());
-  const headerProblems = new Map(
-    headers.map((row) => [row.id, headerProblem(headers, row)]),
-  );
-  const headersInvalid = [...headerProblems.values()].some(
-    (problem) => problem !== null,
-  );
   const canSave =
-    canManage &&
-    provider !== null &&
-    Boolean(title.trim()) &&
-    !urlInvalid &&
-    !headersInvalid;
+    canManage && provider !== null && Boolean(title.trim()) && !urlInvalid;
   const connectionModel = testModelOf(models);
   const kinds = provider?.kinds ?? ['chat'];
   const kindItems = kinds.map((kind) => ({
@@ -401,119 +365,6 @@ function ServiceForm({
             {t('services.connection.openCodeHint')}
           </p>
         ) : null}
-
-        <section
-          className='flex flex-col gap-2'
-          aria-labelledby={id('headers')}
-        >
-          <div className='flex flex-wrap items-center justify-between gap-2'>
-            <div className='min-w-0'>
-              <h3 id={id('headers')} className='text-sm font-medium'>
-                {t('services.connection.headers')}
-              </h3>
-              <p className='text-sm text-muted-foreground'>
-                {t('services.connection.headersHint')}
-              </p>
-            </div>
-            {canManage ? (
-              <Button
-                type='button'
-                variant='outline'
-                size='sm'
-                disabled={headers.length >= MODEL_HEADERS_MAX}
-                onClick={addHeader}
-              >
-                <PlusIcon data-icon='inline-start' />
-                {t('services.connection.addHeader')}
-              </Button>
-            ) : null}
-          </div>
-          {headers.map((row) => {
-            const problem = headerProblems.get(row.id) ?? null;
-            return (
-              <div
-                key={row.id}
-                className='flex flex-col gap-1'
-                data-testid='ag-service-header'
-              >
-                <div className='flex items-center gap-2'>
-                  <Input
-                    className='min-w-0 flex-1 font-mono'
-                    aria-label={t('services.connection.headerName')}
-                    aria-invalid={problem ? true : undefined}
-                    placeholder={t('services.connection.headerName')}
-                    value={row.name}
-                    disabled={!canManage}
-                    onChange={(event) =>
-                      changeHeader(row.id, { name: event.target.value })
-                    }
-                  />
-                  {row.secret ? (
-                    <SecretInput
-                      className='min-w-0 flex-1'
-                      aria-label={t('services.connection.headerValue')}
-                      isSet={row.saved}
-                      placeholder={t('services.connection.headerValue')}
-                      value={row.value}
-                      disabled={!canManage}
-                      onChange={(event) =>
-                        changeHeader(row.id, { value: event.target.value })
-                      }
-                    />
-                  ) : (
-                    <Input
-                      className='min-w-0 flex-1 font-mono'
-                      aria-label={t('services.connection.headerValue')}
-                      placeholder={t('services.connection.headerValue')}
-                      value={row.value}
-                      disabled={!canManage}
-                      onChange={(event) =>
-                        changeHeader(row.id, { value: event.target.value })
-                      }
-                    />
-                  )}
-                  <label className='flex shrink-0 items-center gap-1.5 text-sm'>
-                    <Checkbox
-                      checked={row.secret}
-                      disabled={!canManage}
-                      onCheckedChange={(secret: boolean) =>
-                        changeHeader(row.id, {
-                          secret,
-                          // A saved secret is never shown: no longer secret, its value is typed again.
-                          ...(secret ? {} : { saved: false }),
-                        })
-                      }
-                    />
-                    {t('services.connection.headerSecret')}
-                  </label>
-                  {canManage ? (
-                    <Button
-                      type='button'
-                      variant='ghost'
-                      size='icon-sm'
-                      className='shrink-0'
-                      aria-label={t('services.connection.removeHeader', {
-                        name: row.name.trim() || '—',
-                      })}
-                      onClick={() =>
-                        setHeaders((current) =>
-                          current.filter((other) => other.id !== row.id),
-                        )
-                      }
-                    >
-                      <XIcon />
-                    </Button>
-                  ) : null}
-                </div>
-                {problem ? (
-                  <p role='alert' className='text-xs text-destructive'>
-                    {t(`services.connection.headerProblems.${problem}`)}
-                  </p>
-                ) : null}
-              </div>
-            );
-          })}
-        </section>
 
         {canManage ? (
           <div className='flex flex-wrap items-center gap-3'>

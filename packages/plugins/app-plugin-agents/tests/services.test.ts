@@ -48,7 +48,6 @@ describe('model services', () => {
       provider: 'openai-compatible',
       baseUrl: mock.url,
       apiKeySet: true,
-      headers: [],
       enabled: true,
       models: [
         {

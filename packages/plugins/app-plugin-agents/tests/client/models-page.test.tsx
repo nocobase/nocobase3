@@ -91,7 +91,6 @@ function service(extra: Partial<ModelServiceView> = {}): ModelServiceView {
     provider: 'openai-compatible',
     baseUrl: 'http://127.0.0.1:9999/v1',
     apiKeySet: true,
-    headers: [],
     enabled: true,
     models: [
       {
@@ -225,7 +224,6 @@ describe('Agent team › Models', () => {
           provider: 'openai-compatible',
           baseUrl: 'http://127.0.0.1:9998/v1',
           apiKey: 'mock-key',
-          headers: [],
           models: [
             {
               value: 'mock-model',
@@ -324,7 +322,6 @@ describe('Agent team › Models', () => {
           service: 'team',
           provider: 'openai-compatible',
           baseUrl: 'http://127.0.0.1:9999/v1',
-          headers: [],
         },
       ]),
     );
@@ -354,7 +351,6 @@ describe('Agent team › Models', () => {
         {
           title: 'Team EU',
           baseUrl: 'http://127.0.0.1:9999/v1',
-          headers: [],
           models: [
             {
               value: 'mock-model',
@@ -375,16 +371,8 @@ describe('Agent team › Models', () => {
     );
   });
 
-  it('notes an OpenCode base URL and sends the headers, a saved secret one without its value', async () => {
-    state.services = [
-      service({
-        baseUrl: 'https://opencode.ai/zen/go/v1',
-        headers: [
-          { name: 'X-Team', secret: false, value: 'agents', valueSet: true },
-          { name: 'X-Tenant-Key', secret: true, value: null, valueSet: true },
-        ],
-      }),
-    ];
+  it('notes an OpenCode base URL, whose session header is sent automatically', async () => {
+    state.services = [service({ baseUrl: 'https://opencode.ai/zen/go/v1' })];
     renderPage(<ModelsPage />);
     await userEvent.click(
       await screen.findByRole('button', {
@@ -395,60 +383,13 @@ describe('Agent team › Models', () => {
     expect(
       within(dialog).getByText('services.connection.openCodeHint'),
     ).toBeInTheDocument();
-    // An OpenCode address sends its session header automatically, so the form sets nothing up.
-
-    const rows = within(dialog).getAllByTestId('ag-service-header');
-    expect(rows).toHaveLength(2);
-    // The saved secret is never shown: its field says it is kept.
+    // Nothing on the form sets the session header up: the server sends it.
+    expect(within(dialog).queryAllByTestId('ag-service-header')).toEqual([]);
     expect(
-      within(rows[1]!).getByLabelText('services.connection.headerValue'),
-    ).toHaveAttribute('placeholder', 'common.secretKept');
-
-    // A header the server would refuse cannot be saved.
-    await userEvent.click(
-      within(dialog).getByRole('button', {
+      within(dialog).queryByRole('button', {
         name: 'services.connection.addHeader',
       }),
-    );
-    const added = within(dialog).getAllByTestId('ag-service-header')[2]!;
-    await userEvent.type(
-      within(added).getByLabelText('services.connection.headerName'),
-      'Authorization',
-    );
-    await userEvent.type(
-      within(added).getByLabelText('services.connection.headerValue'),
-      'x',
-    );
-    expect(
-      within(added).getByText('services.connection.headerProblems.reserved'),
-    ).toBeInTheDocument();
-    expect(
-      within(dialog).getByRole('button', { name: 'actions.save' }),
-    ).toBeDisabled();
-    await userEvent.click(
-      within(added).getByRole('button', {
-        name: 'services.connection.removeHeader(name=Authorization)',
-      }),
-    );
-
-    await userEvent.click(
-      within(dialog).getByRole('button', { name: 'actions.save' }),
-    );
-    await waitFor(() =>
-      expect(sent('PATCH', 'agents/services/team').at(-1)).toMatchObject({
-        headers: [
-          { name: 'X-Team', value: 'agents' },
-          { name: 'X-Tenant-Key', secret: true },
-        ],
-      }),
-    );
-    expect(
-      (
-        sent('PATCH', 'agents/services/team').at(-1) as {
-          headers: Record<string, unknown>[];
-        }
-      ).headers[1],
-    ).not.toHaveProperty('value');
+    ).toBeNull();
   });
 
   it('replaces the key with what is typed', async () => {

@@ -70,23 +70,6 @@ const servicesEnUS = {
       testNeedsModel: 'Check a model to test the connection.',
       openCodeHint:
         'OpenCode sends x-opencode-session with every request (one session id per conversation). It serves each model family through its own API: DeepSeek, GLM, Kimi and MiMo through DeepSeek or OpenAI-compatible, Claude, MiniMax and Qwen through Anthropic, GPT and Grok through OpenAI. Add a service of each type you need, all with this base URL.',
-      headers: 'Request headers',
-      headersHint:
-        'Sent with every request to the provider. A secret value is never shown again once saved.',
-      addHeader: 'Add header',
-      headerName: 'Header name',
-      headerValue: 'Value',
-      headerSecret: 'Secret',
-      removeHeader: 'Remove header {{name}}',
-      headerProblems: {
-        invalid:
-          "A header name is letters, digits and !#$%&'*+.^_`|~-, without spaces.",
-        reserved:
-          'This header is set by HTTP, carries the credentials or names the sender; set the key as the API key.',
-        duplicate: 'This header is set twice.',
-        noValue: 'Give the header a value.',
-        tooMany: 'A service sends at most 20 headers.',
-      },
     },
     models: {
       title: 'Models',

@@ -7,9 +7,8 @@
  * `RerankingModelV4` of this plugin's posting `{ model, query, documents, top_n }` to `<base>/rerank` and reading
  * `results[].index` and `relevance_score`, the shape Cohere, Jina, vLLM and SiliconFlow share.
  *
- * Every request carries the service's own headers and its session id when it names a session header (`headersOf`),
- * and names this plugin first in its user agent (`modelFetch`). The credentials are never among a service's headers (`RESERVED_MODEL_HEADERS`): they go
- * as the key, the way each provider sends it.
+ * Every request names this plugin first in its user agent (`modelFetch`), and a call to an OpenCode base URL
+ * (Zen or Go) carries `x-opencode-session` with the conversation's session id (`headersOf`).
  */
 import { createAlibaba } from '@ai-sdk/alibaba';
 import { createAnthropic } from '@ai-sdk/anthropic';
@@ -43,14 +42,12 @@ type RerankingModelV4 = Extract<RerankingModel, { specificationVersion: 'v4' }>;
 type RerankingModelV4CallOptions = Parameters<RerankingModelV4['doRerank']>[0];
 type RerankingModelV4Result = Awaited<ReturnType<RerankingModelV4['doRerank']>>;
 
-/** What a call to a service needs: its provider, where to reach it, its key and the headers it sends. */
+/** What a call to a service needs: its provider, where to reach it and its key. */
 export interface ModelConnection {
   readonly provider: ModelProviderName;
   /** Null calls the provider's default. */
   readonly baseUrl: string | null;
   readonly apiKey: string | null;
-  /** The service's own request headers, secret ones opened; never the credentials, which go as `apiKey`. */
-  readonly headers: Readonly<Record<string, string>>;
 }
 
 /** Who sends every request to a provider: this plugin, at its version, before what the SDK says of itself. */
@@ -79,20 +76,17 @@ interface Settings {
 }
 
 /**
- * The headers every request over the connection carries besides the provider's own: the service's, and — for an
- * OpenCode base URL (Zen or Go), which requires it — `x-opencode-session` with `session`, the conversation's
- * session id, or a new one when the call is outside any.
+ * The headers every request over the connection carries besides the provider's own: for an OpenCode base URL (Zen
+ * or Go), which requires it, `x-opencode-session` with `session`, the conversation's session id, or a new one
+ * when the call is outside any; nothing otherwise.
  */
 export function headersOf(
   connection: ModelConnection,
   session?: string | null,
 ): Record<string, string> {
-  return {
-    ...connection.headers,
-    ...(isOpenCodeUrl(connection.baseUrl)
-      ? { [OPENCODE_SESSION_HEADER]: session ?? randomUUID() }
-      : {}),
-  };
+  return isOpenCodeUrl(connection.baseUrl)
+    ? { [OPENCODE_SESSION_HEADER]: session ?? randomUUID() }
+    : {};
 }
 
 function settingsOf(
@@ -107,7 +101,7 @@ function settingsOf(
   };
 }
 
-/** Ollama's settings: its key, if any, as a bearer token beside the connection's headers. */
+/** Ollama's settings: the connection's headers and fetch, its key as a bearer token beside them. */
 function ollamaSettings(settings: Settings): {
   baseURL?: string;
   headers: Record<string, string>;

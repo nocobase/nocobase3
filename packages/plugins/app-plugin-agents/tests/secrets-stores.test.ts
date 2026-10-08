@@ -18,7 +18,7 @@ describe('agents secrets stores', () => {
     h = undefined;
   });
 
-  it('reseals variables, model service keys and secret headers under a new key', async () => {
+  it('reseals variables and model service keys under a new key', async () => {
     h = await createHarness({ secrets: testSecrets([v1]) });
     const target = { scope: 'agent' as const, scopeId: 'a1' };
     await h.services.variables.set(target, 'TOKEN', 'variable-value', 'admin');
@@ -26,7 +26,6 @@ describe('agents secrets stores', () => {
       title: 'Team',
       provider: 'openai',
       apiKey: 'provider-key',
-      headers: [{ name: 'X-Tenant-Key', value: 'tenant-secret', secret: true }],
       models: [{ value: 'model' }],
     });
 
@@ -37,15 +36,10 @@ describe('agents secrets stores', () => {
       await Promise.all(stores.map((store) => store.status(context))),
     ).toEqual([
       { total: 1, byVersion: { '1': 1 }, needsReseal: 1 },
-      // The key and the secret headers.
-      { total: 2, byVersion: { '1': 2 }, needsReseal: 2 },
+      { total: 1, byVersion: { '1': 1 }, needsReseal: 1 },
     ]);
-    expect(
-      await Promise.all(stores.map((store) => store.reseal(context))),
-    ).toEqual([
-      { resealed: 1, failed: 0 },
-      { resealed: 2, failed: 0 },
-    ]);
+    for (const store of stores)
+      expect(await store.reseal(context)).toEqual({ resealed: 1, failed: 0 });
 
     // Readable with the new key alone.
     const after = createAgents({
@@ -57,11 +51,13 @@ describe('agents secrets stores', () => {
     expect(await after.variables.reveal(target, 'admin')).toEqual([
       expect.objectContaining({ name: 'TOKEN', value: 'variable-value' }),
     ]);
-    const connection = await after.online.services.connectionFor({
-      modelService: 'team',
-      model: 'model',
-    });
-    expect(connection.apiKey).toBe('provider-key');
-    expect(connection.headers).toEqual({ 'X-Tenant-Key': 'tenant-secret' });
+    expect(
+      (
+        await after.online.services.connectionFor({
+          modelService: 'team',
+          model: 'model',
+        })
+      ).apiKey,
+    ).toBe('provider-key');
   });
 });

@@ -1,16 +1,12 @@
 /**
  * The model services UI without React: the services in list order, a new service's title, a service's models as one
- * list, the base URL as it is checked, saved and shown, and the request headers as they are edited and sent.
+ * list, and the base URL as it is checked, saved and shown.
  */
 import {
   guessModelKind,
-  MODEL_HEADER_NAME_PATTERN,
-  MODEL_HEADERS_MAX,
   MODEL_KINDS,
   MODEL_PROVIDERS,
   providerOf,
-  RESERVED_MODEL_HEADERS,
-  type ModelHeaderInput,
   type ModelKind,
   type ModelOption,
   type ModelProviderOption,
@@ -193,56 +189,4 @@ export function serviceStatus(service: ModelServiceView): ServiceStatus {
     return 'noKey';
   if (service.models.length === 0) return 'noModels';
   return 'on';
-}
-
-/** One request header as the form edits it; `saved` says a secret one has a value saved under its name. */
-export interface HeaderRow {
-  readonly id: number;
-  readonly name: string;
-  readonly value: string;
-  readonly secret: boolean;
-  readonly saved: boolean;
-}
-
-/** A service's headers as rows to edit: a secret one's value empty, kept unless one is typed. */
-export function headerRowsOf(service: ModelServiceView | null): HeaderRow[] {
-  return (service?.headers ?? []).map((header, index) => ({
-    id: index,
-    name: header.name,
-    value: header.value ?? '',
-    secret: header.secret,
-    saved: header.secret && header.valueSet,
-  }));
-}
-
-/** The headers to send, the empty rows left out; a secret one left empty keeps its saved value. */
-export function headerInputsOf(rows: readonly HeaderRow[]): ModelHeaderInput[] {
-  return rows
-    .filter((row) => row.name.trim() || row.value.trim())
-    .map((row) => ({
-      name: row.name.trim(),
-      ...(row.secret && !row.value.trim() ? {} : { value: row.value.trim() }),
-      ...(row.secret ? { secret: true } : {}),
-    }));
-}
-
-/** What is wrong with a header name, as the server would refuse it; null when nothing is. */
-export type HeaderProblem =
-  'invalid' | 'reserved' | 'duplicate' | 'noValue' | 'tooMany';
-
-/** Why the row cannot be saved, given the other rows; null when it can. */
-export function headerProblem(
-  rows: readonly HeaderRow[],
-  row: HeaderRow,
-): HeaderProblem | null {
-  const name = row.name.trim();
-  if (!name && !row.value.trim()) return null;
-  const lower = name.toLowerCase();
-  if (!MODEL_HEADER_NAME_PATTERN.test(name)) return 'invalid';
-  if (RESERVED_MODEL_HEADERS.includes(lower)) return 'reserved';
-  if (rows.find((other) => other.name.trim().toLowerCase() === lower) !== row)
-    return 'duplicate';
-  if (!row.value.trim() && !(row.secret && row.saved)) return 'noValue';
-  if (rows.indexOf(row) >= MODEL_HEADERS_MAX) return 'tooMany';
-  return null;
 }

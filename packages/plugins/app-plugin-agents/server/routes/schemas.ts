@@ -1015,21 +1015,6 @@ export const ModelServiceViewSchema: z.ZodType<ModelServiceView> = z
     apiKeySet: z.boolean().meta({
       description: 'Whether a key is stored; the key itself is never answered.',
     }),
-    headers: z
-      .array(
-        z.object({
-          name: z.string(),
-          secret: z.boolean().meta({
-            description:
-              'A secret header’s value is never answered: `value` is null and `valueSet` says whether it has one.',
-          }),
-          value: z.string().nullable(),
-          valueSet: z.boolean(),
-        }),
-      )
-      .meta({
-        description: 'The request headers the service sends with every call.',
-      }),
     enabled: z.boolean(),
     models: z.array(modelOption),
   })

@@ -70,21 +70,6 @@ const servicesZhCN: ServicesLocale = {
       testNeedsModel: '勾选一个模型后才能测试连接。',
       openCodeHint:
         'OpenCode 的每次请求会自动带上 x-opencode-session（每个对话一个会话 ID）。它按模型系列使用不同的接口：DeepSeek、GLM、Kimi、MiMo 用 DeepSeek 或 OpenAI-compatible 类型，Claude、MiniMax、Qwen 用 Anthropic 类型，GPT、Grok 用 OpenAI 类型。需要哪类就各添加一个该类型的服务，Base URL 都填这个地址。',
-      headers: '请求头',
-      headersHint: '每次请求服务商时都会带上。标为密钥的值保存后不再显示。',
-      addHeader: '添加请求头',
-      headerName: '请求头名称',
-      headerValue: '值',
-      headerSecret: '密钥',
-      removeHeader: '删除请求头 {{name}}',
-      headerProblems: {
-        invalid: "请求头名称只能包含字母、数字和 !#$%&'*+.^_`|~-，不能有空格。",
-        reserved:
-          '这个请求头由 HTTP 决定、携带凭据或标识发送方；密钥请填在 API 密钥里。',
-        duplicate: '这个请求头重复了。',
-        noValue: '请填写请求头的值。',
-        tooMany: '一个服务最多发送 20 个请求头。',
-      },
     },
     models: {
       title: '模型',

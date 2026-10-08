@@ -1,15 +1,12 @@
 /**
  * The model services UI without React: services in list order, a new service's title, a service's models as one list,
- * the base URL as it is checked, sent and shown, and the request headers as they are edited and sent.
+ * and the base URL as it is checked, sent and shown.
  */
 import { describe, expect, it } from 'vitest';
 
 import {
   baseUrlOf,
   guessKind,
-  headerInputsOf,
-  headerProblem,
-  headerRowsOf,
   hostOf,
   kindCounts,
   modelRows,
@@ -21,7 +18,6 @@ import {
   testModelOf,
   toggleModel,
   validBaseUrl,
-  type HeaderRow,
 } from '../../client/online/model.js';
 import {
   guessModelKind,
@@ -41,7 +37,6 @@ function service(
     provider,
     baseUrl: null,
     apiKeySet: true,
-    headers: [],
     enabled: true,
     models: [{ value: 'gpt-x', label: 'gpt-x' }],
     ...extra,
@@ -179,60 +174,5 @@ describe('the model services UI model', () => {
     expect(serviceStatus(service('a', 'openai', { models: [] }))).toBe(
       'noModels',
     );
-  });
-
-  it('edits the headers as rows and sends them, a saved secret one without its value', () => {
-    const rows = headerRowsOf(
-      service('a', 'openai', {
-        headers: [
-          { name: 'X-Team', secret: false, value: 'agents', valueSet: true },
-          { name: 'X-Key', secret: true, value: null, valueSet: true },
-        ],
-      }),
-    );
-    expect(rows).toEqual([
-      { id: 0, name: 'X-Team', value: 'agents', secret: false, saved: false },
-      { id: 1, name: 'X-Key', value: '', secret: true, saved: true },
-    ]);
-    expect(
-      headerInputsOf([
-        ...rows,
-        { id: 2, name: ' ', value: '', secret: false, saved: false },
-        { id: 3, name: 'X-New', value: ' s ', secret: true, saved: false },
-      ]),
-    ).toEqual([
-      { name: 'X-Team', value: 'agents' },
-      { name: 'X-Key', secret: true },
-      { name: 'X-New', value: 's', secret: true },
-    ]);
-  });
-
-  it('says why a header would be refused', () => {
-    const row = (
-      id: number,
-      name: string,
-      value = 'v',
-      extra: Partial<HeaderRow> = {},
-    ): HeaderRow => ({
-      id,
-      name,
-      value,
-      secret: false,
-      saved: false,
-      ...extra,
-    });
-    const problem = (rows: HeaderRow[], at: number) =>
-      headerProblem(rows, rows[at]!);
-    expect(problem([row(0, 'X-A')], 0)).toBeNull();
-    expect(problem([row(0, '', '')], 0)).toBeNull();
-    expect(problem([row(0, 'Bad Name')], 0)).toBe('invalid');
-    expect(problem([row(0, 'authorization')], 0)).toBe('reserved');
-    expect(problem([row(0, 'X-A'), row(1, 'x-a')], 1)).toBe('duplicate');
-    expect(problem([row(0, 'X-A'), row(1, 'x-a')], 0)).toBeNull();
-    expect(problem([row(0, 'x-opencode-session')], 0)).toBeNull();
-    expect(problem([row(0, 'X-A', '')], 0)).toBe('noValue');
-    expect(
-      problem([row(0, 'X-A', '', { secret: true, saved: true })], 0),
-    ).toBeNull();
   });
 });
