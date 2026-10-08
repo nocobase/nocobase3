@@ -91,6 +91,8 @@ function service(extra: Partial<ModelServiceView> = {}): ModelServiceView {
     provider: 'openai-compatible',
     baseUrl: 'http://127.0.0.1:9999/v1',
     apiKeySet: true,
+    headers: [],
+    sessionHeader: null,
     enabled: true,
     models: [
       {
@@ -224,6 +226,8 @@ describe('Agent team › Models', () => {
           provider: 'openai-compatible',
           baseUrl: 'http://127.0.0.1:9998/v1',
           apiKey: 'mock-key',
+          headers: [],
+          sessionHeader: null,
           models: [
             {
               value: 'mock-model',
@@ -322,6 +326,8 @@ describe('Agent team › Models', () => {
           service: 'team',
           provider: 'openai-compatible',
           baseUrl: 'http://127.0.0.1:9999/v1',
+          headers: [],
+          sessionHeader: null,
         },
       ]),
     );
@@ -351,6 +357,8 @@ describe('Agent team › Models', () => {
         {
           title: 'Team EU',
           baseUrl: 'http://127.0.0.1:9999/v1',
+          headers: [],
+          sessionHeader: null,
           models: [
             {
               value: 'mock-model',
@@ -369,6 +377,91 @@ describe('Agent team › Models', () => {
         },
       ]),
     );
+  });
+
+  it('fills in OpenCode’s session header and sends the headers, a saved secret one without its value', async () => {
+    state.services = [
+      service({
+        baseUrl: 'https://opencode.ai/zen/go/v1',
+        headers: [
+          { name: 'X-Team', secret: false, value: 'agents', valueSet: true },
+          { name: 'X-Tenant-Key', secret: true, value: null, valueSet: true },
+        ],
+      }),
+    ];
+    renderPage(<ModelsPage />);
+    await userEvent.click(
+      await screen.findByRole('button', {
+        name: 'services.service.edit(title=Team)',
+      }),
+    );
+    const dialog = await screen.findByRole('dialog');
+    expect(
+      within(dialog).getByText('services.connection.openCodeHint'),
+    ).toBeInTheDocument();
+    const session = within(dialog).getByLabelText(
+      'services.connection.sessionHeader',
+    );
+    expect(session).toHaveValue('');
+    // Typing an OpenCode address fills in its session header.
+    const url = within(dialog).getByLabelText('services.connection.baseUrl');
+    await userEvent.clear(url);
+    await userEvent.type(url, 'https://opencode.ai/zen/go/v1');
+    expect(session).toHaveValue('x-opencode-session');
+
+    const rows = within(dialog).getAllByTestId('ag-service-header');
+    expect(rows).toHaveLength(2);
+    // The saved secret is never shown: its field says it is kept.
+    expect(
+      within(rows[1]!).getByLabelText('services.connection.headerValue'),
+    ).toHaveAttribute('placeholder', 'common.secretKept');
+
+    // A header the server would refuse cannot be saved.
+    await userEvent.click(
+      within(dialog).getByRole('button', {
+        name: 'services.connection.addHeader',
+      }),
+    );
+    const added = within(dialog).getAllByTestId('ag-service-header')[2]!;
+    await userEvent.type(
+      within(added).getByLabelText('services.connection.headerName'),
+      'Authorization',
+    );
+    await userEvent.type(
+      within(added).getByLabelText('services.connection.headerValue'),
+      'x',
+    );
+    expect(
+      within(added).getByText('services.connection.headerProblems.reserved'),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole('button', { name: 'actions.save' }),
+    ).toBeDisabled();
+    await userEvent.click(
+      within(added).getByRole('button', {
+        name: 'services.connection.removeHeader(name=Authorization)',
+      }),
+    );
+
+    await userEvent.click(
+      within(dialog).getByRole('button', { name: 'actions.save' }),
+    );
+    await waitFor(() =>
+      expect(sent('PATCH', 'agents/services/team').at(-1)).toMatchObject({
+        headers: [
+          { name: 'X-Team', value: 'agents' },
+          { name: 'X-Tenant-Key', secret: true },
+        ],
+        sessionHeader: 'x-opencode-session',
+      }),
+    );
+    expect(
+      (
+        sent('PATCH', 'agents/services/team').at(-1) as {
+          headers: Record<string, unknown>[];
+        }
+      ).headers[1],
+    ).not.toHaveProperty('value');
   });
 
   it('replaces the key with what is typed', async () => {

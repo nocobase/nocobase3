@@ -6,6 +6,10 @@
  * Reranking: Cohere through its provider package; an OpenAI-compatible endpoint through `compatibleReranking`, a
  * `RerankingModelV4` of this plugin's posting `{ model, query, documents, top_n }` to `<base>/rerank` and reading
  * `results[].index` and `relevance_score`, the shape Cohere, Jina, vLLM and SiliconFlow share.
+ *
+ * Every request carries the service's own headers and its session id when it names a session header (`headersOf`),
+ * and names this plugin first in its user agent (`modelFetch`). The credentials are never among a service's headers (`RESERVED_MODEL_HEADERS`): they go
+ * as the key, the way each provider sends it.
  */
 import { createAlibaba } from '@ai-sdk/alibaba';
 import { createAnthropic } from '@ai-sdk/anthropic';
@@ -22,6 +26,8 @@ import type {
   RerankingModel,
 } from 'ai';
 import { APICallError } from 'ai';
+import packageMetadata from '@nocobase/app-plugin-agents/package.json' with { type: 'json' };
+import { randomUUID } from 'node:crypto';
 import { createOllama } from 'ollama-ai-provider-v2';
 
 import { providerOf, type ModelProviderName } from '../../shared/models.js';
@@ -32,23 +38,86 @@ type RerankingModelV4 = Extract<RerankingModel, { specificationVersion: 'v4' }>;
 type RerankingModelV4CallOptions = Parameters<RerankingModelV4['doRerank']>[0];
 type RerankingModelV4Result = Awaited<ReturnType<RerankingModelV4['doRerank']>>;
 
-/** What a call to a service needs: its provider, where to reach it and its key. */
+/** What a call to a service needs: its provider, where to reach it, its key and the headers it sends. */
 export interface ModelConnection {
   readonly provider: ModelProviderName;
   /** Null calls the provider's default. */
   readonly baseUrl: string | null;
   readonly apiKey: string | null;
+  /** The service's own request headers, secret ones opened; never the credentials, which go as `apiKey`. */
+  readonly headers: Readonly<Record<string, string>>;
+  /** The header a session id goes under; null sends none. */
+  readonly sessionHeader: string | null;
 }
+
+/** Who sends every request to a provider: this plugin, at its version, before what the SDK says of itself. */
+export const MODEL_USER_AGENT: string = `nocobase-agents/${packageMetadata.version}`;
+
+/**
+ * `fetch` for every request to a provider: its user agent starts with `MODEL_USER_AGENT`. The SDK sets its own user
+ * agent on each call, over any a provider is given, so this plugin names itself here, as the request goes out.
+ */
+export const modelFetch: typeof globalThis.fetch = (input, init) => {
+  const headers = new Headers(
+    init?.headers ?? (input instanceof Request ? input.headers : undefined),
+  );
+  headers.set(
+    'user-agent',
+    [MODEL_USER_AGENT, headers.get('user-agent')].filter(Boolean).join(' '),
+  );
+  return globalThis.fetch(input, { ...init, headers });
+};
 
 interface Settings {
   baseURL?: string;
   apiKey?: string;
+  headers: Record<string, string>;
+  fetch: typeof globalThis.fetch;
 }
 
-function settingsOf(connection: ModelConnection): Settings {
+/**
+ * The headers every request over the connection carries besides the provider's own: the service's, and the session
+ * id under its session header (`session`, else a new one).
+ */
+export function headersOf(
+  connection: ModelConnection,
+  session?: string | null,
+): Record<string, string> {
+  return {
+    ...connection.headers,
+    ...(connection.sessionHeader
+      ? { [connection.sessionHeader]: session ?? randomUUID() }
+      : {}),
+  };
+}
+
+function settingsOf(
+  connection: ModelConnection,
+  session?: string | null,
+): Settings {
   return {
     ...(connection.baseUrl ? { baseURL: connection.baseUrl } : {}),
     ...(connection.apiKey ? { apiKey: connection.apiKey } : {}),
+    headers: headersOf(connection, session),
+    fetch: modelFetch,
+  };
+}
+
+/** Ollama's settings: its key, if any, as a bearer token beside the connection's headers. */
+function ollamaSettings(settings: Settings): {
+  baseURL?: string;
+  headers: Record<string, string>;
+  fetch: typeof globalThis.fetch;
+} {
+  return {
+    ...(settings.baseURL ? { baseURL: settings.baseURL } : {}),
+    fetch: settings.fetch,
+    headers: {
+      ...settings.headers,
+      ...(settings.apiKey
+        ? { Authorization: `Bearer ${settings.apiKey}` }
+        : {}),
+    },
   };
 }
 
@@ -61,12 +130,16 @@ export function baseUrlOf(connection: ModelConnection): string | null {
   );
 }
 
-/** The language model `model` of the connection's provider. */
+/**
+ * The language model `model` of the connection's provider; every call it makes sends `session` under the
+ * connection's session header (a conversation's), else one new session id for the model.
+ */
 export function languageModel(
   connection: ModelConnection,
   model: string,
+  session?: string | null,
 ): LanguageModel {
-  const settings = settingsOf(connection);
+  const settings = settingsOf(connection, session);
   switch (connection.provider) {
     case 'openai':
       return createOpenAI(settings)(model);
@@ -83,17 +156,14 @@ export function languageModel(
     case 'cohere':
       return createCohere(settings)(model);
     case 'ollama':
-      return createOllama({
-        ...(settings.baseURL ? { baseURL: settings.baseURL } : {}),
-        ...(settings.apiKey
-          ? { headers: { Authorization: `Bearer ${settings.apiKey}` } }
-          : {}),
-      })(model);
+      return createOllama(ollamaSettings(settings))(model);
     case 'openai-compatible':
       return createOpenAICompatible({
         name: 'openai-compatible',
         baseURL: settings.baseURL ?? '',
         includeUsage: true,
+        headers: settings.headers,
+        fetch: settings.fetch,
         ...(settings.apiKey ? { apiKey: settings.apiKey } : {}),
       })(model);
   }
@@ -154,12 +224,7 @@ export function embeddingModel(
       };
     case 'ollama':
       return {
-        model: createOllama({
-          ...(settings.baseURL ? { baseURL: settings.baseURL } : {}),
-          ...(settings.apiKey
-            ? { headers: { Authorization: `Bearer ${settings.apiKey}` } }
-            : {}),
-        }).embedding(model),
+        model: createOllama(ollamaSettings(settings)).embedding(model),
         providerOptions: sized('ollama', 'dimensions'),
       };
     case 'openai-compatible':
@@ -167,6 +232,8 @@ export function embeddingModel(
         model: createOpenAICompatible({
           name: 'openai-compatible',
           baseURL: settings.baseURL ?? '',
+          headers: settings.headers,
+          fetch: settings.fetch,
           ...(settings.apiKey ? { apiKey: settings.apiKey } : {}),
         }).embeddingModel(model),
         providerOptions: sized('openaiCompatible', 'dimensions'),
@@ -190,6 +257,7 @@ export function rerankingModel(
         settings.baseURL ?? '',
         settings.apiKey ?? null,
         model,
+        settings.headers,
       );
     default:
       throw new Error(`${connection.provider} serves no rerank models.`);
@@ -208,6 +276,7 @@ export function compatibleReranking(
   baseURL: string,
   apiKey: string | null,
   modelId: string,
+  headers: Readonly<Record<string, string>> = {},
 ): RerankingModelV4 {
   return {
     specificationVersion: 'v4',
@@ -229,9 +298,10 @@ export function compatibleReranking(
       };
       let response: Response;
       try {
-        response = await fetch(url, {
+        response = await modelFetch(url, {
           method: 'POST',
           headers: {
+            ...headers,
             'content-type': 'application/json',
             ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}),
             ...Object.fromEntries(
@@ -404,10 +474,10 @@ export async function listModels(
   if (!base) throw new Error('Set the base URL of the provider’s API.');
   const request = listRequest(connection);
   const root = base.replace(/\/+$/u, '');
-  const response = await fetch(
+  const response = await modelFetch(
     `${request.base ? request.base(root) : root}${request.path}`,
     {
-      headers: request.headers,
+      headers: { ...headersOf(connection), ...request.headers },
       signal,
     },
   );

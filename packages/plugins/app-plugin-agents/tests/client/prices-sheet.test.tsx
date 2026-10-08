@@ -93,6 +93,8 @@ function service(extra: Partial<ModelServiceView> = {}): ModelServiceView {
     provider: 'openai-compatible',
     baseUrl: 'http://127.0.0.1:9999/v1',
     apiKeySet: true,
+    headers: [],
+    sessionHeader: null,
     enabled: true,
     models: [{ value: 'mock-model', label: 'mock-model' }],
     ...extra,

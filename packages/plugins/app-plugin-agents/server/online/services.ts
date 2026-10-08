@@ -7,15 +7,19 @@
  * `agents.services`; nothing here knows HTTP.
  *
  * A provider may have any number of services. Keys are sealed with the application's secrets keys, as variables are
- * (`kernel/secrets.ts`), and never answered: a view says whether one is set. Deleting a service deletes its model
- * prices.
+ * (`kernel/secrets.ts`), and never answered: a view says whether one is set. So are the values of the request headers
+ * marked secret, sealed together as one JSON object (`headersEncrypted`, bound to the service's name and `headers`).
+ * Deleting a service deletes its model prices.
  */
 import type { DatabaseConnection } from '@nocobase/db';
 import { z } from 'zod';
 
 import {
+  MODEL_HEADER_NAME_PATTERN,
+  MODEL_HEADERS_MAX,
   MODEL_KINDS,
   MODEL_PROVIDER_NAMES,
+  RESERVED_MODEL_HEADERS,
   guessModelKind,
   providerOf,
   type CreateModelServiceRequest,
@@ -25,6 +29,8 @@ import {
   type ModelCheck,
   type ModelConnectionCheckRequest,
   type ModelConnectionRequest,
+  type ModelHeaderInput,
+  type ModelHeaderView,
   type ModelInput,
   type ModelKind,
   type ModelOption,
@@ -73,6 +79,9 @@ interface ServiceRecord {
   readonly provider: string;
   readonly baseUrl: string | null;
   readonly apiKeyEncrypted: string | null;
+  readonly headers: unknown;
+  readonly headersEncrypted: string | null;
+  readonly sessionHeader: string | null;
   readonly enabled: boolean | number;
   readonly models: unknown;
   readonly sort: number;
@@ -99,6 +108,18 @@ const ModelsSchema = z
   )
   .max(500);
 
+const HeadersSchema = z
+  .array(
+    z.strictObject({
+      name: z.string().trim().min(1).max(100),
+      value: z.string().max(4000).optional(),
+      secret: z.boolean().optional(),
+    }),
+  )
+  .max(MODEL_HEADERS_MAX);
+
+const SessionHeaderSchema = z.string().trim().max(100).nullable().optional();
+
 const ProviderSchema = z.enum(
   MODEL_PROVIDER_NAMES as [ModelProviderName, ...ModelProviderName[]],
 );
@@ -109,6 +130,8 @@ export const CreateServiceSchema: z.ZodType<CreateModelServiceRequest> =
     provider: ProviderSchema,
     baseUrl: z.string().trim().max(500).nullable().optional(),
     apiKey: z.string().max(4000).nullable().optional(),
+    headers: HeadersSchema.optional(),
+    sessionHeader: SessionHeaderSchema,
     models: ModelsSchema.optional(),
     enabled: z.boolean().optional(),
   });
@@ -118,6 +141,8 @@ export const UpdateServiceSchema: z.ZodType<UpdateModelServiceRequest> =
     title: z.string().trim().min(1).max(100).optional(),
     baseUrl: z.string().trim().max(500).nullable().optional(),
     apiKey: z.string().max(4000).nullable().optional(),
+    headers: HeadersSchema.optional(),
+    sessionHeader: SessionHeaderSchema,
     models: ModelsSchema.optional(),
     enabled: z.boolean().optional(),
   });
@@ -133,6 +158,8 @@ export const ConnectionSchema: z.ZodType<ModelConnectionRequest> =
     provider: ProviderSchema.optional(),
     baseUrl: z.string().trim().max(500).nullable().optional(),
     apiKey: z.string().max(4000).nullable().optional(),
+    headers: HeadersSchema.optional(),
+    sessionHeader: SessionHeaderSchema,
   });
 
 export const ConnectionCheckSchema: z.ZodType<ModelConnectionCheckRequest> =
@@ -141,6 +168,8 @@ export const ConnectionCheckSchema: z.ZodType<ModelConnectionCheckRequest> =
     provider: ProviderSchema.optional(),
     baseUrl: z.string().trim().max(500).nullable().optional(),
     apiKey: z.string().max(4000).nullable().optional(),
+    headers: HeadersSchema.optional(),
+    sessionHeader: SessionHeaderSchema,
     model: z.string().trim().min(1).max(200),
     kind: KindSchema.optional(),
     dimensions: DimensionsSchema.optional(),
@@ -254,6 +283,114 @@ function normalizeBaseUrl(value: string | null | undefined): string | null {
   return url.replace(/\/+$/u, '');
 }
 
+/** A request header as stored (`agModelServices.headers`): a secret one's value is sealed apart. */
+interface StoredHeader {
+  readonly name: string;
+  readonly secret: boolean;
+  readonly value: string | null;
+}
+
+/** The headers a service sends, as they were set: names and plain values, secret values sealed apart. */
+interface HeaderPlan {
+  readonly stored: StoredHeader[];
+  /** The secret headers' values, by lower-case name. */
+  readonly secrets: Record<string, string>;
+}
+
+function storedHeadersOf(value: unknown): StoredHeader[] {
+  return (Array.isArray(value) ? (value as unknown[]) : []).flatMap((item) => {
+    if (!isRecord(item) || typeof item.name !== 'string') return [];
+    return [
+      {
+        name: item.name,
+        secret: item.secret === true,
+        value: typeof item.value === 'string' ? item.value : null,
+      },
+    ];
+  });
+}
+
+/** A header name a service may send: an HTTP token, none of the reserved ones. */
+function checkHeaderName(name: string, field: string): string {
+  const trimmed = name.trim();
+  if (!MODEL_HEADER_NAME_PATTERN.test(trimmed))
+    throw invalid(`${trimmed || 'A header name'} is not a header name.`, {
+      field,
+    });
+  if (RESERVED_MODEL_HEADERS.includes(trimmed.toLowerCase()))
+    throw invalid(
+      `A service cannot set ${trimmed}: HTTP sets it, or it carries the credentials, which go as the API key.`,
+      { field },
+    );
+  return trimmed;
+}
+
+/**
+ * The headers as set, each checked; a secret header without a value takes the one `saved` has under its name
+ * (lower case), and needs one there.
+ */
+function planHeaders(
+  input: readonly ModelHeaderInput[],
+  saved: Readonly<Record<string, string>>,
+): HeaderPlan {
+  if (input.length > MODEL_HEADERS_MAX)
+    throw invalid(`A service sends at most ${MODEL_HEADERS_MAX} headers.`, {
+      field: 'headers',
+    });
+  const seen = new Set<string>();
+  const stored: StoredHeader[] = [];
+  const secrets: Record<string, string> = {};
+  input.forEach((header, index) => {
+    const field = `headers.${index}`;
+    const name = checkHeaderName(header.name, `${field}.name`);
+    const key = name.toLowerCase();
+    if (seen.has(key))
+      throw invalid(`The header ${name} is set twice.`, { field });
+    seen.add(key);
+    const value = header.value ?? (header.secret ? saved[key] : undefined);
+    if (value === undefined || value.trim() === '')
+      throw invalid(`The header ${name} needs a value.`, {
+        field: `${field}.value`,
+      });
+    if (value.length > 4000 || /[\r\n\0]/u.test(value))
+      throw invalid(
+        `The value of ${name} must be one line of at most 4000 characters.`,
+        { field: `${field}.value` },
+      );
+    if (header.secret) {
+      secrets[key] = value.trim();
+      stored.push({ name, secret: true, value: null });
+    } else stored.push({ name, secret: false, value: value.trim() });
+  });
+  return { stored, secrets };
+}
+
+/** The session header as set: null for none, else a header name that is not reserved nor one of `headers`. */
+function cleanSessionHeader(
+  value: string | null | undefined,
+  headers: readonly StoredHeader[],
+): string | null {
+  const trimmed = text(value);
+  if (!trimmed) return null;
+  const name = checkHeaderName(trimmed, 'sessionHeader');
+  if (
+    headers.some((header) => header.name.toLowerCase() === name.toLowerCase())
+  )
+    throw invalid(
+      `${name} is the session header: the session id goes under it, so it is not one of the headers too.`,
+      { field: 'sessionHeader' },
+    );
+  return name;
+}
+
+/** The headers of a connection by lower-case name, as `planHeaders` takes the saved ones. */
+const byLowerName = (
+  headers: Readonly<Record<string, string>>,
+): Record<string, string> =>
+  Object.fromEntries(
+    Object.entries(headers).map(([name, value]) => [name.toLowerCase(), value]),
+  );
+
 const providerName = (record: ServiceRecord): ModelProviderName =>
   ProviderSchema.parse(record.provider);
 
@@ -264,6 +401,15 @@ function view(record: ServiceRecord): ModelServiceView {
     provider: providerName(record),
     baseUrl: record.baseUrl,
     apiKeySet: record.apiKeyEncrypted !== null,
+    headers: storedHeadersOf(record.headers).map((header): ModelHeaderView => ({
+      name: header.name,
+      secret: header.secret,
+      value: header.secret ? null : header.value,
+      valueSet: header.secret
+        ? record.headersEncrypted !== null
+        : header.value !== null,
+    })),
+    sessionHeader: record.sessionHeader ?? null,
     enabled: Boolean(record.enabled),
     models: modelsOf(record.models),
   };
@@ -365,10 +511,57 @@ export function createModelServices(deps: {
     return { apiKeyEncrypted: apiKey ? deps.box.seal(apiKey, [name]) : null };
   }
 
+  /** The secret headers' values by lower-case name; none when there are none. */
+  function secretsOf(record: ServiceRecord): Record<string, string> {
+    if (record.headersEncrypted === null) return {};
+    const opened = JSON.parse(
+      deps.box.open(record.headersEncrypted, [record.name, 'headers']),
+    ) as unknown;
+    return isRecord(opened)
+      ? Object.fromEntries(
+          Object.entries(opened).filter(
+            (entry): entry is [string, string] => typeof entry[1] === 'string',
+          ),
+        )
+      : {};
+  }
+
+  /** The secret headers' values, bound to the service's name like its key. */
+  function sealedHeaders(
+    name: string,
+    plan: HeaderPlan,
+  ): { headers: StoredHeader[]; headersEncrypted: string | null } {
+    return {
+      headers: plan.stored,
+      headersEncrypted:
+        Object.keys(plan.secrets).length > 0
+          ? deps.box.seal(JSON.stringify(plan.secrets), [name, 'headers'])
+          : null,
+    };
+  }
+
+  /** The headers a plan sends: each by its name, secret ones with their values. */
+  const headersFrom = (plan: HeaderPlan): Record<string, string> =>
+    Object.fromEntries(
+      plan.stored.flatMap((header) => {
+        const value = header.secret
+          ? plan.secrets[header.name.toLowerCase()]
+          : header.value;
+        return value === undefined || value === null
+          ? []
+          : [[header.name, value]];
+      }),
+    );
+
   const connectionOf = (record: ServiceRecord): ModelConnection => ({
     provider: providerName(record),
     baseUrl: record.baseUrl,
     apiKey: keyOf(record),
+    headers: headersFrom({
+      stored: storedHeadersOf(record.headers),
+      secrets: secretsOf(record),
+    }),
+    sessionHeader: record.sessionHeader ?? null,
   });
 
   /** The connection being tried: the edited values over the saved service's. */
@@ -380,6 +573,11 @@ export function createModelServices(deps: {
       : null;
     const provider = request.provider ?? saved?.provider;
     if (!provider) throw invalid('Choose a provider.');
+    const plan =
+      request.headers === undefined
+        ? null
+        : planHeaders(request.headers, byLowerName(saved?.headers ?? {}));
+    const headers = plan ? headersFrom(plan) : (saved?.headers ?? {});
     return {
       provider,
       baseUrl:
@@ -390,6 +588,18 @@ export function createModelServices(deps: {
         request.apiKey === undefined
           ? (saved?.apiKey ?? null)
           : text(request.apiKey),
+      headers,
+      sessionHeader:
+        request.sessionHeader === undefined
+          ? (saved?.sessionHeader ?? null)
+          : cleanSessionHeader(
+              request.sessionHeader,
+              Object.keys(headers).map((name) => ({
+                name,
+                secret: false,
+                value: null,
+              })),
+            ),
     };
   }
 
@@ -402,6 +612,8 @@ export function createModelServices(deps: {
     const baseUrl = normalizeBaseUrl(input.baseUrl);
     if (!baseUrl && !providerOf(input.provider)?.defaultBaseUrl)
       throw invalid('This provider needs a base URL.');
+    const plan = planHeaders(input.headers ?? [], {});
+    const sessionHeader = cleanSessionHeader(input.sessionHeader, plan.stored);
     const services = await all(conn);
     const now = deps.clock.now().toISOString();
     await repo(conn).createOne({
@@ -411,6 +623,8 @@ export function createModelServices(deps: {
         provider: input.provider,
         baseUrl,
         ...sealed(name, text(input.apiKey)),
+        ...sealedHeaders(name, plan),
+        sessionHeader,
         enabled: input.enabled !== false,
         models: cleanModels(input.provider, input.models ?? []),
         sort: services.reduce((top, row) => Math.max(top, row.sort), 0) + 1,
@@ -497,6 +711,30 @@ export function createModelServices(deps: {
             : normalizeBaseUrl(input.baseUrl);
         if (baseUrl === null && !providerOf(current.provider)?.defaultBaseUrl)
           throw invalid('This provider needs a base URL.');
+        const currentHeaders = storedHeadersOf(current.headers);
+        const plan =
+          input.headers === undefined
+            ? null
+            : planHeaders(
+                input.headers,
+                input.headers.some((header) => header.secret && !header.value)
+                  ? byLowerName(
+                      headersFrom({
+                        stored: currentHeaders,
+                        secrets: secretsOf(current),
+                      }),
+                    )
+                  : {},
+              );
+        const sessionHeader =
+          input.sessionHeader === undefined && plan === null
+            ? undefined
+            : cleanSessionHeader(
+                input.sessionHeader === undefined
+                  ? current.sessionHeader
+                  : input.sessionHeader,
+                plan?.stored ?? currentHeaders,
+              );
         await repo(conn).updateMany({
           filter: { name },
           values: {
@@ -505,6 +743,8 @@ export function createModelServices(deps: {
             ...(input.apiKey === undefined
               ? {}
               : sealed(name, text(input.apiKey))),
+            ...(plan === null ? {} : sealedHeaders(name, plan)),
+            ...(sessionHeader === undefined ? {} : { sessionHeader }),
             ...(input.models === undefined
               ? {}
               : { models: cleanModels(providerName(current), input.models) }),
@@ -651,7 +891,7 @@ export function createModelServices(deps: {
     } catch (error) {
       throw new ModelError(
         'auth',
-        'The service’s API key cannot be read with this application’s secrets keys; set it again.',
+        'The service’s API key or secret headers cannot be read with this application’s secrets keys; set them again.',
         { cause: error },
       );
     }

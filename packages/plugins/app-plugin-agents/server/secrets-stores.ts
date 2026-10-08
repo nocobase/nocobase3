@@ -1,6 +1,6 @@
 /**
- * Where the plugin keeps sealed values: variables (`agSecrets`) and model service keys (`agModelServices`), for
- * `nocobase secrets status` and `secrets rotate`.
+ * Where the plugin keeps sealed values: variables (`agSecrets`), and model service keys and secret headers
+ * (`agModelServices`), for `nocobase secrets status` and `secrets rotate`.
  */
 import {
   createSecretsTableStore,
@@ -46,6 +46,11 @@ export function createAgentsSecretsStores(
           column: 'apiKeyEncrypted',
           purpose: MODEL_SERVICE_KEY_SECRET_PURPOSE,
           aad: (row) => [String(row.name)],
+        },
+        {
+          column: 'headersEncrypted',
+          purpose: MODEL_SERVICE_KEY_SECRET_PURPOSE,
+          aad: (row) => [String(row.name), 'headers'],
         },
       ],
       connection,

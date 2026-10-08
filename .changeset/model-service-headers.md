@@ -1,0 +1,5 @@
+---
+'@nocobase/app-plugin-agents': minor
+---
+
+A model service can send request headers of its own with every call, and a session id under a header it names. Each header has a name, a value and whether it is secret: a secret value is sealed with the secrets keys like the API key, rotated with it, and never answered (`valueSet` says whether one is saved). Headers HTTP decides, the credentials' (`authorization`, `x-api-key` and the like) and `user-agent` cannot be set. A service with a session header (`sessionHeader`, such as `x-opencode-session`, which OpenCode Zen and Go require) sends the same id for every model call of a conversation and a new one for each call outside any. Every request to a provider now names the plugin first in its user agent (`nocobase-agents/<version>`). The service form fills in OpenCode's session header when the base URL is OpenCode's and says which provider type serves which of its model families. The migration `202610080001_ag_add_model_service_headers` adds the `headers`, `headersEncrypted` and `sessionHeader` columns to `agModelServices`.

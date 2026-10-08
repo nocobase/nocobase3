@@ -17,9 +17,15 @@
  * | PUT    | `agents/defaultModels/chat`          | `agents.services` manage | `ModelRef`                    | `DefaultModels`            |
  *
  * The catalog names services and models, never keys or URLs. An API key is write-only: a service answers whether it
- * has one (`apiKeySet`). Listing models and checking take a connection being edited (`provider`, `baseUrl`, `apiKey`)
- * over a saved service (`service`), so a form can try a new key before saving it and an unchanged one without sending
- * it; neither fails for the provider's sake, they answer what it said.
+ * has one (`apiKeySet`), and so is a request header marked secret (`ModelHeaderView.valueSet`). Listing models and
+ * checking take a connection being edited (`provider`, `baseUrl`, `apiKey`, `headers`, `sessionHeader`) over a saved
+ * service (`service`), so a form can try a new key before saving it and an unchanged one without sending it; neither
+ * fails for the provider's sake, they answer what it said.
+ *
+ * Every request to a provider says who sends it (`User-Agent: nocobase-agents/<version>`) and carries the service's
+ * own headers (`headers`). A service that names a session header (`sessionHeader`, such as OpenCode's
+ * `x-opencode-session`) sends a session id under it: the same one for every model call of a conversation, a new one
+ * for each call outside any.
  */
 
 export type ModelProviderName =
@@ -132,6 +138,70 @@ export function providerOf(name: string): ModelProviderOption | null {
   return MODEL_PROVIDERS.find((provider) => provider.name === name) ?? null;
 }
 
+/** How many request headers of its own a service sends at most. */
+export const MODEL_HEADERS_MAX = 20;
+
+/** A header name: an HTTP token (RFC 9110), at most 100 characters. */
+export const MODEL_HEADER_NAME_PATTERN: RegExp =
+  /^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,100}$/u;
+
+/**
+ * Header names a service may not set, in lower case: those HTTP itself decides, the provider's credentials (the API
+ * key is set as the key, never as a header) and `user-agent`, which names this plugin.
+ */
+export const RESERVED_MODEL_HEADERS: readonly string[] = [
+  'host',
+  'content-length',
+  'content-type',
+  'connection',
+  'transfer-encoding',
+  'keep-alive',
+  'upgrade',
+  'te',
+  'trailer',
+  'cookie',
+  'user-agent',
+  'authorization',
+  'proxy-authorization',
+  'x-api-key',
+  'api-key',
+  'x-goog-api-key',
+];
+
+/** The session header OpenCode Zen and Go ask for, one stable id per conversation. */
+export const OPENCODE_SESSION_HEADER = 'x-opencode-session';
+
+/** Whether a base URL is OpenCode's (Zen or Go), which wants `OPENCODE_SESSION_HEADER`. */
+export function isOpenCodeUrl(baseUrl: string | null | undefined): boolean {
+  if (!baseUrl) return false;
+  try {
+    const host = new URL(baseUrl).hostname.toLowerCase();
+    return host === 'opencode.ai' || host.endsWith('.opencode.ai');
+  } catch {
+    return false;
+  }
+}
+
+/** A request header a service sends with every call, as a service answers it. */
+export interface ModelHeaderView {
+  readonly name: string;
+  /** A secret header's value is never answered: `value` is null and `valueSet` says whether it has one. */
+  readonly secret: boolean;
+  readonly value: string | null;
+  readonly valueSet: boolean;
+}
+
+/**
+ * A request header as it is set. The list replaces the service's headers; a secret header without `value` keeps the
+ * value it had under the same name.
+ */
+export interface ModelHeaderInput {
+  readonly name: string;
+  readonly value?: string;
+  /** False when absent. */
+  readonly secret?: boolean;
+}
+
 export interface ModelOption {
   /** The provider's model id. */
   readonly value: string;
@@ -232,6 +302,10 @@ export interface ModelServiceView {
   readonly baseUrl: string | null;
   /** Whether an API key is set; the key itself is never answered. */
   readonly apiKeySet: boolean;
+  /** The request headers it sends with every call, in order. */
+  readonly headers: readonly ModelHeaderView[];
+  /** The header it sends a session id under (one per conversation); null sends none. */
+  readonly sessionHeader: string | null;
   readonly enabled: boolean;
   /** The models it offers, in order. */
   readonly models: readonly ModelOption[];
@@ -252,29 +326,39 @@ export interface CreateModelServiceRequest {
   readonly provider: ModelProviderName;
   readonly baseUrl?: string | null;
   readonly apiKey?: string | null;
+  readonly headers?: readonly ModelHeaderInput[];
+  readonly sessionHeader?: string | null;
   readonly models?: readonly ModelInput[];
   /** True when absent. */
   readonly enabled?: boolean;
 }
 
-/** `PATCH agents/services/:serviceName`: what is absent stays; `apiKey` null clears the key. */
+/**
+ * `PATCH agents/services/:serviceName`: what is absent stays; `apiKey` null clears the key, `headers` replaces the
+ * headers (a secret one without a value keeping its own) and `sessionHeader` null sends no session id.
+ */
 export interface UpdateModelServiceRequest {
   readonly title?: string;
   readonly baseUrl?: string | null;
   readonly apiKey?: string | null;
+  readonly headers?: readonly ModelHeaderInput[];
+  readonly sessionHeader?: string | null;
   readonly models?: readonly ModelInput[];
   readonly enabled?: boolean;
 }
 
 /**
  * A connection to try: a saved service (`service`), what is being edited, or both, the edited values winning. `apiKey`
- * null tries without a key; absent, the saved service's key.
+ * null tries without a key; absent, the saved service's key. `headers` and `sessionHeader` absent are the saved
+ * service's; a secret header without a value is the saved one of that name.
  */
 export interface ModelConnectionRequest {
   readonly service?: string;
   readonly provider?: ModelProviderName;
   readonly baseUrl?: string | null;
   readonly apiKey?: string | null;
+  readonly headers?: readonly ModelHeaderInput[];
+  readonly sessionHeader?: string | null;
 }
 
 /**
