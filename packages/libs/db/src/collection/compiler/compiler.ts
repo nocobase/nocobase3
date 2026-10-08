@@ -486,6 +486,16 @@ export class CollectionCompiler {
     }
 
     for (const field of changes.dropFields ?? []) {
+      // A relation that owns no column (hasOne, hasMany, belongsToMany, or a belongsTo over an existing Field) leaves
+      // the table as it is, just as adding it did.
+      const existing = existingFields.find((item) => item.name === field);
+      const relation = existing ? relationField(existing) : undefined;
+      if (
+        relation &&
+        (relation.type !== 'belongsTo' ||
+          this.relationUsesExistingField(relation, current))
+      )
+        continue;
       operations.push({
         type: 'dropColumn',
         column: this.resolveColumn(field, existingFields, current),
