@@ -8,6 +8,9 @@ import {
 } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
+import ts from 'typescript';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { PluginCapability } from '../src/lib/capabilities.ts';
@@ -65,6 +68,77 @@ async function listFiles(
 }
 
 describe('createPlugin', () => {
+  it('resolves package imports to development sources and published output', async () => {
+    const result = await createWith(['client.components', 'registry']);
+    const root = result.targetDirectory;
+    const source = path.join(root, 'client/components/probe.ts');
+    const compiled = path.join(root, 'dist/client/components/probe.js');
+    await writeFile(source, 'export const probe: string = "local";\n');
+    await mkdir(path.dirname(compiled), { recursive: true });
+    await writeFile(compiled, 'export const probe = "published";\n');
+
+    const config = JSON.parse(
+      await readFile(path.join(root, 'tsconfig.json'), 'utf8'),
+    ) as { compilerOptions: { customConditions: string[]; paths?: unknown } };
+    expect(config.compilerOptions.paths).toBeUndefined();
+    expect(
+      ts.resolveModuleName(
+        '#components/probe',
+        path.join(root, 'client/index.ts'),
+        {
+          module: ts.ModuleKind.NodeNext,
+          moduleResolution: ts.ModuleResolutionKind.NodeNext,
+          customConditions: config.compilerOptions.customConditions,
+        },
+        ts.sys,
+      ).resolvedModule?.resolvedFileName,
+    ).toBe(source);
+    const manifest = JSON.parse(
+      await readFile(path.join(root, 'package.json'), 'utf8'),
+    ) as {
+      name: string;
+      type: string;
+      publishConfig: { imports: Record<string, string> };
+    };
+    const published = path.join(root, 'published');
+    const publishedOutput = path.join(
+      published,
+      'dist/client/components/probe.js',
+    );
+    await mkdir(path.dirname(publishedOutput), { recursive: true });
+    await writeFile(publishedOutput, 'export const probe = "published";\n');
+    await writeFile(
+      path.join(published, 'package.json'),
+      JSON.stringify({
+        name: manifest.name,
+        type: manifest.type,
+        imports: manifest.publishConfig.imports,
+      }),
+    );
+    expect(
+      execFileSync(
+        process.execPath,
+        [
+          '--conditions=development',
+          '--input-type=module',
+          '-e',
+          'console.log(import.meta.resolve("#components/probe"))',
+        ],
+        // A published package must resolve compiled files even when the host is in development mode.
+        {
+          cwd: published,
+          env: { ...process.env, NODE_OPTIONS: '' },
+          encoding: 'utf8',
+        },
+      ).trim(),
+    ).toBe(pathToFileURL(publishedOutput).href);
+
+    const shadcn = JSON.parse(
+      await readFile(path.join(root, 'components.json'), 'utf8'),
+    ) as { aliases: { ui: string } };
+    expect(shadcn.aliases.ui).toBe('#components/ui');
+  });
+
   it.each([
     ['database', 'database/README.md', 'client/'],
     ['server.service-providers', 'server/providers/index.ts', 'server/routes/'],
