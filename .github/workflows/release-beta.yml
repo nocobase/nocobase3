@@ -730,27 +730,6 @@ jobs:
     permissions:
       contents: read
 
-  # The image is built from the release tag alone, so it starts with the GitHub Release rather than after it.
-  hub-image:
-    name: Publish Hub Docker image
-    needs: release
-    if: >-
-      !cancelled() && !inputs.dry_run
-      && needs.release.result == 'success'
-      && needs.release.outputs.merged == 'true'
-    uses: ./.github/workflows/docker-hub.yml
-    with:
-      # The tag marks the exact commit that was versioned and published; the release branch is deleted on merge.
-      ref: refs/tags/${{ needs.release.outputs.tag }}
-      image_tag: latest
-    secrets:
-      ALI_DOCKER_REGISTRY: ${{ secrets.ALI_DOCKER_REGISTRY }}
-      ALI_DOCKER_USERNAME: ${{ secrets.ALI_DOCKER_USERNAME }}
-      ALI_DOCKER_PASSWORD: ${{ secrets.ALI_DOCKER_PASSWORD }}
-    permissions:
-      contents: read
-      packages: write
-
   follow-pro-release:
     name: Release matching Pro beta
     needs: [prepare, release, github-release]
