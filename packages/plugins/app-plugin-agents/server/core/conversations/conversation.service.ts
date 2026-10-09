@@ -11,8 +11,8 @@
  * - The agent's text events become assistant messages (`syncRun`): as the runner reports them (a listener on
  *   `run.events`), when the run ends (inside its transaction), and when the owner reads messages of a run still open.
  * - Switching to the system default and back moves the queued work and the unanswered messages to the other agent,
- *   and bumps `thread`, so every switch starts a new session. A conversation keeps its mode (the type of the agent it
- *   started with): it switches only to an agent of the same type.
+ *   and bumps `thread`, so every switch starts a new session. Its mode follows the answering agent, including a
+ *   runner conversation temporarily answered by the online fallback agent.
  * - An online agent's reply is drafted as it is written (`streamDraft`, from the server executor): one assistant message
  *   per run without a run event, rewritten in place, which the run's next text event makes final (`syncIn`). A draft
  *   left when the run ends is kept as what it had written, marked interrupted.
@@ -25,7 +25,7 @@ import {
   type Agent,
   type OnlineModelEntry,
 } from '../../../shared/agents.js';
-import type { ModelRef } from '../../../shared/models.js';
+import type { ModelCatalog, ModelRef } from '../../../shared/models.js';
 import {
   CONVERSATION_HISTORY_IN_PROMPT,
   CONVERSATION_PAGE_DEFAULT,
@@ -40,6 +40,8 @@ import {
   MESSAGE_PAGE_MAX,
   chatModelChoices,
   type ChatAgent,
+  type ChatAvailability,
+  type ChatSettings,
   type ConversationAgent,
   type ConversationConflict,
   type ConversationDetail,
@@ -88,7 +90,7 @@ import {
   storedAttachments,
   type ChatAttachmentLinks,
 } from './attachments.js';
-import { availabilityOf, wakeable } from './availability.js';
+import { availabilityOf, runnersFor, wakeable } from './availability.js';
 import type { ChatSettingsService } from './chat-settings.js';
 import {
   appendMessage,
@@ -232,6 +234,10 @@ function noticeText(
   switch (notice.code) {
     case 'switchedToDefault':
       return `This conversation now uses ${name(notice.agentId)}, the default agent, until you switch back to ${name(notice.fromAgentId)}.`;
+    case 'switchedToOnline':
+      return `${name(notice.fromAgentId)} has no runner for you now, so ${name(notice.agentId)} answers until you switch back.`;
+    case 'onlineFallbackUnavailable':
+      return `The online fallback agent cannot answer (${notice.reason}). This conversation stays with ${name(notice.fromAgentId)} while it waits for a runner.`;
     case 'switchedBack':
       return `This conversation is back with ${name(notice.agentId)}.`;
     case 'runFailed':
@@ -385,6 +391,50 @@ export function createConversationService(
     return wakeable(agent, userId, deps.agents.mayInvoke) ? agent : null;
   }
 
+  /** The configured online agent and whether its default answering model is offered now. */
+  async function onlineFallback(
+    conn: DatabaseConnection,
+    userId: string,
+    catalog: ModelCatalog,
+    settings?: ChatSettings,
+  ): Promise<{ agent: Agent | null; availability: ChatAvailability } | null> {
+    const { onlineFallbackAgentId } =
+      settings ?? (await deps.settings.settings(conn));
+    if (!onlineFallbackAgentId) return null;
+    const agent = await findAgent(conn, onlineFallbackAgentId);
+    const online = agent?.type === 'online' ? agent : null;
+    return {
+      agent: online,
+      availability: availabilityOf(
+        online,
+        userId,
+        deps.agents.mayInvoke,
+        [],
+        catalog,
+      ),
+    };
+  }
+
+  /**
+   * The agent `fallback` switches the conversation to: the system default when it is of the conversation's mode, else,
+   * for a runner conversation, the online fallback agent. Null while it already uses another agent in place of its own.
+   */
+  async function fallbackTarget(
+    conn: DatabaseConnection,
+    record: ConversationRecord,
+    catalog: ModelCatalog,
+  ): Promise<Agent | null> {
+    if (record.fallbackFromAgentId) return null;
+    const system = await systemDefault(conn, record.userId);
+    if (system && system.id !== record.agentId && system.type === record.mode)
+      return system;
+    if (record.mode !== 'runner') return null;
+    const online = await onlineFallback(conn, record.userId, catalog);
+    return online?.availability.online && online.agent?.id !== record.agentId
+      ? online.agent
+      : null;
+  }
+
   async function detailOf(
     conn: DatabaseConnection,
     record: ConversationRecord,
@@ -396,7 +446,7 @@ export function createConversationService(
     const fallbackFrom = record.fallbackFromAgentId
       ? await findAgent(conn, record.fallbackFromAgentId)
       : null;
-    const system = await systemDefault(conn, record.userId);
+    const target = await fallbackTarget(conn, record, catalog);
     return {
       ...summary,
       availability: availabilityOf(
@@ -414,12 +464,7 @@ export function createConversationService(
               catalog,
             )
           : [],
-      canFallback: Boolean(
-        system &&
-        !record.fallbackFromAgentId &&
-        system.id !== record.agentId &&
-        system.type === record.mode,
-      ),
+      canFallback: Boolean(target),
       canRestore: wakeable(fallbackFrom, record.userId, deps.agents.mayInvoke),
     };
   }
@@ -465,9 +510,13 @@ export function createConversationService(
     runId: string | null = null,
   ): Promise<void> {
     const agentIds =
-      value.code === 'switchedToDefault' || value.code === 'switchedBack'
+      value.code === 'switchedToDefault' ||
+      value.code === 'switchedToOnline' ||
+      value.code === 'switchedBack'
         ? [value.agentId, value.fromAgentId]
-        : [];
+        : value.code === 'onlineFallbackUnavailable'
+          ? [value.fromAgentId]
+          : [];
     const names = new Map<string, string>();
     for (const id of agentIds) {
       const agent = await findAgent(unit.conn, id);
@@ -548,13 +597,14 @@ export function createConversationService(
   }
 
   /**
-   * Moves the conversation to `agentId`: its queued work is withdrawn, the thread moves on (a new session), and the
-   * messages nobody answered go to the new agent.
+   * Moves the conversation to `agent`: its queued work is withdrawn, the thread moves on (a new session), and the
+   * messages nobody answered go to the new agent. The mode follows the agent's type; a model chosen for an online
+   * conversation is dropped when it changes.
    */
   async function rebind(
     unit: Tx,
     record: ConversationRecord,
-    agentId: string,
+    agent: Agent,
     fallbackFromAgentId: string | null,
     value: ConversationNotice,
   ): Promise<void> {
@@ -565,7 +615,11 @@ export function createConversationService(
     await conversationsRepo(unit.conn).updateMany({
       filter: { id: record.id },
       values: {
-        agentId,
+        agentId: agent.id,
+        mode: agent.type,
+        ...(agent.type === record.mode
+          ? {}
+          : { modelService: null, model: null }),
         fallbackFromAgentId,
         thread: Number(record.thread) + 1,
         updatedAt: now(),
@@ -1092,11 +1146,26 @@ export function createConversationService(
     async create(userId, request) {
       const wanted = request.model ?? null;
       // Read before the transaction, which a read on another connection would wait for.
-      const fallback = wanted
-        ? ((await deps.models.catalog()).defaultModel ?? null)
-        : null;
+      const catalog = await deps.models.catalog();
+      const fallback = catalog.defaultModel ?? null;
+      const settings = await deps.settings.settings();
+      // Only read when a runner agent may be replaced: unset, nothing changes.
+      const runners =
+        settings.onlineFallbackAgentId && !wanted
+          ? await deps.runners.list()
+          : null;
       const id = await tx.run(async (unit) => {
-        const agent = await pickAgent(unit.conn, userId, request.agentId);
+        const picked = await pickAgent(unit.conn, userId, request.agentId);
+        const replacement =
+          runners &&
+          picked.type === 'runner' &&
+          runnersFor(runners, picked, userId).length === 0
+            ? await onlineFallback(unit.conn, userId, catalog, settings)
+            : null;
+        const instead = replacement?.availability.online
+          ? replacement.agent
+          : null;
+        const agent = instead ?? picked;
         if (
           wanted &&
           (agent.type !== 'online' ||
@@ -1123,7 +1192,7 @@ export function createConversationService(
             userId,
             agentId: agent.id,
             mode: agent.type,
-            fallbackFromAgentId: null,
+            fallbackFromAgentId: instead ? picked.id : null,
             modelService: wanted?.modelService ?? null,
             model: wanted?.model ?? null,
             title,
@@ -1142,7 +1211,20 @@ export function createConversationService(
             updatedAt: at,
           },
         });
-        changed(unit, (await findConversation(unit.conn, conversationId))!);
+        const record = (await findConversation(unit.conn, conversationId))!;
+        if (instead)
+          await notice(unit, record, {
+            code: 'switchedToOnline',
+            agentId: instead.id,
+            fromAgentId: picked.id,
+          });
+        else if (replacement?.availability.reason)
+          await notice(unit, record, {
+            code: 'onlineFallbackUnavailable',
+            fromAgentId: picked.id,
+            reason: replacement.availability.reason,
+          });
+        else changed(unit, record);
         return conversationId;
       });
       return detail(userId, id);
@@ -1304,22 +1386,21 @@ export function createConversationService(
     },
 
     async fallback(userId, id) {
+      const catalog = await deps.models.catalog();
       await tx.run(async (unit) => {
         const record = await lockOwned(unit, userId, id);
-        const system = await systemDefault(unit.conn, userId);
-        if (
-          !system ||
-          record.fallbackFromAgentId ||
-          system.id === record.agentId ||
-          system.type !== record.mode
-        )
+        const target = await fallbackTarget(unit.conn, record, catalog);
+        if (!target)
           throw conversationConflict(
             'noFallback',
-            'This conversation cannot switch to the default agent.',
+            'This conversation cannot switch to another agent.',
           );
-        await rebind(unit, record, system.id, record.agentId, {
-          code: 'switchedToDefault',
-          agentId: system.id,
+        await rebind(unit, record, target, record.agentId, {
+          code:
+            target.type === record.mode
+              ? 'switchedToDefault'
+              : 'switchedToOnline',
+          agentId: target.id,
           fromAgentId: record.agentId,
         });
       });
@@ -1337,7 +1418,7 @@ export function createConversationService(
             'noRestore',
             'This conversation cannot switch back to its own agent now.',
           );
-        await rebind(unit, record, own.id, null, {
+        await rebind(unit, record, own, null, {
           code: 'switchedBack',
           agentId: own.id,
           fromAgentId: record.agentId,
@@ -1522,6 +1603,10 @@ export function createConversationService(
           deps.settings.preferences(userId, conn),
           deps.models.catalog(),
         ]);
+      const replacement = await onlineFallback(conn, userId, catalog, settings);
+      const online = replacement?.availability.online
+        ? replacement.agent
+        : null;
       return agents
         .filter((agent) => deps.agents.mayInvoke(agent, userId))
         .map((agent): ChatAgent => ({
@@ -1550,6 +1635,12 @@ export function createConversationService(
             runners,
             catalog,
           ),
+          fallbackAgentId:
+            online &&
+            agent.type === 'runner' &&
+            runnersFor(runners, agent, userId).length === 0
+              ? online.id
+              : null,
         }));
     },
 
