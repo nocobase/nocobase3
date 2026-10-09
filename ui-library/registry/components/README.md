@@ -87,7 +87,7 @@ The overlays' close button names itself with `useTranslation()` from `@nocobase/
 
 ## In a plugin
 
-`page-header` has no `#` imports and compiles in a plugin as installed. The others import `cn` from the `cn` package, which stays as it is, and most of them also import primitives as `#components/ui/<name>` — `route-dialog` and `route-drawer` the `button` and `dialog` ones, and `rich-text-editor` the `toggle` one; rewrite those imports to relative `.js` paths, as [USAGE.md](../../USAGE.md#add-an-item-to-a-plugin) describes.
+`page-header` has no `#` imports and compiles in a plugin as installed. The others import `cn` from the `cn` package, which stays as it is, and most of them also import primitives as `#components/ui/<name>` — `route-dialog` and `route-drawer` the `button` and `dialog` ones, and `rich-text-editor` the `toggle` one. Keep these imports unchanged. Align the plugin's `package.json#imports` and `components.json` prefixes so the imports resolve to local source files during development and compiled `dist/client` files in the published package, using `publishConfig.imports` as [USAGE.md](../../USAGE.md#add-an-item-to-a-plugin) describes.
 
 ## Rich text editor
 
