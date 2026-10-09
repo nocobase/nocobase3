@@ -16,6 +16,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { expect, it } from 'vitest';
+import { parse } from 'yaml';
 
 import { createPlugin } from '../src/lib/scaffold.ts';
 
@@ -97,6 +98,82 @@ async function files(directory: string, prefix = ''): Promise<string[]> {
     else result.push(name);
   }
   return result;
+}
+
+async function prepareOfflineMetadata(cache: string): Promise<void> {
+  const lockfile = parse(
+    await readFile(path.join(repository, 'pnpm-lock.yaml'), 'utf8'),
+  ) as {
+    packages: Record<string, { resolution: { integrity: string } }>;
+  };
+  // Frozen installs restore package contents, not the registry metadata pnpm add needs.
+  // Seed a private pnpm 11 metadata cache from actual installed, locked versions,
+  // including the generated plugin's catalog dependencies and their transitives.
+  // The real CLI still resolves dependencies and updates its own manifest/lockfile offline.
+  const metadataByName = new Map<
+    string,
+    {
+      name: string;
+      'dist-tags': { latest: string };
+      versions: Record<string, unknown>;
+    }
+  >();
+  async function addInstalled(directory: string): Promise<void> {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      // Only real package directories belong to this store entry; dependency links
+      // point at other entries, and must not be followed recursively.
+      if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
+      const target = path.join(directory, entry.name);
+      if (entry.name.startsWith('@')) {
+        await addInstalled(target);
+        continue;
+      }
+      const manifest = JSON.parse(
+        await readFile(path.join(target, 'package.json'), 'utf8'),
+      ) as {
+        name: string;
+        version: string;
+      };
+      const { name, version } = manifest;
+      const resolution = lockfile.packages[`${name}@${version}`]?.resolution;
+      if (!resolution?.integrity)
+        throw new Error(
+          `Installed ${name}@${version} is not in the repository lockfile`,
+        );
+      const metadata = metadataByName.get(name) ?? {
+        name,
+        'dist-tags': { latest: version },
+        versions: {},
+      };
+      metadata.versions[version] = {
+        ...manifest,
+        dist: {
+          integrity: resolution.integrity,
+          tarball: `https://registry.npmjs.org/${name}/-/${path.basename(name)}-${version}.tgz`,
+        },
+      };
+      metadataByName.set(name, metadata);
+    }
+  }
+  const store = path.join(repository, 'node_modules/.pnpm');
+  for (const entry of await readdir(store, { withFileTypes: true })) {
+    if (
+      !entry.isDirectory() ||
+      entry.name === 'node_modules' ||
+      entry.name.startsWith('.')
+    )
+      continue;
+    await addInstalled(path.join(store, entry.name, 'node_modules'));
+  }
+  for (const [name, metadata] of metadataByName) {
+    const file = path.join(
+      cache,
+      'v11/metadata/registry.npmjs.org',
+      `${name}.jsonl`,
+    );
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, `{}\n${JSON.stringify(metadata)}`);
+  }
 }
 
 async function validatePublished(directory: string): Promise<void> {
@@ -249,6 +326,8 @@ it('installs a real registry item, builds and packs a generated plugin, and load
         'utf8',
       ),
     ) as { storeDir: string };
+    const metadataCache = path.join(root, 'pnpm-cache');
+    await prepareOfflineMetadata(metadataCache);
     await run(
       process.execPath,
       [
@@ -267,6 +346,7 @@ it('installs a real registry item, builds and packs a generated plugin, and load
         PNPM_CONFIG_OFFLINE: 'true',
         PNPM_CONFIG_IGNORE_SCRIPTS: 'true',
         PNPM_CONFIG_STORE_DIR: path.dirname(installation.storeDir),
+        PNPM_CONFIG_CACHE_DIR: metadataCache,
       },
     ).catch((error: unknown) => {
       throw new Error(
