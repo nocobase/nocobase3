@@ -36,7 +36,12 @@ test('release candidates and sync commits use the verified NocoBase bot identity
     delete env[key];
   }
   let count = 0;
-  for (const name of releases) {
+  for (const name of [
+    ...releases,
+    'pro-release-beta.yml',
+    'pro-release-stable.yml',
+    'pro-promote-to-stable.yml',
+  ]) {
     const source = workflow(name);
     const configurations = source.matchAll(
       /git config user\.name [^\n]+\n\s*git config user\.email [^\n]+/gu,
