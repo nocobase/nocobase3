@@ -10,7 +10,7 @@
  */
 import { useTranslation } from '@nocobase/i18n/client';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { CheckCircle2Icon } from 'lucide-react';
+import { CheckCircle2Icon, ChevronRightIcon } from 'lucide-react';
 import { useState, type FormEvent, type ReactElement } from 'react';
 
 import { AGENT_TOOLS, type AgentTool } from '@nocobase/agent-protocol';
@@ -26,6 +26,11 @@ import { CommandLine } from '../../components/command-line.js';
 import { RouteDialog } from '../../components/route-dialog.js';
 import { Button } from '../../components/ui/button.js';
 import { Checkbox } from '../../components/ui/checkbox.js';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '../../components/ui/collapsible.js';
 import {
   Field,
   FieldContent,
@@ -92,6 +97,7 @@ function AddRunnerSteps(): ReactElement {
   const [slotsInvalid, setSlotsInvalid] = useState(false);
   const [toolSlots, setToolSlots] = useState<ToolSlotsDraft>({});
   const [toolSlotsInvalid, setToolSlotsInvalid] = useState(false);
+  const [advanced, setAdvanced] = useState(false);
   // The runners that existed when the token was made: a runner not among them is the one that just registered.
   const [known, setKnown] = useState<ReadonlySet<string>>();
 
@@ -129,6 +135,8 @@ function AddRunnerSteps(): ReactElement {
     setToolsMissing(tools.length === 0);
     setSlotsInvalid(badSlots);
     setToolSlotsInvalid(badToolSlots);
+    // An invalid limit is in the advanced options: open them so it shows.
+    if (badToolSlots) setAdvanced(true);
     if (tools.length === 0 || badSlots || badToolSlots) return;
     create.mutate();
   }
@@ -215,16 +223,28 @@ function AddRunnerSteps(): ReactElement {
           <FieldDescription>{t('connect.slotsHint')}</FieldDescription>
         )}
       </Field>
-      <ToolSlotsFields
-        idPrefix='ag-add-tool-slots'
-        tools={tools}
-        draft={toolSlots}
-        invalid={toolSlotsInvalid}
-        onChange={(draft) => {
-          setToolSlotsInvalid(false);
-          setToolSlots(draft);
-        }}
-      />
+      <Collapsible open={advanced} onOpenChange={setAdvanced}>
+        <CollapsibleTrigger className='group flex items-center gap-1 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring'>
+          <ChevronRightIcon
+            className='size-4 transition-transform group-data-panel-open:rotate-90'
+            aria-hidden='true'
+          />
+          {t('connect.advanced')}
+        </CollapsibleTrigger>
+        <CollapsibleContent className='pt-3'>
+          <ToolSlotsFields
+            idPrefix='ag-add-tool-slots'
+            tools={tools}
+            draft={toolSlots}
+            total={slots}
+            invalid={toolSlotsInvalid}
+            onChange={(draft) => {
+              setToolSlotsInvalid(false);
+              setToolSlots(draft);
+            }}
+          />
+        </CollapsibleContent>
+      </Collapsible>
       <div className='flex justify-end gap-2'>
         <Button type='button' variant='outline' onClick={() => void close()}>
           {t('actions.cancel')}

@@ -33,3 +33,20 @@ export function readToolSlots(
   }
   return Object.keys(slots).length > 0 ? slots : null;
 }
+
+/**
+ * The tools of `tools` whose limit in `draft` is above `total` runs at once: they take the total instead. Empty while
+ * the total is not a whole number.
+ */
+export function toolsOverTotal(
+  draft: ToolSlotsDraft,
+  tools: readonly AgentTool[],
+  total: string,
+): AgentTool[] {
+  const count = Number(total.trim());
+  if (!Number.isInteger(count) || count < 1) return [];
+  return tools.filter((tool) => {
+    const text = draft[tool]?.trim() ?? '';
+    return /^\d+$/u.test(text) && Number(text) > count;
+  });
+}

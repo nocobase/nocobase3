@@ -28,6 +28,17 @@ const runtimesEnUS = {
       hint: 'How many runs of each coding tool it takes at once, such as fewer for a tool whose subscription allows fewer sessions. Leave one empty to bound it by the concurrent runs only.',
       none: 'No limit',
       invalid: 'Enter whole numbers from 1 to 64, or leave them empty.',
+      inputLabel: 'Runs of {{tool}} at once',
+      overTotal:
+        'The limit of {{tools}} is above the max concurrent runs ({{slots}}): at most {{slots}} run at once.',
+      noneChecked: 'Check a coding tool above to limit it.',
+    },
+    toolTable: {
+      tool: 'Tool',
+      enabled: 'On',
+      state: 'Status',
+      limit: 'At once',
+      active: 'Running',
     },
     policy: {
       title: 'Local policy',
@@ -55,13 +66,14 @@ const runtimesEnUS = {
       sharing: 'Sharing',
       version: 'Runner',
       lastSeen: 'Last seen',
-      slots: 'Concurrent runs',
+      slots: 'Max concurrent runs',
     },
     detail: {
       general: 'General',
       tools: 'Tools',
       toolsDescription:
-        'The coding tools it reported. Work for a tool that is off is not sent here.',
+        'The coding tools it reported. Work for a tool that is off is not sent here. Switches and limits are saved with “Save”.',
+      version: 'Runner {{version}}',
       runs: 'Recent runs',
       runsEmpty: 'No runs yet.',
       runsFailed: 'Could not load its runs.',
@@ -95,10 +107,6 @@ const runtimesEnUS = {
       offHint: 'Off: work for this tool is not sent to this runtime.',
       enableLabel: 'Run {{tool}} on {{name}}',
       version: 'Version {{version}}',
-      switched: {
-        on: '{{tool}} is on for {{name}}',
-        off: '{{tool}} is off for {{name}}',
-      },
     },
     trust: {
       label: 'Who it works for',
@@ -153,7 +161,8 @@ const runtimesEnUS = {
     title: 'Add runtime',
     description:
       'Run the command below on a host that has a coding tool installed: a server, a VM or your own device.',
-    createCredential: 'Create credential',
+    createCredential: 'Generate install command',
+    advanced: 'Advanced: limits per coding tool',
     run: "Run this on that host. It downloads the runner (nocobase-runner) and this application's CLI from this application (no Node.js needed), registers the runner and starts it at login:",
     installed: 'Already have nocobase-runner installed? Register it instead:',
     unsupported:

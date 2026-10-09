@@ -1,70 +1,150 @@
 /**
- * Limits per coding tool beside a runtime's concurrent runs (`Runner.toolSlots`), as the runtime's settings and the
- * "Add runtime" dialog edit them: a number per tool, empty for no limit of its own.
+ * Limits per coding tool beside a runtime's concurrent runs (`Runner.toolSlots`), as the "Add runtime" dialog edits
+ * them: one row per checked tool, its name and its limit, empty for no limit of its own. `ToolLimitInput` and
+ * `OverTotalHint` are the pieces the runtime's settings put in their tools table.
  */
 import type { AgentTool } from '@nocobase/agent-protocol';
 import { useTranslation } from '@nocobase/i18n/client';
 import type { ReactElement } from 'react';
 
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldLabel,
-  FieldLegend,
-  FieldSet,
-} from '../../components/ui/field.js';
 import { Input } from '../../components/ui/input.js';
-import type { ToolSlotsDraft } from '../../lib/tool-slots.js';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../../components/ui/table.js';
+import { toolsOverTotal, type ToolSlotsDraft } from '../../lib/tool-slots.js';
 
-export function ToolSlotsFields({
-  idPrefix,
-  tools,
+/** One tool's limit: a short number field, empty for no limit of its own. */
+export function ToolLimitInput({
+  id,
+  tool,
   draft,
   invalid,
   disabled = false,
   onChange,
 }: {
-  readonly idPrefix: string;
-  readonly tools: readonly AgentTool[];
+  readonly id: string;
+  readonly tool: AgentTool;
   readonly draft: ToolSlotsDraft;
   readonly invalid: boolean;
   readonly disabled?: boolean;
   readonly onChange: (draft: ToolSlotsDraft) => void;
+}): ReactElement {
+  const { t } = useTranslation();
+  return (
+    <Input
+      id={id}
+      inputMode='numeric'
+      className='h-8 w-20'
+      placeholder={t('runtimes.toolSlots.none')}
+      aria-label={t('runtimes.toolSlots.inputLabel', {
+        tool: t(`tools.${tool}`),
+      })}
+      value={draft[tool] ?? ''}
+      disabled={disabled}
+      aria-invalid={invalid ? true : undefined}
+      onChange={(event) => onChange({ ...draft, [tool]: event.target.value })}
+    />
+  );
+}
+
+/** Says which limits are above the concurrent runs, and that the concurrent runs bound them; nothing when none is. */
+export function OverTotalHint({
+  tools,
+  draft,
+  total,
+}: {
+  readonly tools: readonly AgentTool[];
+  readonly draft: ToolSlotsDraft;
+  readonly total: string;
 }): ReactElement | null {
   const { t } = useTranslation();
-  if (tools.length === 0) return null;
+  const over = toolsOverTotal(draft, tools, total);
+  if (over.length === 0) return null;
   return (
-    <FieldSet data-invalid={invalid ? true : undefined}>
-      <FieldLegend variant='label'>{t('runtimes.toolSlots.label')}</FieldLegend>
-      <FieldDescription>{t('runtimes.toolSlots.hint')}</FieldDescription>
-      <div className='grid gap-2 sm:grid-cols-2'>
-        {tools.map((tool) => (
-          <Field key={tool} orientation='horizontal'>
-            <FieldLabel
-              htmlFor={`${idPrefix}-${tool}`}
-              className='min-w-24 font-normal'
-            >
-              {t(`tools.${tool}`)}
-            </FieldLabel>
-            <Input
-              id={`${idPrefix}-${tool}`}
-              inputMode='numeric'
-              className='w-24'
-              placeholder={t('runtimes.toolSlots.none')}
-              value={draft[tool] ?? ''}
-              disabled={disabled}
-              aria-invalid={invalid ? true : undefined}
-              onChange={(event) =>
-                onChange({ ...draft, [tool]: event.target.value })
-              }
-            />
-          </Field>
-        ))}
-      </div>
+    <p
+      role='status'
+      data-testid='tool-slots-over-total'
+      className='text-xs text-amber-700 dark:text-amber-400'
+    >
+      {t('runtimes.toolSlots.overTotal', {
+        tools: over.map((tool) => t(`tools.${tool}`)).join(', '),
+        slots: total.trim(),
+      })}
+    </p>
+  );
+}
+
+export function ToolSlotsFields({
+  idPrefix,
+  tools,
+  draft,
+  total,
+  invalid,
+  onChange,
+}: {
+  readonly idPrefix: string;
+  readonly tools: readonly AgentTool[];
+  readonly draft: ToolSlotsDraft;
+  /** The concurrent runs as typed, for the hint about limits above them. */
+  readonly total: string;
+  readonly invalid: boolean;
+  readonly onChange: (draft: ToolSlotsDraft) => void;
+}): ReactElement {
+  const { t } = useTranslation();
+  return (
+    <div className='space-y-2'>
+      <p className='text-sm text-muted-foreground'>
+        {t('runtimes.toolSlots.hint')}
+      </p>
+      {tools.length === 0 ? (
+        <p className='text-sm text-muted-foreground'>
+          {t('runtimes.toolSlots.noneChecked')}
+        </p>
+      ) : (
+        <div className='rounded-lg border'>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t('runtimes.toolTable.tool')}</TableHead>
+                <TableHead className='w-28'>
+                  {t('runtimes.toolTable.limit')}
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {tools.map((tool) => (
+                <TableRow key={tool} data-testid={`${idPrefix}-row-${tool}`}>
+                  <TableCell>
+                    <label htmlFor={`${idPrefix}-${tool}`}>
+                      {t(`tools.${tool}`)}
+                    </label>
+                  </TableCell>
+                  <TableCell>
+                    <ToolLimitInput
+                      id={`${idPrefix}-${tool}`}
+                      tool={tool}
+                      draft={draft}
+                      invalid={invalid}
+                      onChange={onChange}
+                    />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
       {invalid ? (
-        <FieldError>{t('runtimes.toolSlots.invalid')}</FieldError>
+        <p className='text-sm text-destructive' role='alert'>
+          {t('runtimes.toolSlots.invalid')}
+        </p>
       ) : null}
-    </FieldSet>
+      <OverTotalHint tools={tools} draft={draft} total={total} />
+    </div>
   );
 }

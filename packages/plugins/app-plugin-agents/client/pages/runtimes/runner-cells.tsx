@@ -181,17 +181,24 @@ export function RunnerToolsCell({
  */
 export function RunnerVersionCell({
   runner,
+  plain = false,
 }: {
   readonly runner: Pick<Runner, 'name' | 'version' | 'product'> & {
     readonly updateVersion?: string | null;
   };
+  /** Words it as text among other details ("Runner 0.1.0"), rather than as a column's monospaced value. */
+  readonly plain?: boolean;
 }): ReactElement {
   const { t } = useTranslation();
   if (!runner.version) return <span className='text-muted-foreground'>—</span>;
   const command = upgradeCommand(runner.product);
   return (
     <span className='inline-flex items-center gap-1.5'>
-      <span className='font-mono text-xs'>{runner.version}</span>
+      {plain ? (
+        <span>{t('runtimes.detail.version', { version: runner.version })}</span>
+      ) : (
+        <span className='font-mono text-xs'>{runner.version}</span>
+      )}
       {runner.updateVersion ? (
         <Popover>
           <PopoverTrigger
