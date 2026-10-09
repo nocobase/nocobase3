@@ -134,3 +134,5 @@ plugin, build an `Auth` with `createAuthentication({ connection, secret })`
 against a test database, sign up through `auth.handler()` with a
 `POST /api/auth/sign-up/email` request, and reuse the returned `set-cookie`
 header on later requests. The plugin's own integration tests do exactly this.
+
+`auth.required()` and `auth.optional()` also reject a cookie-authenticated `POST`, `PUT`, `PATCH` or `DELETE` whose `Origin` (or, without one, `Referer`) is not a trusted origin, answering `403` with `{ code: 'INVALID_CSRF_ORIGIN' }`. A test or script that reuses a session cookie for a write must send the application's own origin, such as `Origin: http://localhost:13000`, as a browser does. A script that calls the API outside a browser should authenticate with an API key instead: requests that carry no cookie skip this check.
