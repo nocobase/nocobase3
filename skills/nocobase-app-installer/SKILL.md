@@ -53,11 +53,11 @@ An archive is built where the sources are — the user's computer or CI — and 
 In the application project, whose own `AGENTS.md` and `nocobase-deployment` Skill are the authority on building:
 
 ```bash
-APP_BASE_PATH=/crm pnpm build --target linux-x64 --node-version 24 --tar
+pnpm build --target linux-x64 --node-version 24 --tar
 ```
 
 - `--target` and `--node-version` describe the machine that will run it, not the one building it: `node -p "process.platform + '-' + process.arch"` and `node --version` there; Alpine takes a `-musl` target. The installer refuses an archive built for another machine and names the command that fits.
-- `APP_BASE_PATH` is compiled into the client, `/main` when unset. The application is served there, and every later archive must be built for the same one.
+- The archive is not tied to a base path; the installation chooses one. An archive built by an `@nocobase/app-cli` from before relocatable builds has its base path compiled into the client instead, and installs only at that path: `BASE_PATH_MISMATCH` means upgrading the project's NocoBase packages and building again.
 - A database other than SQLite needs its driver in the project before the build, such as `pnpm add @nocobase/db-postgres`: an archive carries only the drivers it was built with.
 
 The archive is `storage/exports/dist.tar.gz`; the user copies it to the machine that runs NocoBase, for example `scp storage/exports/dist.tar.gz user@server:/tmp/crm.tar.gz`. `ARCHIVE_TOO_OLD` or `STORAGE_IN_RELEASE` means the project's NocoBase packages are older than the installer needs: upgrade them, build again, then retry.
@@ -67,17 +67,17 @@ The archive is `storage/exports/dist.tar.gz`; the user copies it to the machine 
 ### Every installation
 
 1. Check the machine: `node --version` (24 or later) and `command -v pm2`, which finds pm2 without starting its daemon. pm2 4.3 or later has to be installed globally, `npm install -g pm2`; a copy fetched through `npx` breaks `pm2 startup`. Report what is missing with the command that installs it, and install nothing globally unless the user asks. On Windows, work in WSL.
-2. Settle with the user: the target directory, new or empty, such as `/srv/nocobase/crm`; the public origin without the base path, such as `https://apps.example.com`, which may be left out for a machine reached only at `http://127.0.0.1:<port>`; whether a reverse proxy sits in front; the port, 13000 by default and different for every installation on the machine; and the database, SQLite by default.
+2. Settle with the user: the target directory, new or empty, such as `/srv/nocobase/crm`; the public origin without the base path, such as `https://apps.example.com`, which may be left out for a machine reached only at `http://127.0.0.1:<port>`; the base path, such as `/crm`, `/` for the origin root, or left out for `/main` (`/hub` for a Hub); whether a reverse proxy sits in front; the port, 13000 by default and different for every installation on the machine; and the database, SQLite by default.
 3. It listens on `127.0.0.1`, which suits a reverse proxy on the same machine; when people reach it directly at `http://<address>:<port>`, add `--host 0.0.0.0` and use that address as the origin. For another database add `--dialect <dialect>`, the connection as `--set database.connections.main.host=…` and friends, and the password as `--set-from-env database.connections.main.password=<VARIABLE>` after the user has exported it; never put a password on the command line.
 4. `PORT_IN_USE` names a free port in `error.details.freePort`; offer it rather than picking one silently.
 
 ### From an archive
 
-`install <dir> --archive <file> --origin <origin> --json`. It needs no pnpm, and finishes in a minute or two. The archive must carry the driver for `--dialect`, or the install stops with `DRIVER_MISSING` and the build command that fixes it.
+`install <dir> --archive <file> --origin <origin> --base-path <path> --json`, leaving `--base-path` out for the default. It needs no pnpm, and finishes in a minute or two. The archive must carry the driver for `--dialect`, or the install stops with `DRIVER_MISSING` and the build command that fixes it.
 
 ### A Hub from its template
 
-`install <dir> --template hub --origin <origin> --json`; `hub@<version>` pins a version. It also needs `pnpm --version` 11 or later, and adds the driver for `--dialect` itself. It builds on the machine and takes several minutes: give it a timeout of 30 minutes or more. A shorter one interrupts the build. The installer removes what it wrote when the interruption is a signal it can catch, SIGINT or SIGTERM; a tool that kills with SIGKILL leaves the target half-written, and the next `install` refuses it with `TARGET_NOT_EMPTY`. Report that, and leave emptying the directory to the user.
+`install <dir> --template hub --origin <origin> --json`; `hub@<version>` pins a version, and `--base-path` mounts it somewhere other than `/hub`. It also needs `pnpm --version` 11 or later, and adds the driver for `--dialect` itself. It builds on the machine and takes several minutes: give it a timeout of 30 minutes or more. A shorter one interrupts the build. The installer removes what it wrote when the interruption is a signal it can catch, SIGINT or SIGTERM; a tool that kills with SIGKILL leaves the target half-written, and the next `install` refuses it with `TARGET_NOT_EMPTY`. Report that, and leave emptying the directory to the user.
 
 ### When it succeeds
 
@@ -102,7 +102,7 @@ Each application or Hub is installed once, in a directory of its own, with its o
 
 Both stop the application — and for a Hub, every application it hosts — so the user decides:
 
-1. An archive installation upgrades from a new archive: `upgrade --dir <root> --archive <file> --json`. It must be the same application built for the same base path, and not an older version; the same version built again is a new release and deploys normally. A template installation upgrades with `upgrade --dir <root> --json`, to `latest` or `--to <version>`, and needs the same long timeout as an install.
+1. An archive installation upgrades from a new archive: `upgrade --dir <root> --archive <file> --json`. It must be the same application, and not an older version, and it runs at the base path in `app.env`; an archive from before relocatable builds must have been built for that path, or it is refused with `BASE_PATH_MISMATCH`; the same version built again is a new release and deploys normally. A template installation upgrades with `upgrade --dir <root> --json`, to `latest` or `--to <version>`, and needs the same long timeout as an install.
 2. Run it without `--yes`. It answers `CONFIRMATION_REQUIRED` with `error.details.notes`: what will stop, what is backed up, and any Node major change. Relay those notes and wait for a clear yes before running it again with `--yes`. `success-noop` means that release is already running.
 3. The installer backs up every SQLite database `config.yml` declares, plus `config.yml` and `app.env`, but not any other database: `BACKUP_REQUIRED` names those connections; have the user back them up first, then add `--backup-done`.
 4. An upgrade keeps three releases, always including the new one and the one it came from, and prunes older ones once it succeeds; pass `--keep <n>` when the user wants more of them to stay available for rollback.
@@ -118,17 +118,18 @@ Both stop the application — and for a Hub, every application it hosts — so t
 
 `OPERATION_INTERRUPTED` from `upgrade`, or `pending` in `status`, means an earlier run stopped while the application was down. Plain `rollback` recovers, through the same confirmation: it undoes an interrupted upgrade, restoring the databases, and finishes an interrupted rollback. An interrupted Hub rebuild is the exception: `rollback` cannot start a release built for another Node, so the error names `upgrade --rebuild`, which builds a fresh release and switches to it.
 
-## Change the origin or port
+## Change the origin, base path or port
 
-app-installer has no command for it. The origin, address and port live in `app.env` as `APP_PUBLIC_ORIGIN`, `APP_SERVER_HOST` and `APP_SERVER_PORT`. Before changing them, tell the user:
+app-installer has no command for it. The origin, base path, address and port live in `app.env` as `APP_PUBLIC_ORIGIN`, `APP_BASE_PATH`, `APP_SERVER_HOST` and `APP_SERVER_PORT`; an empty `APP_BASE_PATH=` is the origin root. Before changing them, tell the user:
 
 - the application will be at the new origin plus its base path, and for a Hub the applications it hosts move with it;
 - the application stops briefly while it restarts;
 - a new port has to be free, or the application restarts into a crash loop that only `logs/app.err.log` explains, and a reverse proxy in front has to forward to it;
-- `APP_BASE_PATH` cannot change this way: it is compiled into the client.
+- a new base path needs the reverse proxy to route it, and bookmarks and links to the old one stop working;
+- a release from before relocatable builds cannot move: its base path is compiled into the client, so at another path its pages load none of their assets while the health check, which asks only the API, still passes. `upgrade` and `rollback` refuse such a release when it does not match `app.env`.
 
-With their agreement, edit those three lines and nothing else, then run `pm2 restart <name>`, `<name>` being `name` in `status`. pm2 starts the application through `launcher.mjs`, which reads `app.env` on every start, so nothing has to be registered again. `status` afterwards reports the new `endpoints` and checks health at the address in `app.env`; for a new origin, have the user open `endpoints.url`.
+With their agreement, edit those lines and nothing else, then run `pm2 restart <name>`, `<name>` being `name` in `status`. pm2 starts the application through `launcher.mjs`, which reads `app.env` on every start, so nothing has to be registered again. `status` afterwards reports the new `endpoints` and checks health at the address in `app.env`; for a new origin, have the user open `endpoints.url`.
 
 ## Keep the data intact
 
-The root holds the only copy of the application's configuration, secrets and data. Change everything in it through app-installer, apart from the three `app.env` lines above, and leave the choice of deleting anything to the user. Keep the contents of `config.yml`, which holds the secrets, out of the conversation.
+The root holds the only copy of the application's configuration, secrets and data. Change everything in it through app-installer, apart from the `app.env` lines above, and leave the choice of deleting anything to the user. Keep the contents of `config.yml`, which holds the secrets, out of the conversation.
