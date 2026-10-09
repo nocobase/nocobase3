@@ -17,7 +17,7 @@ import type { Run } from '../../../shared/runs.js';
 import type { Tx } from '../../kernel/tx.js';
 
 /**
- * How the agent reaches the application's commands: `cli` for a runner agent (it types `acme issue get PM-12` in its
+ * How the agent reaches the application's commands: `cli` for a runner agent (it types `acme issue get PM-1` in its
  * terminal), `tools` for an online agent (it runs the same command in its sandboxed shell, the `bash` tool). Both name
  * commands the same way; what differs is where files go (a working directory, or `/tmp`).
  */
@@ -187,6 +187,15 @@ export interface SubjectReports {
 
 export interface SubjectBinding {
   readonly kind: string;
+  /**
+   * Reads the current responsible inside the request's transaction, before confirming or rejecting. Null means
+   * nobody answers for it (including a deleted subject). Applications with mutable responsibility must bind this;
+   * without it, requests use their recorded responsible and the application must call `requests.reassign` on changes.
+   */
+  readonly responsibleUserId?: (
+    conn: DatabaseConnection,
+    subjectId: string,
+  ) => Promise<string | null>;
   /**
    * Runs on this kind belong to the people they involve (who woke the agent, the owner): no one else sees them, or
    * their transcripts and briefs, whatever they may manage (a private conversation).
