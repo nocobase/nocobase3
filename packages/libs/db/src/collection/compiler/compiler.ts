@@ -475,6 +475,28 @@ export class CollectionCompiler {
         existingFields,
         current,
       );
+      // A column alteration restates the whole column, so a change that leaves the type out keeps the field's
+      // current definition, as the enum and char branches above already do. Relations are not columns of their own.
+      if (
+        previous &&
+        field.changes.type === undefined &&
+        !isRelationType(previous.type)
+      ) {
+        const merged = {
+          ...previous,
+          ...field.changes,
+          name: field.name,
+        } as FieldDefinition;
+        const [definition] = this.compileFieldColumns(merged, current);
+        // Existing primary keys are constraints, not new column declarations.
+        delete definition.primaryKey;
+        operations.push({
+          type: 'alterColumn',
+          column: oldColumnName,
+          changes: { ...definition, name: oldColumnName },
+        });
+        continue;
+      }
       operations.push({
         type: 'alterColumn',
         column: oldColumnName,
