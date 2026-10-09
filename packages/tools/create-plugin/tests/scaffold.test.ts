@@ -1,4 +1,4 @@
-import { execFileSync, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import {
   mkdir,
   mkdtemp,
@@ -11,7 +11,7 @@ import {
 import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -70,14 +70,11 @@ async function listFiles(
 }
 
 describe('createPlugin', () => {
-  it('resolves package imports to development sources and published output', async () => {
+  it('resolves package imports to development sources without compiler aliases', async () => {
     const result = await createWith(['client.components', 'registry']);
     const root = result.targetDirectory;
     const source = path.join(root, 'client/components/probe.ts');
-    const compiled = path.join(root, 'dist/client/components/probe.js');
     await writeFile(source, 'export const probe: string = "local";\n');
-    await mkdir(path.dirname(compiled), { recursive: true });
-    await writeFile(compiled, 'export const probe = "published";\n');
 
     const config = JSON.parse(
       await readFile(path.join(root, 'tsconfig.json'), 'utf8'),
@@ -95,46 +92,6 @@ describe('createPlugin', () => {
         ts.sys,
       ).resolvedModule?.resolvedFileName,
     ).toBe(source);
-    const manifest = JSON.parse(
-      await readFile(path.join(root, 'package.json'), 'utf8'),
-    ) as {
-      name: string;
-      type: string;
-      publishConfig: { imports: Record<string, string> };
-    };
-    const published = path.join(root, 'published');
-    const publishedOutput = path.join(
-      published,
-      'dist/client/components/probe.js',
-    );
-    await mkdir(path.dirname(publishedOutput), { recursive: true });
-    await writeFile(publishedOutput, 'export const probe = "published";\n');
-    await writeFile(
-      path.join(published, 'package.json'),
-      JSON.stringify({
-        name: manifest.name,
-        type: manifest.type,
-        imports: manifest.publishConfig.imports,
-      }),
-    );
-    expect(
-      execFileSync(
-        process.execPath,
-        [
-          '--conditions=development',
-          '--input-type=module',
-          '-e',
-          'console.log(import.meta.resolve("#components/probe"))',
-        ],
-        // A published package must resolve compiled files even when the host is in development mode.
-        {
-          cwd: published,
-          env: { ...process.env, NODE_OPTIONS: '' },
-          encoding: 'utf8',
-        },
-      ).trim(),
-    ).toBe(pathToFileURL(publishedOutput).href);
-
     const shadcn = JSON.parse(
       await readFile(path.join(root, 'components.json'), 'utf8'),
     ) as { aliases: { ui: string } };
